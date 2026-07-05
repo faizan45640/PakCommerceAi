@@ -2,10 +2,21 @@
   "name": "@pakcommerce/api",
   "version": "0.1.0",
   "private": true,
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
   "scripts": {
     "lint": "echo \"@pakcommerce/api: replace with eslint . when scaffolded\"",
     "typecheck": "echo \"@pakcommerce/api: replace with tsc --noEmit when scaffolded\"",
     "test": "echo \"@pakcommerce/api: replace with vitest/jest when scaffolded\"",
     "build": "echo \"@pakcommerce/api: replace with tsc when scaffolded\""
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
   }
 }
