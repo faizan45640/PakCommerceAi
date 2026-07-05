@@ -2,10 +2,24 @@
   "name": "@pakcommerce/integrations",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./supabase": "./src/supabase/index.ts"
+  },
   "scripts": {
-    "lint": "echo \"@pakcommerce/integrations: replace with eslint . when scaffolded\"",
-    "typecheck": "echo \"@pakcommerce/integrations: replace with tsc --noEmit when scaffolded\"",
-    "test": "echo \"@pakcommerce/integrations: replace with vitest when scaffolded\"",
-    "build": "echo \"@pakcommerce/integrations: replace with tsc when scaffolded\""
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"@pakcommerce/integrations: add vitest when tests are written\"",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
   }
 }
