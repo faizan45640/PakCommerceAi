@@ -1,0 +1,10 @@
+{
+  "name": "@pakcommerce/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo \"@pakcommerce/integrations: lint placeholder\"",
+    "typecheck": "echo \"@pakcommerce/integrations: typecheck placeholder\"",
+    "build": "echo \"@pakcommerce/integrations: build placeholder\""
+  }
+}
