@@ -340,3 +340,19 @@ Then open PR:
 ```text
 feature branch → dev
 ```
+Rules:
+Never commit to main.
+
+Never commit to dev.
+
+Always create a feature branch.
+
+Always pull latest dev first.
+
+Always open PR to dev.
+
+One task = One branch.
+
+One PR = One task.
+
+Push before ending your day.
