@@ -1,0 +1,3 @@
+# Runtime deps for FastAPI service — add when scaffolding apps/ml
+# fastapi==0.115.6
+# uvicorn[standard]==0.34.0

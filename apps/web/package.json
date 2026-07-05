@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "lint": "echo \"@pakcommerce/web: lint placeholder\"",
-    "typecheck": "echo \"@pakcommerce/web: typecheck placeholder\"",
-    "build": "echo \"@pakcommerce/web: build placeholder\""
+    "lint": "echo \"@pakcommerce/web: replace with eslint . when scaffolded\"",
+    "typecheck": "echo \"@pakcommerce/web: replace with tsc --noEmit when scaffolded\"",
+    "test": "echo \"@pakcommerce/web: replace with vitest run when scaffolded\"",
+    "build": "echo \"@pakcommerce/web: replace with vite build when scaffolded\""
   }
 }
