@@ -6,14 +6,39 @@ on:
   pull_request:
     branches: [main, dev]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  node:
-    name: Install / Lint / Typecheck / Build
+  security:
+    name: Security checks
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Block committed secret env files
+        run: |
+          tracked="$(git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.[^e]|credentials\.json|\.pem$' || true)"
+          if [ -n "$tracked" ]; then
+            echo "Sensitive file detected in git."
+            echo "$tracked"
+            exit 1
+          fi
+          echo "No sensitive env files tracked."
+
+      - name: Require package-lock.json
+        run: test -f package-lock.json
+
+  node:
+    name: Node — install / lint / typecheck / test / build
+    runs-on: ubuntu-latest
+    needs: security
 
     steps:
       - name: Checkout
@@ -22,7 +47,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install
@@ -34,16 +59,55 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Test
+        run: npm run test
+
       - name: Build
         run: npm run build
 
   ml:
-    name: ML service (placeholder)
+    name: ML — Python lint / test
     runs-on: ubuntu-latest
+    needs: security
+
+    defaults:
+      run:
+        working-directory: apps/ml
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Placeholder
-        run: echo "Add FastAPI lint/test steps when apps/ml is scaffolded"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: apps/ml/.python-version
+          cache: pip
+          cache-dependency-path: apps/ml/requirements-dev.txt
+
+      - name: Install Python dev tools
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Test (pytest)
+        run: pytest tests/ -q
+
+  ci-success:
+    name: CI passed
+    runs-on: ubuntu-latest
+    needs: [node, ml]
+    if: always()
+
+    steps:
+      - name: Require all jobs to pass
+        run: |
+          if [ "${{ needs.node.result }}" != "success" ] || [ "${{ needs.ml.result }}" != "success" ]; then
+            echo "One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs passed."

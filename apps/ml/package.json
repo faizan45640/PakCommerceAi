@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "lint": "echo \"@pakcommerce/ml: add ruff when Python service is scaffolded\"",
-    "typecheck": "echo \"@pakcommerce/ml: add mypy when Python service is scaffolded\"",
-    "build": "echo \"@pakcommerce/ml: build placeholder\""
+    "lint": "echo \"@pakcommerce/ml: Python lint runs via ruff in CI (npm run ci:ml)\"",
+    "typecheck": "echo \"@pakcommerce/ml: add mypy when FastAPI service is scaffolded\"",
+    "test": "echo \"@pakcommerce/ml: Python tests run via pytest in CI (npm run ci:ml)\"",
+    "build": "echo \"@pakcommerce/ml: no Node build step\""
   }
 }

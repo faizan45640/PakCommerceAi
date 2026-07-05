@@ -1,0 +1,128 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.workflow }}-${{ github.ref }}-${{ inputs.environment || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload Node build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-build-${{ github.sha }}
+          path: |
+            apps/web/dist
+            apps/api/dist
+            packages/*/dist
+          if-no-files-found: ignore
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: apps/ml/.python-version
+          cache: pip
+          cache-dependency-path: apps/ml/requirements.txt
+
+      - name: Install ML runtime deps
+        working-directory: apps/ml
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "No runtime requirements yet."
+          fi
+
+      - name: Upload ML service artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-service-${{ github.sha }}
+          path: apps/ml
+          if-no-files-found: warn
+
+  deploy-web:
+    name: Deploy web (placeholder)
+    runs-on: ubuntu-latest
+    needs: build
+    if: vars.ENABLE_CD == 'true'
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: Deploy web
+        run: |
+          echo "Configure hosting secrets (VERCEL_TOKEN, etc.) and replace this step."
+          echo "Suggested targets: Vercel, Netlify, or static bucket."
+
+  deploy-api:
+    name: Deploy API (placeholder)
+    runs-on: ubuntu-latest
+    needs: build
+    if: vars.ENABLE_CD == 'true'
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: Deploy API
+        run: |
+          echo "Configure hosting secrets (RAILWAY_TOKEN, etc.) and replace this step."
+          echo "Suggested targets: Railway, Render, or Docker host."
+
+  deploy-ml:
+    name: Deploy ML service (placeholder)
+    runs-on: ubuntu-latest
+    needs: build
+    if: vars.ENABLE_CD == 'true'
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: Deploy ML
+        run: |
+          echo "Configure hosting secrets and replace this step."
+          echo "Suggested targets: Railway, Render, or GPU VM with Docker."
+
+  cd-skipped:
+    name: CD skipped (expected until hosting is configured)
+    runs-on: ubuntu-latest
+    needs: build
+    if: vars.ENABLE_CD != 'true'
+
+    steps:
+      - name: Explain skipped deploy
+        run: |
+          echo "Build artifacts uploaded successfully."
+          echo "Deploy jobs are disabled until you set repository variable ENABLE_CD=true."
+          echo "See docs/ci-cd.md for setup steps."
