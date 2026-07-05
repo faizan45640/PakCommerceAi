@@ -1,0 +1,10 @@
+{
+  "name": "@pakcommerce/ml",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo \"@pakcommerce/ml: add ruff when Python service is scaffolded\"",
+    "typecheck": "echo \"@pakcommerce/ml: add mypy when Python service is scaffolded\"",
+    "build": "echo \"@pakcommerce/ml: build placeholder\""
+  }
+}

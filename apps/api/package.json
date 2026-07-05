@@ -1,0 +1,10 @@
+{
+  "name": "@pakcommerce/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo \"@pakcommerce/api: lint placeholder\"",
+    "typecheck": "echo \"@pakcommerce/api: typecheck placeholder\"",
+    "build": "echo \"@pakcommerce/api: build placeholder\""
+  }
+}

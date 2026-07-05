@@ -1,0 +1,10 @@
+{
+  "name": "@pakcommerce/shared",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo \"@pakcommerce/shared: lint placeholder\"",
+    "typecheck": "echo \"@pakcommerce/shared: typecheck placeholder\"",
+    "build": "echo \"@pakcommerce/shared: build placeholder\""
+  }
+}
