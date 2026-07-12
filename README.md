@@ -23,6 +23,7 @@ Final Year Project monorepo for PakCommerce AI — an AI-powered commerce platfo
 - **CD** builds artifacts on `main`; deploy is opt-in until hosting is configured
 
 See [docs/ci-cd.md](docs/ci-cd.md) for the full guide.
+See [docs/supabase-setup.md](docs/supabase-setup.md) for frontend/backend Supabase setup.
 
 Run checks locally:
 
