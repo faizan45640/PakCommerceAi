@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
-
+.cursor/
+.vscode/
 # Build output
 dist/
 build/
