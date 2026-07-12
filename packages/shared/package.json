@@ -2,10 +2,23 @@
   "name": "@pakcommerce/shared",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./products": "./src/products/index.ts"
+  },
   "scripts": {
-    "lint": "echo \"@pakcommerce/shared: replace with eslint . when scaffolded\"",
-    "typecheck": "echo \"@pakcommerce/shared: replace with tsc --noEmit when scaffolded\"",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "echo \"@pakcommerce/shared: replace with vitest when scaffolded\"",
-    "build": "echo \"@pakcommerce/shared: replace with tsc when scaffolded\""
+    "build": "tsc"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
   }
 }
