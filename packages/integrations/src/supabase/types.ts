@@ -1,8 +1,4 @@
-/**
- * Replace with generated types from Supabase CLI:
- * npx supabase gen types typescript --project-id <id> > packages/integrations/src/supabase/database.types.ts
- */
-export type Database = Record<string, never>;
+export type { Database } from "./database.types.js";
 
 export interface SupabaseConfig {
   url: string;

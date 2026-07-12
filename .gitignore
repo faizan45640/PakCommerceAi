@@ -39,6 +39,10 @@ coverage/
 .eslintcache
 *.tsbuildinfo
 
+# Local agent skills
+.agents/
+skills-lock.json
+
 # Python (if used in scripts or AI packages)
 __pycache__/
 *.py[cod]
