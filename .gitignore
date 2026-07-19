@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
-
+.cursor/
+.vscode/
 # Build output
 dist/
 build/
@@ -37,6 +38,10 @@ coverage/
 .cache/
 .eslintcache
 *.tsbuildinfo
+
+# Local agent skills
+.agents/
+skills-lock.json
 
 # Python (if used in scripts or AI packages)
 __pycache__/

@@ -2,7 +2,7 @@ import type { SupabaseConfig, SupabaseEnvOptions } from "./types.js";
 
 const DEFAULT_ENV_KEYS = {
   urlKey: "SUPABASE_URL",
-  anonKeyKey: "SUPABASE_ANON_KEY",
+  anonKeyKey: "SUPABASE_PUBLISHABLE_KEY",
   serviceRoleKeyKey: "SUPABASE_SERVICE_ROLE_KEY",
 } as const;
 
@@ -16,7 +16,7 @@ export function getSupabaseConfigFromEnv(
 ): SupabaseConfig | null {
   const keys = { ...DEFAULT_ENV_KEYS, ...options };
   const url = readEnv(keys.urlKey);
-  const anonKey = readEnv(keys.anonKeyKey);
+  const anonKey = readEnv(keys.anonKeyKey) ?? readEnv("SUPABASE_ANON_KEY");
 
   if (!url || !anonKey) {
     return null;
@@ -36,7 +36,7 @@ export function assertSupabaseConfig(
 ): asserts config is SupabaseConfig {
   if (!config) {
     throw new Error(
-      "Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY.",
+      "Supabase is not configured. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.",
     );
   }
 }
