@@ -8,11 +8,11 @@ import type { InvoiceFormValues } from "./data";
 import { InvoicePaper } from "./invoice-paper";
 
 export function PrintInvoice({ invoice }: { invoice: InvoiceFormValues }) {
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   if (!mounted) return null;
 

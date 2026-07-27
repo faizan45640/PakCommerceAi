@@ -289,7 +289,7 @@ export function PerformanceOverview() {
               tickMargin={8}
               minTickGap={48}
               tickFormatter={(value) =>
-                parseISO(value).toLocaleDateString("en-US", {
+                parseISO(String(value)).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 })
@@ -302,7 +302,7 @@ export function PerformanceOverview() {
                 <ChartTooltipContent
                   className="w-50"
                   indicator="line"
-                  labelFormatter={(value) => format(parseISO(value), "d MMMM yyyy")}
+                  labelFormatter={(value) => format(parseISO(String(value)), "d MMMM yyyy")}
                 />
               }
             />
