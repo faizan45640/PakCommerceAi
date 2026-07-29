@@ -16,6 +16,6 @@
     "ci:ml": "cd apps/ml && python3 -m pip install -r requirements-dev.txt && ruff check . && ruff format --check . && pytest tests/ -q"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }
