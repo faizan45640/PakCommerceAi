@@ -123,7 +123,7 @@ export function Inventory() {
         <Separator />
 
         <div className="grid grid-cols-3 divide-x">
-          {inventorySummary.map((item, _index) => (
+          {inventorySummary.map((item) => (
             <div key={item.label} className="flex flex-col items-center gap-3 text-center">
               <div className="grid size-9 place-items-center rounded-full bg-muted">
                 <item.icon className="size-4 text-muted-foreground" />
