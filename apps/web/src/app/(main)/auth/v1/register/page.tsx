@@ -13,7 +13,7 @@ export default function RegisterV1() {
           <div className="space-y-4 text-center">
             <div className="font-medium tracking-tight">Register</div>
             <div className="mx-auto max-w-xl text-muted-foreground">
-              Fill in your details below. We promise not to quiz you about your first pet&apos;s name (this time).
+              Create your seller workspace and start managing your commerce operations.
             </div>
           </div>
           <div className="space-y-4">
@@ -21,7 +21,7 @@ export default function RegisterV1() {
             <GoogleButton className="w-full" variant="outline" />
             <p className="text-center text-muted-foreground text-xs">
               Already have an account?{" "}
-              <Link prefetch={false} href="login" className="text-primary">
+              <Link prefetch={false} href="/auth/v1/login" className="text-primary">
                 Login
               </Link>
             </p>
@@ -34,8 +34,8 @@ export default function RegisterV1() {
           <div className="space-y-6">
             <Command className="mx-auto size-12 text-primary-foreground" />
             <div className="space-y-2">
-              <h1 className="font-light text-5xl text-primary-foreground">Welcome!</h1>
-              <p className="text-primary-foreground/80 text-xl">You&apos;re in the right place.</p>
+              <h1 className="font-light text-5xl text-primary-foreground">PakCommerce AI</h1>
+              <p className="text-primary-foreground/80 text-xl">Built for ambitious online sellers</p>
             </div>
           </div>
         </div>
