@@ -11,12 +11,12 @@ import timeGridPlugin from "@fullcalendar/react/timegrid";
 import { differenceInCalendarDays, endOfMonth, format, startOfMonth } from "date-fns";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, XIcon } from "lucide-react";
 
-import { EventCalendarViews } from "@/components/calendar/event-calendar-views";
+//import { EventCalendarViews } from "@/components/calendar/event-calendar-views";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { demoEvents } from "./events-data";
+//import { demoEvents } from "./events-data";
 
 const views = [
   { key: "dayGridMonth", label: "Month" },
@@ -112,7 +112,7 @@ export function Calendar() {
         </div>
       </div>
 
-      <EventCalendarViews
+      {/*<EventCalendarViews
         controller={controller}
         initialView={views[0].key}
         plugins={[...plugins]}
@@ -132,7 +132,7 @@ export function Calendar() {
             }).length,
           );
         }}
-      />
+      />*/}
     </div>
   );
 }

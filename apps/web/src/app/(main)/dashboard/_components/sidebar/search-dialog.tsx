@@ -1,3 +1,4 @@
+// search-dialog.tsx
 "use client";
 
 import * as React from "react";
@@ -64,7 +65,7 @@ const searchItems: SearchItem[] = sidebarItems.flatMap((group) =>
 );
 
 function getAvailableItems(items: SearchItem[]) {
-  return items.filter((item) => !item.disabled && !item.url.includes("coming-soon"));
+  return items.filter((item) => !item.disabled);
 }
 
 const recommendations = getAvailableItems(searchItems);

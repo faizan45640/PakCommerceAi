@@ -1,4 +1,4 @@
-"use client";
+/* "use client";
 
 import { Ellipsis, Folder, Forward, type LucideIcon, Trash2 } from "lucide-react";
 
@@ -81,3 +81,4 @@ export function NavDocuments({
     </SidebarGroup>
   );
 }
+ */
