@@ -22,8 +22,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 Use these helpers in `apps/web`:
 
-- `apps/web/lib/supabase/client.ts` for Client Components.
-- `apps/web/lib/supabase/server.ts` for Server Components, Server Actions, and Route Handlers.
+- `apps/web/src/lib/supabase/client.ts` for Client Components.
+- `apps/web/src/lib/supabase/server.ts` for Server Components, Server Actions, and Route Handlers.
 - `apps/web/proxy.ts` keeps Supabase SSR cookies in sync.
 
 Example Client Component:
