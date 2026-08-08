@@ -5,7 +5,7 @@ import { ArrowRight, TrendingUp, TrendingDown, AlertTriangle, Sparkles, Zap } fr
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const insights = [
   {

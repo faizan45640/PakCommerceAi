@@ -1,7 +1,7 @@
 // quick-actions.tsx
 "use client";
 
-import { ArrowRight, BarChart3, Package, RefreshCw, Settings, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, Package, RefreshCw, Sparkles, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

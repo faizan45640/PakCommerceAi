@@ -85,7 +85,7 @@ export function SalesKpiStrip() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-normal text-sm">Today's Orders</CardTitle>
+            <CardTitle className="font-normal text-sm">Today&apos;s Orders</CardTitle>
             <CardAction>
               <Ellipsis className="size-4" />
             </CardAction>
