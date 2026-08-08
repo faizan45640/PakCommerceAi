@@ -77,6 +77,7 @@ export function OrdersTable({ data }: { data: OrderRow[] }) {
     pageSize: 10,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns: ordersColumns,

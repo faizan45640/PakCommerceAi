@@ -1,7 +1,7 @@
 // orders-table/schema.ts
 import z from "zod";
 
-const ordersSchema = z.object({
+export const ordersSchema = z.object({
   id: z.string(),
   customer: z.string(),
   email: z.string(),
