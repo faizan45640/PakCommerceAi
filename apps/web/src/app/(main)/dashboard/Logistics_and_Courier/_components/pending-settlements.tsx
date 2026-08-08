@@ -1,7 +1,7 @@
 // pending-settlements.tsx
 "use client";
 
-import { ArrowRight, Clock, DollarSign, Users } from "lucide-react";
+import { ArrowRight, Clock, DollarSign } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

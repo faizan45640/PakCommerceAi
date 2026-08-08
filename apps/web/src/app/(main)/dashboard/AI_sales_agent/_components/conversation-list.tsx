@@ -1,7 +1,7 @@
 // conversation-list.tsx
 "use client";
 
-import { ArrowRight, Bot, MessageSquare, Users } from "lucide-react";
+import { ArrowRight, Bot, MessageSquare } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -1,7 +1,7 @@
 // conversation-transcript.tsx
 "use client";
 
-import { ArrowRight, Bot, User, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Bot, User, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +63,7 @@ const conversation = {
   ],
 };
 
-function MessageBubble({ message, index }: { message: typeof conversation.messages[0], index: number }) {
+function MessageBubble({ message}: { message: typeof conversation.messages[0], index: number }) {
   const isAgent = message.sender === "agent";
   
   return (

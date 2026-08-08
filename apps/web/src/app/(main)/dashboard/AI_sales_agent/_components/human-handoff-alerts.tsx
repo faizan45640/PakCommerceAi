@@ -1,7 +1,7 @@
 // human-handoff-alerts.tsx
 "use client";
 
-import { ArrowRight, AlertTriangle, Bot, User, Clock, ChevronRight } from "lucide-react";
+import { ArrowRight, AlertTriangle, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

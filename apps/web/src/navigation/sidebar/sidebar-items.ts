@@ -2,20 +2,10 @@
 import {
   Bot,
   Boxes,
-  LayoutDashboard,
   Settings,
   ShoppingBag,
   Truck,
-  Zap,
-  Gauge,
-  BarChart3,
-  Package,
-  Users,
-  Store,
-  MessageSquare,
-  TrendingUp,
-  Shield,
-  Globe,
+  Zap
 } from "lucide-react";
 
 import type { LucideIcon } from "lucide-react";

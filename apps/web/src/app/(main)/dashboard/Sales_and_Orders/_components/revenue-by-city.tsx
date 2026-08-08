@@ -31,7 +31,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function RevenueByCity() {
-  const totalRevenue = cityData.reduce((sum, d) => sum + d.revenue, 0);
+  //const totalRevenue = cityData.reduce((sum, d) => sum + d.revenue, 0);
   const topCity = cityData.reduce((max, d) => d.revenue > max.revenue ? d : max, cityData[0]);
 
   return (

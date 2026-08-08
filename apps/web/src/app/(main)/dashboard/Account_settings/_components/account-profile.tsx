@@ -1,7 +1,7 @@
 // account-profile.tsx
 "use client";
 
-import { ArrowRight, Mail, MapPin, Phone, User, UserCircle } from "lucide-react";
+import { Mail, MapPin, Phone, UserCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

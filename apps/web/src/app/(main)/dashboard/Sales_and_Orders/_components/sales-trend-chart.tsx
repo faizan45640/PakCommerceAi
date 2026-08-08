@@ -3,7 +3,7 @@
 
 import { addDays, format, subDays } from "date-fns";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { useEffect, useState } from "react";
+//import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -84,11 +84,11 @@ const formatYAxisTick = (value: number): string => {
 };
 
 export function SalesTrendChart() {
-  const [isClient, setIsClient] = useState(false);
+  /* const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
+  }, []); */
 
   const totalRevenue = salesData.reduce((sum, d) => sum + d.revenue, 0);
   const totalOrders = salesData.reduce((sum, d) => sum + d.orders, 0);

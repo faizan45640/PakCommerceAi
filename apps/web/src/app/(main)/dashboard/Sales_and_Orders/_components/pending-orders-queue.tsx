@@ -1,7 +1,7 @@
 // pending-orders-queue.tsx
 "use client";
 
-import { ArrowRight, Clock, Package, User } from "lucide-react";
+import { ArrowRight, Clock, User } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

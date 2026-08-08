@@ -1,9 +1,9 @@
 // agent-settings.tsx
 "use client";
 
-import { ArrowRight, Bot, Settings, ToggleLeft, ToggleRight } from "lucide-react";
+import {Settings } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+//import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

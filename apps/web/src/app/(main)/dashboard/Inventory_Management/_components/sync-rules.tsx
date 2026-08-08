@@ -1,7 +1,7 @@
 // sync-rules.tsx
 "use client";
 
-import { ArrowRight, CheckCircle, XCircle, Plus } from "lucide-react";
+import { CheckCircle, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

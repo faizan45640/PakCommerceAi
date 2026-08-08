@@ -1,7 +1,7 @@
 // notification-center.tsx
 "use client";
 
-import { ArrowRight, Bell, CheckCircle, Clock, Package, RefreshCw, Send, XCircle, Zap } from "lucide-react";
+import { ArrowRight, Bell, CheckCircle, Clock, Package, RefreshCw, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

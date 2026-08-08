@@ -1,5 +1,5 @@
 // account-kpi-cards.tsx
-import { ArrowDownRight, ArrowUpRight, CheckCircle, Store, Users, Zap } from "lucide-react";
+import { ArrowUpRight, CheckCircle, Store, Users, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardHeader } from "@/components/ui/card";

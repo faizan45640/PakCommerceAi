@@ -1,7 +1,7 @@
 // system-status.tsx
 "use client";
 
-import { ArrowRight, CheckCircle, Clock, Server, Shield, XCircle, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle, Clock, Server, Shield, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -81,7 +81,7 @@ export function ThemeBootScript() {
   return (
     <Script
       id="theme-boot"
-      strategy="beforeInteractive"
+      strategy="afterInteractive"
       dangerouslySetInnerHTML={{ __html: code }}
     />
   );

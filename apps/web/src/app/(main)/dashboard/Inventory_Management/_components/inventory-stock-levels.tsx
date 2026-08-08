@@ -1,17 +1,17 @@
 // inventory-stock-levels.tsx
 "use client";
 
-import { ArrowRight, Package, Store } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
+import { ArrowRight } from "lucide-react";
+//import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
+/*import {
   type ChartConfig,
-  ChartContainer,
+   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+  ChartTooltipContent, 
+} from "@/components/ui/chart";*/
 
 const stockData = [
   { product: "T-Shirt - L", sku: "TS-L-001", store1: 124, store2: 56, store3: 32 },
@@ -22,7 +22,7 @@ const stockData = [
   { product: "Scarf - Red", sku: "SC-R-006", store1: 56, store2: 34, store3: 21 },
 ];
 
-const chartConfig = {
+/* const chartConfig = {
   store1: {
     label: "Main Store",
     color: "var(--chart-1)",
@@ -35,7 +35,7 @@ const chartConfig = {
     label: "Partner Store B",
     color: "var(--chart-3)",
   },
-} satisfies ChartConfig;
+} satisfies ChartConfig; */
 
 function StockLevelIndicator({ level }: { level: number }) {
   let color = "bg-green-500";
