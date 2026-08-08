@@ -1,14 +1,16 @@
-// sidebar-items.ts
 import {
-  Bot,
   Boxes,
+  ClipboardCheck,
+  LayoutDashboard,
+  MessageSquare,
+  PackageSearch,
   Settings,
-  ShoppingBag,
+  ShoppingCart,
   Truck,
-  Zap
+  Users,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
-
-import type { LucideIcon } from "lucide-react";
 
 export type NavBadge = "new" | "soon";
 
@@ -51,42 +53,84 @@ export interface NavGroup {
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "Dashboards",
+    label: "Commerce",
     items: [
       {
-        id: "sales_and_orders",
-        title: "Sales & Orders",
-        url: "/dashboard/sales-and-orders",
-        icon: ShoppingBag,
+        id: "products",
+        title: "Products",
+        url: "/dashboard/products",
+        icon: PackageSearch,
       },
       {
-        id: "inventory_management",
-        title: "Inventory Management",
-        url: "/dashboard/inventory-management",
+        id: "inventory",
+        title: "Inventory",
+        url: "/dashboard/inventory",
         icon: Boxes,
       },
       {
-        id: "logistics_courier",
-        title: "Logistics & Courier",
+        id: "orders",
+        title: "Orders",
+        url: "/dashboard/orders",
+        icon: ShoppingCart,
+      },
+      {
+        id: "customers",
+        title: "Customers",
+        url: "/dashboard/customers",
+        icon: Users,
+      },
+    ],
+  },
+  {
+    id: 2,
+    label: "Operations",
+    items: [
+      {
+        id: "conversations",
+        title: "Conversations",
+        url: "/dashboard/conversations",
+        icon: MessageSquare,
+      },
+      {
+        id: "approvals",
+        title: "Approvals",
+        url: "/dashboard/approvals",
+        icon: ClipboardCheck,
+      },
+      {
+        id: "logistics",
+        title: "Logistics",
         url: "/dashboard/logistics-and-courier",
         icon: Truck,
       },
+    ],
+  },
+  {
+    id: 3,
+    label: "Insights",
+    items: [
       {
-        id: "ai_sales_agent",
-        title: "AI Sales Agent",
-        url: "/dashboard/ai-sales-agent",
-        icon: Bot,
+        id: "analytics",
+        title: "Analytics",
+        url: "/dashboard/analytics",
+        icon: LayoutDashboard,
       },
       {
-        id: "ai_insights_copilot",
-        title: "AI Insights & Copilot",
-        url: "/dashboard/ai-insights-and-copilot",
+        id: "copilot",
+        title: "Copilot",
+        url: "/dashboard/copilot",
         icon: Zap,
       },
+    ],
+  },
+  {
+    id: 4,
+    label: "Workspace",
+    items: [
       {
-        id: "account_settings",
-        title: "Account Settings",
-        url: "/dashboard/account-settings",
+        id: "settings",
+        title: "Settings",
+        url: "/dashboard/settings",
         icon: Settings,
       },
     ],
