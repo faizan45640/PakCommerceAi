@@ -40,7 +40,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link prefetch={false} href="/dashboard/ecommerce">
+              <Link prefetch={false} href="/dashboard/Sales_and_Orders" className="flex items-center space-x-2">
                 <Store />
                 <span className="font-semibold text-base">{APP_CONFIG.name}</span>
               </Link>
