@@ -1,3 +1,8 @@
+// src/scripts/theme-boot.tsx
+"use client";
+
+import Script from "next/script";
+
 /**
  * Boot script that reads user preference values from cookies or localStorage
  * based on the configured persistence mode.
@@ -73,6 +78,11 @@ export function ThemeBootScript() {
     })();
   `;
 
-  /* biome-ignore lint/security/noDangerouslySetInnerHtml: required for pre-hydration boot script */
-  return <script dangerouslySetInnerHTML={{ __html: code }} />;
+  return (
+    <Script
+      id="theme-boot"
+      strategy="beforeInteractive"
+      dangerouslySetInnerHTML={{ __html: code }}
+    />
+  );
 }

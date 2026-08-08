@@ -1,13 +1,24 @@
+// sidebar-items.ts
 import {
-  BarChart3,
+  Bot,
   Boxes,
   LayoutDashboard,
-  type LucideIcon,
-  PackageSearch,
-  Plug,
   Settings,
-  ShoppingCart,
+  ShoppingBag,
+  Truck,
+  Zap,
+  Gauge,
+  BarChart3,
+  Package,
+  Users,
+  Store,
+  MessageSquare,
+  TrendingUp,
+  Shield,
+  Globe,
 } from "lucide-react";
+
+import type { LucideIcon } from "lucide-react";
 
 export type NavBadge = "new" | "soon";
 
@@ -50,65 +61,43 @@ export interface NavGroup {
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "Commerce",
+    label: "Dashboards",
     items: [
       {
-        id: "overview",
-        title: "Overview",
-        url: "/dashboard/ecommerce",
-        icon: LayoutDashboard,
+        id: "sales_and_orders",
+        title: "Sales & Orders",
+        url: "/dashboard/Sales_and_Orders",
+        icon: ShoppingBag,
       },
       {
-        id: "analytics",
-        title: "Analytics",
-        url: "/dashboard/analytics",
-        icon: BarChart3,
-      },
-      {
-        id: "products",
-        title: "Products",
-        url: "#",
-        icon: PackageSearch,
-        badge: "soon",
-        disabled: true,
-      },
-      {
-        id: "orders",
-        title: "Orders",
-        url: "#",
-        icon: ShoppingCart,
-        badge: "soon",
-        disabled: true,
-      },
-      {
-        id: "inventory",
-        title: "Inventory",
-        url: "#",
+        id: "inventory_management",
+        title: "Inventory Management",
+        url: "/dashboard/Inventory_Management",
         icon: Boxes,
-        badge: "soon",
-        disabled: true,
-      },
-    ],
-  },
-  {
-    id: 2,
-    label: "Workspace",
-    items: [
-      {
-        id: "integrations",
-        title: "Integrations",
-        url: "#",
-        icon: Plug,
-        badge: "soon",
-        disabled: true,
       },
       {
-        id: "settings",
-        title: "Settings",
-        url: "#",
+        id: "logistics_courier",
+        title: "Logistics & Courier",
+        url: "/dashboard/Logistics_and_Courier",
+        icon: Truck,
+      },
+      {
+        id: "ai_sales_agent",
+        title: "AI Sales Agent",
+        url: "/dashboard/AI_sales_agent",
+        icon: Bot,
+      },
+      {
+        id: "ai_insights_copilot",
+        title: "AI Insights & Copilot",
+        url: "/dashboard/AI_insights_and_copilot",
+        icon: Zap,
+      },
+      {
+        id: "account_settings",
+        title: "Account Settings",
+        url: "/dashboard/Account_settings",
         icon: Settings,
-        badge: "soon",
-        disabled: true,
       },
     ],
   },
