@@ -348,9 +348,10 @@ Tenant isolation must always be preserved.
 
 > **Enforced on every table that exists.** `products` and `product_variants` carry RLS
 > policies plus a composite foreign key that makes `workspace_id`/`seller_id` drift
-> impossible. `profiles`, `seller_profiles` and `workspaces` gained policies in migration
-> `0008` — before that, any authenticated user could read every seller's business name,
-> phone number and workspace list.
+> impossible. `profiles`, `seller_profiles` and `workspaces` already carried RLS and eight
+> policies on the hosted project; the repository did not know until the live schema was
+> dumped. They are now captured in the baseline migration, so a local database enforces the
+> same rules.
 >
 > 20 tests prove the boundary by attacking it: what seller A can actually do to seller B's
 > rows, not what the policies claim.
