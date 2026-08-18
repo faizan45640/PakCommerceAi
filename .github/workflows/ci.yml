@@ -2,15 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: ["**"]
   pull_request:
     branches: [main, dev]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# `head_ref` on a pull_request and `ref_name` on a push both resolve to the
+# branch name, so a PR branch does not run the same commit twice.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -36,9 +39,24 @@ jobs:
         run: test -f package-lock.json
 
   node:
-    name: Node — install / lint / typecheck / test / build
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     needs: security
+
+    strategy:
+      # One member's red workspace must not hide another's. Every workspace
+      # reports its own result on every push.
+      fail-fast: false
+      matrix:
+        include:
+          - name: shared
+            package: "@pakcommerce/shared"
+          - name: integrations
+            package: "@pakcommerce/integrations"
+          - name: api
+            package: "@pakcommerce/api"
+          - name: web
+            package: "@pakcommerce/web"
 
     steps:
       - name: Checkout
@@ -50,23 +68,73 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # Root install: this is an npm workspaces monorepo and the internal
+      # @pakcommerce/* links only resolve from the root.
       - name: Install
         run: npm ci
 
       - name: Lint
-        run: npm run lint
+        id: lint
+        if: ${{ !cancelled() }}
+        run: npm run lint -w ${{ matrix.package }}
 
       - name: Typecheck
-        run: npm run typecheck
+        id: typecheck
+        if: ${{ !cancelled() }}
+        run: npm run typecheck -w ${{ matrix.package }}
 
+      # The github-actions reporter annotates the failing line directly in the
+      # pull request diff. The json reporter feeds the per-test summary below.
       - name: Test
-        run: npm run test
+        id: test
+        if: ${{ !cancelled() }}
+        run: >
+          npm run test -w ${{ matrix.package }} --
+          --reporter=default
+          --reporter=github-actions
+          --reporter=json
+          --outputFile.json=vitest-report.json
 
       - name: Build
-        run: npm run build
+        id: build
+        if: ${{ !cancelled() }}
+        run: npm run build -w ${{ matrix.package }}
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## ${{ matrix.name }}"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Lint | ${{ steps.lint.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| Typecheck | ${{ steps.typecheck.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| Test | ${{ steps.test.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| Build | ${{ steps.build.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Per-test breakdown. Best-effort: the authoritative pass/fail is the
+          # Test step's exit code, so a reporting hiccup must not fail the build.
+          report="$(find . -name vitest-report.json -not -path './node_modules/*' | head -1)"
+          if [ -n "$report" ]; then
+            {
+              echo "<details><summary>Individual tests</summary>"
+              echo ""
+              echo "| | Test |"
+              echo "|---|---|"
+              jq -r '.testResults[].assertionResults[]
+                     | "| \(if .status == "passed" then "✅" else "❌" end) | \(.fullName) |"' \
+                 "$report" 2>/dev/null || echo "| ⚠️ | could not parse $report |"
+              echo ""
+              echo "</details>"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   ml:
-    name: ML — Python lint / test
+    name: ml
     runs-on: ubuntu-latest
     needs: security
 
@@ -89,13 +157,48 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
+        id: lint
+        if: ${{ !cancelled() }}
         run: ruff check .
 
       - name: Format check (ruff)
+        id: format
+        if: ${{ !cancelled() }}
         run: ruff format --check .
 
+      # pytest-github-actions-annotate-failures turns a failed assertion into an
+      # inline annotation on the pull request diff.
       - name: Test (pytest)
-        run: pytest tests/ -q
+        id: test
+        if: ${{ !cancelled() }}
+        run: pytest tests/ -v --tb=short | tee pytest-output.txt
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## ml"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Lint (ruff) | ${{ steps.lint.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| Format (ruff) | ${{ steps.format.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| Test (pytest) | ${{ steps.test.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f pytest-output.txt ]; then
+            {
+              echo "<details><summary>Individual tests</summary>"
+              echo ""
+              echo '```'
+              grep -E "PASSED|FAILED|ERROR|SKIPPED" pytest-output.txt || echo "no test lines captured"
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   ci-success:
     name: CI passed
@@ -107,7 +210,8 @@ jobs:
       - name: Require all jobs to pass
         run: |
           if [ "${{ needs.node.result }}" != "success" ] || [ "${{ needs.ml.result }}" != "success" ]; then
-            echo "One or more CI jobs failed."
+            echo "One or more CI jobs failed. Open the failing job above —"
+            echo "each workspace reports its own lint / typecheck / test / build result."
             exit 1
           fi
           echo "All CI jobs passed."
