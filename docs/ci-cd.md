@@ -27,28 +27,47 @@ CI runs on **every pull request** and **every push** to `dev` or `main`.
 - Allows `.env.example` (template only)
 - Requires `package-lock.json` so installs are reproducible
 
-### Job 2: Node (monorepo)
+### Job 2: Node (one job per workspace)
 
-Runs from repo root:
+A build matrix runs `shared`, `integrations`, `api` and `web` as **four independent jobs**
+with `fail-fast: false`. Four people work on this repo in parallel; one member's red
+workspace must never hide another's result.
+
+Each job runs from the repo root — this is an npm workspaces monorepo and the internal
+`@pakcommerce/*` links only resolve from there:
 
 ```bash
 npm ci
-npm run lint
-npm run typecheck
-npm run test
-npm run build
+npm run lint      -w <workspace>
+npm run typecheck -w <workspace>
+npm run test      -w <workspace>
+npm run build     -w <workspace>
 ```
 
-These commands fan out to all npm workspaces (`apps/*`, `packages/*`).
-
-**Today:** workspaces use placeholder scripts (echo).  
-**Later:** replace each workspace script with real tooling:
+Every step carries `if: ${{ !cancelled() }}`, so a lint failure does not stop the job before
+the tests run. You get all four results from one push, not the first one that broke.
 
 | App/Package | Lint | Typecheck | Test | Build |
 |---|---|---|---|---|
-| `apps/web` | `eslint .` | `tsc --noEmit` | `vitest run` | `vite build` |
-| `apps/api` | `eslint .` | `tsc --noEmit` | `vitest run` | `tsc` |
-| `packages/*` | `eslint .` | `tsc --noEmit` | `vitest run` | `tsc` |
+| `apps/web` | `eslint` | `tsc --noEmit` | `vitest run` | `next build` |
+| `apps/api` | `eslint .` | `tsc --noEmit` | `vitest run` | `tsc -p tsconfig.build.json` |
+| `packages/shared` | `eslint .` | `tsc --noEmit` | `vitest run` | `tsc -p tsconfig.build.json` |
+| `packages/integrations` | `eslint .` | `tsc --noEmit` | `vitest run` | `tsc -p tsconfig.build.json` |
+
+`tsconfig.build.json` exists so `*.test.ts` is excluded from `dist/` while still being
+typechecked by `tsc --noEmit`.
+
+### Reading a failed run
+
+Three places, in increasing detail:
+
+1. **The PR checks list** — names the workspace that failed (`shared`, `api`, …).
+2. **The run summary page** — a table per workspace showing which of lint / typecheck /
+   test / build failed, plus a collapsible list of every individual test with ✅ or ❌.
+3. **Inline annotations** — a failed assertion is annotated on the exact line in the PR
+   diff. Vitest's built-in `github-actions` reporter and
+   `pytest-github-actions-annotate-failures` produce these; no third-party action and no
+   `checks: write` permission is needed.
 
 ### Job 3: ML (Python)
 
@@ -61,7 +80,7 @@ ruff format --check .
 pytest tests/ -q
 ```
 
-Python version is pinned in `apps/ml/.python-version` (3.12).
+Python version is pinned in `apps/ml/.python-version` (3.12) and asserted by `tests/test_package.py`, which fails if it drifts from `requires-python` in `pyproject.toml`.
 
 When you scaffold FastAPI, uncomment runtime deps in `apps/ml/requirements.txt`.
 
@@ -109,6 +128,9 @@ npm run ci          # Node checks only
 npm run ci:ml       # ML Python checks only
 ./scripts/ci-local.sh   # Both
 ```
+
+> On Windows `npm run ci:ml` calls `python3`, which usually does not exist. Run the steps
+> from `apps/ml` with `python -m pytest tests/ -v`, or use Git Bash / WSL.
 
 Run this before opening a PR to avoid CI failures on GitHub.
 
@@ -173,7 +195,7 @@ For Python-only code, add checks under `apps/ml` or create a new workflow job.
 ├── dependabot.yml       # Dependency updates
 └── PULL_REQUEST_TEMPLATE.md
 
-.nvmrc                   # Node 20 (used by CI)
+.nvmrc                   # Node 22 (used by CI)
 apps/ml/
 ├── .python-version      # Python 3.12 (used by CI)
 ├── requirements-dev.txt # ruff, pytest
