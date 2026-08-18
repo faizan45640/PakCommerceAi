@@ -13,3 +13,6 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Puts apps/ml on sys.path so tests can `import app` without an installed package.
+pythonpath = ["."]
+addopts = "-v"
