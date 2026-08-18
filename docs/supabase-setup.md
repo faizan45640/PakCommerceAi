@@ -84,6 +84,45 @@ npx supabase stop       # when you are done
 `supabase start` applies every migration in order. Local Studio runs at
 <http://127.0.0.1:54323> and Postgres at `postgresql://postgres:postgres@127.0.0.1:54322/postgres`.
 
+### If `supabase start` fails or Studio will not load
+
+The usual symptom is `http://127.0.0.1:54323` refusing to load, or:
+
+```text
+LegacyHealthCheckTimeoutError:
+  supabase_analytics_... container is not ready: unhealthy
+  supabase_realtime_...  container is not ready: unhealthy
+  supabase_storage_...   container is not ready: unhealthy
+  supabase_studio_...    container is not ready: unhealthy
+```
+
+`analytics` (logflare) frequently fails its health check on Windows, and when it does the CLI
+tears the whole stack down with it — often leaving only the database container running. That
+is confusing, because the database alone is enough for the tests to pass, so everything looks
+fine until you try to open Studio.
+
+Start without the services this project does not use:
+
+```bash
+npx supabase stop
+npx supabase start -x logflare,vector,realtime,storage-api,imgproxy,edge-runtime,supavisor,mailpit
+```
+
+That leaves `db`, `auth`, `rest`, `kong`, `pg_meta` and `studio` — everything needed to browse
+tables and run the database tests. Storage, realtime subscriptions and edge functions are not
+used by this project yet; add them back if that changes.
+
+Check what is actually running before assuming it is broken:
+
+```bash
+npx supabase status      # lists stopped services explicitly
+docker ps                # should show ~6 supabase_* containers
+```
+
+> The keys printed by `supabase start` are the standard local development keys. They are
+> identical on every machine, are published in Supabase's own documentation, and are not
+> secrets. Your real keys live in `.env` and are never printed.
+
 ### Rebuilding from scratch
 
 ```bash
