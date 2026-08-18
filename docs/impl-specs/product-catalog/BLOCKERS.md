@@ -116,3 +116,49 @@ the table needs.
 pre-existing production grant, which deserves its own reviewable change.
 
 **Resolution:** _(written by a human)_
+
+
+---
+
+## BLK-4 — Five migrations were applied to production but never committed   [RESOLVED]
+
+**Phase:** 1   **Raised:** 2026-08-18   **Resolved:** 2026-08-18   **Gate:** 6 (Run)
+**Where:** the hosted project's `supabase_migrations.schema_migrations` table
+
+**The question:** `db push --dry-run` refused to run:
+
+```
+Remote migration versions not found in local migrations directory.
+  20260711085757  20260711085825  20260711085845  20260711091800  20260712162600
+```
+
+The hosted database records five migrations applied on 11-12 July. **None of their SQL is in
+this repository.** Someone on the team did use migrations properly; the files never reached
+git. They are what created `profiles`, `seller_profiles`, `workspaces`, the triggers and the
+eight policies.
+
+This also explains BLK-1 completely. The repository was never the source of truth for this
+schema — it had only `database.types.ts`, a by-product, which is why reconstructing from it
+went wrong in eleven ways.
+
+**Options:**
+- A — `supabase migration repair --status reverted <the five>`. What the CLI suggests. Deletes
+  those rows from the remote history. Cost: the repository would then claim these migrations
+  never happened, and a teammate who still has the files could not push them without a
+  conflict. It is also a write to production to solve a local problem.
+- B — Commit five placeholder files using those exact version numbers, each explaining what it
+  stands for. Cost: five near-empty files. Local and remote histories agree, nothing is
+  written to production, and the record stays true.
+
+**Decision: B.** They were applied; saying otherwise to satisfy a tool is the wrong trade.
+Five files with an explanation cost nothing and answer the question a future reader will
+have — "why does the history start in July with nothing in it?"
+
+**Verified after:** `supabase db reset` rebuilds locally and 41/41 integration tests pass;
+`db push --dry-run` lists exactly the five catalogue migrations, with neither the baseline nor
+the placeholders included.
+
+**Still worth doing:** if anyone finds the original SQL — a stale branch, an old clone, a
+laptop — prefer it over the capture. It carries the intent; the baseline only carries the
+result. Replace the placeholder contents and drop the matching section from
+`20260818100001`.
