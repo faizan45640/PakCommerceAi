@@ -12,7 +12,12 @@ Written and verified on **Windows 10 + PowerShell**, Node 22.13.0, npm 11.11.0. 
 |---|---|---|---|
 | Seller dashboard | `apps/web` | **3000** | ✅ Runs. All pages render mock data. |
 | Backend API | `apps/api` | **4000** | ✅ Runs. Health endpoint only. |
+| Local database | `supabase/` | **54322** | ✅ Runs via Docker. `npx supabase start`. |
 | ML service | `apps/ml` | — | ❌ **Nothing to run.** Not scaffolded yet. |
+
+The local database is only needed for schema work and integration tests — the dashboards do
+not read from it yet. Setup, migration rules and deploy steps are in
+[`supabase-setup.md`](supabase-setup.md#migrations).
 
 Do not expect the dashboards to show real data — none of them are wired to a database or to the API. See the status table in the [README](../README.md).
 
@@ -26,6 +31,7 @@ Do not expect the dashboards to show real data — none of them are wired to a d
 | **npm** | 10+ (ships with Node 22) | Everything | `npm -v` |
 | **Git** | any recent | Cloning | `git --version` |
 | **Python** | **3.12** (pinned in `apps/ml/.python-version`) | ML **CI checks only** | `python --version` |
+| **Docker** | any recent | Local database + integration tests only | `docker info` |
 
 Node 22 is enforced by `engines` in the root `package.json`. Older versions will fail or behave unpredictably.
 
@@ -227,6 +233,16 @@ Watch mode, for the workspace you are editing:
 
 ```bash
 npx vitest --root packages/shared
+```
+
+### Database tests
+
+Schema and row-level-security tests need a real Postgres, so they are kept out of
+`npm run test` — a teammate without Docker running can still run the unit suite.
+
+```bash
+npx supabase start                                     # Docker must be running
+npm run test:integration -w @pakcommerce/integrations
 ```
 
 > **Historical note.** Earlier revisions of this runbook said `npm run build` failed while
