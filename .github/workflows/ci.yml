@@ -227,7 +227,7 @@ jobs:
       # RLS policies and auth.uid() behave as they do in production. The UI and
       # edge services are excluded because nothing here uses them.
       - name: Start local Supabase
-        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+        run: supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,storage-api
 
       # Proves the migrations rebuild the whole schema on an empty database,
       # which is the property that was missing before this task.
