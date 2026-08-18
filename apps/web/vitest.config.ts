@@ -11,7 +11,7 @@ export default defineConfig({
   test: {
     // Node, not jsdom: these are pure-function tests. The dashboard components
     // render hardcoded mock data, so rendering them would assert that a
-    // constant equals itself. See docs/impl-specs/github-ci/SPEC.md §2.
+    // constant equals itself.
     environment: "node",
     include: ["src/**/*.test.ts"],
   },

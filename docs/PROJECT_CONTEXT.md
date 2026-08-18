@@ -14,7 +14,7 @@ This project has two layers, and confusing them causes real bugs:
 
 | Layer | Source | Status |
 |---|---|---|
-| **The target system** | `docs/G2_PakCommerceAI.pdf` (proposal) + the vision sections below | **Planned.** Mostly not built. |
+| **The target system** | The product vision sections below | **Planned.** Mostly not built. |
 | **The current codebase** | This repository | **Phase 3 of 8.** See [Implementation Status](#implementation-status). |
 
 Sections describing vision, domain, philosophy, and invariants describe **where the project is going**. They are binding as *principles* — follow them when writing new code — but they do **not** describe what exists today.
@@ -237,7 +237,7 @@ Three tables: `profiles`, `seller_profiles`, `workspaces`. Two enums: `seller_ve
 |---|---|---|
 | `@shadcn/react` dependency never imported | `apps/web/package.json` | Dead dependency |
 | CD uploads `apps/web/dist` | `.github/workflows/cd.yml` | Next.js builds to `.next` — artifact is always empty |
-| 8 npm advisories (1 moderate, 7 high) | root `package-lock.json` | Untriaged. CI deliberately has no audit gate until they are — see `docs/impl-specs/github-ci/BLOCKERS.md` BLK-2 |
+| 8 npm advisories (1 moderate, 7 high) | root `package-lock.json` | Untriaged dependency vulnerabilities. Needs audit triage before enabling audit gate. |
 | No branch protection on `dev` / `main` | GitHub repository settings | CI is advisory; a red branch can still be merged. See BLK-1 |
 
 ### Resolved since the last revision
@@ -518,7 +518,6 @@ Every feature added to the project should support one overarching objective:
 
 | Document | Purpose |
 |---|---|
-| [`G2_PakCommerceAI.pdf`](G2_PakCommerceAI.pdf) | Project proposal — the full target system |
 | [`RUNBOOK.md`](RUNBOOK.md) | Install, run, verify, troubleshoot |
 | [`supabase-setup.md`](supabase-setup.md) | Supabase env vars and client usage |
 | [`ci-cd.md`](ci-cd.md) | CI/CD pipelines |
