@@ -10,7 +10,7 @@ Final Year Project — Department of Computer Science, UET Lahore (New Campus), 
 
 ## ⚠️ Read this before anything else
 
-This repository is **early-stage**. The project proposal ([`docs/G2_PakCommerceAI.pdf`](docs/G2_PakCommerceAI.pdf)) describes the **complete target system**. Most of it is **not built yet**.
+This repository is **early-stage**. The target system describes the **complete operational layer**. Most advanced features are **under active development**.
 
 | | |
 |---|---|
@@ -56,7 +56,6 @@ Three tables exist in Supabase: `profiles`, `seller_profiles`, `workspaces` (plu
 │   ├── integrations/           # Supabase clients + generated DB types
 │   └── ai/                     # AI/agent code (empty)
 ├── docs/
-│   ├── G2_PakCommerceAI.pdf    # Project proposal — the target system
 │   ├── PROJECT_CONTEXT.md      # Vision, domain, principles, invariants
 │   ├── RUNBOOK.md              # How to install and run  ← start here
 │   ├── supabase-setup.md       # Supabase env + client usage
