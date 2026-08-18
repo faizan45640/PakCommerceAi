@@ -5,12 +5,12 @@ Build record for the module, per
 
 | Phase | Delivered | Proof | Commit | Blockers |
 |---|---|---|---|---|
-| 1 | Supabase CLI, `supabase init`, baseline of the three pre-existing tables | `gates/phase-1.md` — baseline rebuilds standalone | `chore(db)`, `feat(db): baseline` | **BLK-1 — OPEN** |
+| 1 | Supabase CLI, `supabase init`, baseline captured from the live project | `gates/phase-1.md` — local and production dumps diff to zero | `chore(db)`, `feat(db): baseline`, `fix(db): capture` | **BLK-1 — RESOLVED** |
 | 2 | `set_updated_at()`, workspaces tenant key, three enums, `products`, `product_variants` | `gates/phase-2.md` — 27/27 red then green | `feat(db)` x4 | — |
 | 3 | Table grants and RLS policies on both tables | `gates/phase-3.md` — found and fixed a real grant defect | `feat(db): access control` | — |
 | 4 | Regenerated types; 27 integration tests; test tiers | `gates/phase-4.md` — 82 tests total | `test(db)`, `chore(types)` | — |
 | 5 | Migration guide, runbook, project context | `gates/phase-5.md` — Open Decisions #4 and #5 answered | `docs` | **BLK-2 — OPEN** |
-| 6 | RLS on `profiles`, `seller_profiles`, `workspaces` | `gates/phase-6.md` — 10/14 red then 41/41 green | `feat(db)`, `test(db)` | — |
+| 6 | Identity-table isolation — migration written, then deleted once the live schema showed production already had it. Tests kept and repointed at the real policies. | `gates/phase-6.md` — 41/41 green | `feat(db)`, `test(db)`, `fix(db): capture` | **BLK-3 — OPEN** |
 
 ## Totals
 
@@ -58,12 +58,15 @@ Two defects that no amount of reading would have surfaced:
 
 ## Precondition for opening a pull request
 
-Workflow §7 requires this registry complete and §4.1 requires no open blocker. **BLK-1 and
-BLK-2 are open**, and both need someone with Supabase project access:
+Workflow §7 requires this registry complete and §4.1 requires no open blocker.
 
-- BLK-1 — run `supabase db diff --linked` and fold any difference into the baseline. Until
-  then the baseline is a good reconstruction, not a verified fact.
-- BLK-2 — run `supabase db push` to apply these migrations to the hosted database.
+- **BLK-1 — RESOLVED.** The baseline is now captured from the live project, not
+  reconstructed. Verified by dumping both databases and diffing to zero.
+- **BLK-2 — OPEN.** `supabase db push` has not been run. The migration files are reviewed
+  and tested, but nothing has been applied to the hosted database yet.
+- **BLK-3 — OPEN.** `workspaces` grants `anon` more than the other identity tables do.
+  Pre-existing, not introduced here, and not currently exploitable — recommended as a small
+  follow-up rather than a change smuggled into T-020.
 
-Everything in this branch was developed and verified against a local database built from
-these migrations alone.
+Everything in this branch was developed and verified against a local database that is now
+byte-for-byte equivalent to production outside the new catalogue tables.

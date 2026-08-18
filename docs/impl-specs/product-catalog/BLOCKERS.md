@@ -5,60 +5,50 @@ blocker halts every phase of this module.
 
 ---
 
-## BLK-1 — The baseline migration is reconstructed, not captured   [OPEN]
+## BLK-1 — The baseline migration is reconstructed, not captured   [RESOLVED]
 
-**Phase:** 1   **Raised:** 2026-08-18   **Gate:** 2 (Reconcile)
+**Phase:** 1   **Raised:** 2026-08-18   **Resolved:** 2026-08-18   **Gate:** 2 (Reconcile)
 **Where:** `supabase/migrations/20260818100001_baseline_identity_and_workspaces.sql`
 
-**The question:** `profiles`, `seller_profiles` and `workspaces` were created by hand in the
-Supabase dashboard before migrations existed. The baseline migration has to reproduce them,
-but the only machine-readable record of that schema in this repository is
-`packages/integrations/src/supabase/database.types.ts`.
+**The question:** the baseline was reconstructed from `database.types.ts`, which records
+columns, types, enums and foreign keys but nothing about defaults, indexes, triggers,
+constraints or RLS. Did it match the live database?
 
-Generated types are authoritative for **columns, types, enums and foreign keys**. They say
-nothing about **defaults, indexes, triggers, check constraints, or existing RLS policies**.
-Everything in the baseline beyond columns and keys is therefore an informed reconstruction:
+**Resolution:** _(task owner obtained project access; `supabase db dump --linked --schema
+public` run against the live project)_
 
-- `profiles.id references auth.users (id) on delete cascade` — the standard Supabase
-  pattern, and `profiles.id` has no default so it must come from somewhere. Foreign keys
-  into the `auth` schema do not appear in generated public-schema relationships, so this
-  cannot be confirmed from the types.
-- `seller_profiles.slug unique` — inferred from it being a slug.
-- Defaults (`now()`, `gen_random_uuid()`, `'pending'`, `'active'`, `false`) — inferred from
-  which fields are optional in the generated `Insert` types.
-- `workspaces_seller_id_idx` — added because every tenant query needs it. May not exist
-  upstream.
-- **RLS state is unknown.** Supabase's dashboard enables RLS by default on tables created
-  through it, so the three identity tables may already be protected upstream, possibly with
-  policies under dashboard-generated names. Migration `0008` is written to be idempotent for
-  this reason, but permissive policies are OR-ed together: a pre-existing policy under a
-  different name would survive and could widen access beyond what `0008` defines. The diff
-  must be reviewed for policies, not only for columns.
+**It did not match. The reconstruction was wrong in eleven ways:**
 
-If the live project differs, a fresh clone and the deployed database diverge silently, and
-the next person to run `supabase db reset` gets a schema that never existed.
+| Missing from the reconstruction | Consequence had it shipped |
+|---|---|
+| `handle_new_auth_user()` — creates a profile on signup, SECURITY DEFINER | Local signups would not create a profile |
+| `create_default_workspace_for_seller()` + its trigger | Every seller would start with no workspace locally |
+| 10 check constraints (name/phone/slug/description lengths, slug regex, `seller_verified_at_consistency`, `workspaces_archived_at_matches_status`) | Local accepts data production rejects |
+| 4 `updated_at` triggers | `updated_at` frozen locally |
+| `seller_profiles_slug_key`, `workspaces_seller_slug_unique` | Duplicate slugs locally; the default-workspace trigger's `ON CONFLICT` would error |
+| `workspaces_one_default_per_seller_idx` | Multiple default workspaces locally |
+| `seller_profiles_verification_status_idx` | — |
+| **RLS already enabled with 8 policies** | Migration `0008` would have created a duplicate, parallel policy set |
+| **Column-level grants** — sellers may update only display fields, never `verification_status` | Local grants table-wide UPDATE; the gap flagged in `0008` was already solved upstream |
+| **`alter default privileges ... grant all on tables to anon`** | **Every new table is granted to `anon` automatically.** `products` would have been reachable by logged-out requests in production while the local test asserted it was denied |
+| Table and column comments | Documentation lost |
 
-**What the documents say nearest to it:** `docs/PROJECT_CONTEXT.md` records "There is no
-`supabase/migrations/` directory. The schema is not reproducible from source control" and
-raises Open Decision #5, "Who owns migrations, and where do they live?" — which this module
-answers, but only for schema written from here on.
+**Actions taken:**
 
-**Options:**
-- A — Someone with dashboard access runs `supabase link --project-ref lnznyolcbmqxnweuvawf`
-  then `supabase db diff --linked --schema public`, and the output is folded into the
-  baseline as a correction migration. Cost: ~15 minutes and a Supabase access token.
-- B — Accept the reconstruction. Cost: local and deployed schemas may differ in ways nobody
-  discovers until a query behaves differently in production.
+1. `0001` rewritten as a faithful capture of the live schema, verified by dumping both
+   databases and diffing: **zero differences** outside the new catalogue objects.
+2. `0002` (`set_updated_at`) **deleted** — the function already existed upstream and is now
+   part of the baseline.
+3. `0008` (identity RLS) **deleted** — production already had equivalent policies, with
+   better column-grant hygiene than the version written blind.
+4. `0007` gained explicit `revoke all ... from anon` on both catalogue tables, because the
+   inherited default privileges would otherwise grant `anon` access to every new table.
+5. The test fixture now uses the trigger-created default workspace instead of making its
+   own, matching production behaviour.
 
-**Recommendation:** A, before this branch is merged. It is the only step that turns the
-baseline from a good guess into a fact, and it gets cheaper the sooner it happens — every
-migration written on top of an unverified baseline inherits the doubt.
-
-**If unanswered I will:** stop. The tables and tests in this module are unaffected by the
-answer — they are additive and were verified against a database built from these
-migrations — but the baseline itself stays provisional until someone diffs it.
-
-**Resolution:** _(written by a human)_
+**The lesson, recorded because it will recur:** generated types are not a schema. They
+describe shape, not behaviour or permissions. Any future baseline of an existing database
+must come from `db dump`, never from types.
 
 ---
 
@@ -90,5 +80,39 @@ still true of application code, but it is now needed by tooling.
 
 **Recommendation:** A. The commands are in `docs/supabase-setup.md`. Deployment is a human
 decision, the same way pushing to GitHub is.
+
+**Resolution:** _(written by a human)_
+
+
+---
+
+## BLK-3 — `workspaces` is granted to `anon`, unlike the other identity tables   [OPEN]
+
+**Phase:** 6   **Raised:** 2026-08-18   **Gate:** 7 (Scan)
+**Where:** `supabase/migrations/20260818100001_baseline_identity_and_workspaces.sql`, the
+privileges section — inherited from the live schema, not introduced here.
+
+**The question:** production grants `ALL ON TABLE workspaces TO anon`, while `profiles` and
+`seller_profiles` grant `anon` nothing. Is that deliberate?
+
+**Why it matters:** it is not currently a leak — RLS is enabled on `workspaces` and no policy
+grants `anon` anything, so a logged-out request returns zero rows. But it removes one of the
+two independent barriers the other tables have. `profiles` stops `anon` at the privilege
+layer *and* at RLS; `workspaces` stops it only at RLS. A future permissive policy, or RLS
+being disabled during debugging, would expose every seller's workspace list.
+
+`ALL` also includes `TRUNCATE`, which **RLS does not filter**. Today `anon` cannot reach the
+database without a valid token, so this is not exploitable — but it is more privilege than
+the table needs.
+
+**Options:**
+- A — `revoke all on public.workspaces from anon` in a new migration, matching the other two
+  tables. Cost: a migration and a test update. Risk: near zero, since nothing anonymous reads
+  workspaces today.
+- B — Leave it. Cost: an inconsistency nobody can explain later, and one barrier instead of
+  two.
+
+**Recommendation:** A, as a small follow-up task rather than inside T-020 — it changes a
+pre-existing production grant, which deserves its own reviewable change.
 
 **Resolution:** _(written by a human)_

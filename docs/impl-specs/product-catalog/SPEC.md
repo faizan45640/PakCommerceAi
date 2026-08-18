@@ -52,13 +52,12 @@ exist. All six were approved by the task owner before implementation.
 
 | File | Responsibility |
 |---|---|
-| `20260818100001_baseline_identity_and_workspaces.sql` | Records the three pre-existing tables so migrations and reality agree. Changes nothing. |
-| `20260818100002_set_updated_at_function.sql` | Shared `set_updated_at()` trigger function. Infrastructure, used by every table from here on. |
+| `20260818100001_baseline_identity_and_workspaces.sql` | Captures the pre-existing schema — tables, constraints, functions, triggers, RLS policies and grants — dumped from the live project. Changes nothing there. |
 | `20260818100003_workspaces_tenant_key.sql` | `unique (id, seller_id)` on workspaces — the target of the composite FK in decision 2. |
 | `20260818100004_product_catalog_enums.sql` | `product_status`, `product_variant_status`, `inventory_state`. |
 | `20260818100005_products_table.sql` | The products table, its constraints, indexes and trigger. |
 | `20260818100006_product_variants_table.sql` | The variants table, its constraints, indexes and trigger. |
-| `20260818100007_product_catalog_rls.sql` | RLS policies for both tables. |
+| `20260818100007_product_catalog_rls.sql` | Grants, `anon` revokes and RLS policies for both tables. |
 
 Migrations are append-only. A mistake in a shipped migration is corrected by a new
 migration, never by editing the old one — editing it would leave every machine that already

@@ -5,9 +5,10 @@
 The spec assumed migrations existed. They did not: no `supabase/` directory, no migration
 files anywhere in the repository, and the three live tables created by hand in the dashboard.
 
-That is recorded as **BLK-1** (the baseline is reconstructed from `database.types.ts`, which
-is authoritative for columns/types/enums/keys but silent on defaults, indexes, triggers and
-policies) — `OPEN`, awaiting a `supabase db diff --linked` from someone with project access.
+That was recorded as **BLK-1** and is now **RESOLVED**. The first baseline was reconstructed
+from `database.types.ts` and was wrong in eleven ways — see BLOCKERS.md. It has been replaced
+with a capture from `supabase db dump --linked`, verified by dumping both databases and
+diffing: **zero differences** outside the new catalogue objects.
 
 ## Gate 5 — Green + aligned
 
@@ -25,7 +26,6 @@ pulling, using a temporary container with a stand-in `auth` schema:
 
 ```
   ok: 20260818100001_baseline_identity_and_workspaces.sql
-  ok: 20260818100002_set_updated_at_function.sql
   ok: 20260818100003_workspaces_tenant_key.sql
 ```
 

@@ -1,5 +1,11 @@
 # Phase 6 — RLS on the identity tables
 
+> **Outcome: the migration was written, then deleted.** Production already had RLS and eight
+> policies on these tables — the repository had no way to know until BLK-1 was resolved and
+> the live schema dumped. The policies are now part of the captured baseline, and the tests
+> written here were kept: they now verify the *real* production policies rather than ones we
+> invented. Everything below records how that was discovered.
+
 Added after the module's original scope, at the task owner's request: since migrations are
 now the only source of schema truth, the three pre-existing tables should be brought under
 the same rule rather than left as an exception.

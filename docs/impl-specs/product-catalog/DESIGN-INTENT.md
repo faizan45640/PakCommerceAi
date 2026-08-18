@@ -91,9 +91,12 @@ what your local database looks like.
 
 ## Every table gets a policy, including the ones that came first
 
-`profiles`, `seller_profiles` and `workspaces` were built before RLS was chosen, and were
-left open. Migration `0008` closed that. It was done at the one moment it was free: no
-application code queried those tables yet, so there was no behaviour to break.
+`profiles`, `seller_profiles` and `workspaces` already had RLS and eight policies — the team
+had done it through the dashboard, and the repository simply did not know. A migration was
+written to add it blind, then deleted once the live schema was dumped and the policies turned
+out to exist already, with better column-grant hygiene than the blind version.
+
+The upstream approach is the one to copy, and it goes further than policies alone:
 
 The pattern to copy for any new table:
 
@@ -102,7 +105,12 @@ The pattern to copy for any new table:
 - **no `delete` policy** unless deletion is genuinely a client action. Deleting a workspace
   cascades to its whole catalogue; the contract models retirement as `status = 'archived'`,
   which is reversible and leaves a trail.
-- `anon` granted nothing, so logged-out requests stop at the privilege layer
+- **column-level grants** for anything a user must not edit. A policy works per row, so it
+  can never stop a seller writing `verification_status` on their *own* row — only a grant
+  can. `grant update (full_name, phone, avatar_url)` is the mechanism.
+- **`revoke` from `anon` explicitly.** Supabase configures default privileges that grant
+  every new table to `anon` automatically, so staying silent is not the same as granting
+  nothing.
 
 ## Identity is ours
 
