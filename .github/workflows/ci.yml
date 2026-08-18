@@ -200,16 +200,87 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  integration:
+    name: integration (database)
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Tier-2 tests bind one real dependency: Postgres with the auth schema, so
+      # RLS policies and auth.uid() behave as they do in production. The UI and
+      # edge services are excluded because nothing here uses them.
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      # Proves the migrations rebuild the whole schema on an empty database,
+      # which is the property that was missing before this task.
+      - name: Verify migrations rebuild the schema from scratch
+        run: supabase db reset
+
+      - name: Integration tests
+        id: test
+        if: ${{ !cancelled() }}
+        run: >
+          npm run test:integration -w @pakcommerce/integrations --
+          --reporter=default
+          --reporter=github-actions
+          --reporter=json
+          --outputFile.json=itest-report.json
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## integration (database)"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Integration tests | ${{ steps.test.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          report="$(find . -name itest-report.json -not -path './node_modules/*' | head -1)"
+          if [ -n "$report" ]; then
+            {
+              echo "<details><summary>Individual tests</summary>"
+              echo ""
+              echo "| | Test |"
+              echo "|---|---|"
+              jq -r '.testResults[].assertionResults[]
+                     | "| \(if .status == "passed" then "✅" else "❌" end) | \(.fullName) |"'                  "$report" 2>/dev/null || echo "| ⚠️ | could not parse $report |"
+              echo ""
+              echo "</details>"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   ci-success:
     name: CI passed
     runs-on: ubuntu-latest
-    needs: [node, ml]
+    needs: [node, ml, integration]
     if: always()
 
     steps:
       - name: Require all jobs to pass
         run: |
-          if [ "${{ needs.node.result }}" != "success" ] || [ "${{ needs.ml.result }}" != "success" ]; then
+          if [ "${{ needs.node.result }}" != "success" ] \n             || [ "${{ needs.ml.result }}" != "success" ] \n             || [ "${{ needs.integration.result }}" != "success" ]; then
             echo "One or more CI jobs failed. Open the failing job above —"
             echo "each workspace reports its own lint / typecheck / test / build result."
             exit 1
