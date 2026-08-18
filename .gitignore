@@ -49,3 +49,7 @@ __pycache__/
 .venv/
 venv/
 implementation-workflow.md
+
+# Schema dumps taken for comparison; regenerate with `supabase db dump`
+remote-schema.sql
+local-schema.sql
