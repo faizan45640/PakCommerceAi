@@ -1,24 +1,18 @@
-import cors from "cors";
 import dotenv from "dotenv";
-import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { healthRouter } from "./routes/health.js";
+import { createApp } from "./app.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// src/index.ts and dist/index.js sit at the same depth, so this reaches the
+// monorepo root either way. Next.js does not read this file — apps/web uses
+// apps/web/.env.local. See docs/RUNBOOK.md §4.
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
-const app = express();
 const port = Number(process.env.API_PORT) || 4000;
-const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
-app.use(cors({ origin: appUrl }));
-app.use(express.json());
-
-app.use("/health", healthRouter);
-app.use("/api/v1", healthRouter);
-
-app.listen(port, () => {
+createApp().listen(port, () => {
   console.log(`API running at http://localhost:${port}`);
 });
