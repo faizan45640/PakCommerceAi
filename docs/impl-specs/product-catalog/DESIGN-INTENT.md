@@ -86,5 +86,32 @@ what your local database looks like.
 | `product_images` table | Its own task. A variant `image_id` pointing at a missing table would be worse than no column. | When the catalogue UI needs images |
 | Options as a table | Capped at 3 by the contract and never queried independently — a child table buys joins and nothing else. | If options ever need to be searched or shared across products |
 | `categories` table | `category_ids` is a uuid array today. Nothing defines a category yet. | When categories become a real entity |
+| External store ids (`product_external_refs`) | See "Identity is ours" below. Needs a `stores` table first. | Phase 4, with the store connectors |
 | RLS on `profiles`, `seller_profiles`, `workspaces` | They predate this decision and changing them is not this task's scope. | Soon — they are the tables holding seller identity |
 | Full-text search index | `search_text` exists and is populated by the backend, but no index yet. Adding one before there is a query to serve would be guessing at the shape. | When product search is implemented |
+
+## Identity is ours
+
+`products.id` is a UUID we generate, not the id Shopify, WooCommerce or Daraz uses. That is
+deliberate, and it is the decision that makes multi-store sync possible at all.
+
+The same product can live on several platforms at once - the point of the whole system. If
+the primary key were the Shopify id there would be no way to say "this Lawn Kurta is Shopify
+7891234 **and** WooCommerce 445 **and** Daraz PK-ABC-9931". External ids also collide across
+providers (WooCommerce 445 and Daraz 445 are unrelated), come in incompatible formats
+(numeric, GID string, alphanumeric), and are absent entirely for products created inside
+PakCommerce AI by a seller or the WhatsApp agent.
+
+They are also not stable for us: reconnecting a store can change them, while our orders,
+inventory and conversations all point at `product_id`. Internal identity must not move
+because an external system changed its mind.
+
+External ids therefore belong in a mapping table - one row per store a product appears in -
+not in a column on `products`. A `shopify_id` column works right up until the second platform
+arrives.
+
+`packages/shared/src/products/README.md` already states this: "Provider-specific variant IDs
+belong in integration mapping tables, not in this shared contract." The schema follows it.
+
+**When extending:** never add a provider-specific column to a domain table. If a value only
+makes sense for one integration, it belongs with that integration.
