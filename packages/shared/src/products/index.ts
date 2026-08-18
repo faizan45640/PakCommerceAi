@@ -101,36 +101,48 @@ export const productImageSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 
-export const productSchema = z
-  .object({
-    id: idSchema,
-    sellerId: idSchema,
-    workspaceId: idSchema,
-    title: trimmedText.min(1).max(180),
-    slug: trimmedText.min(3).max(220),
-    description: nullableText.optional(),
-    status: productStatusSchema,
-    tags: z.array(trimmedText.min(1).max(60)).max(30),
-    categoryIds: z.array(idSchema).max(10),
-    options: z.array(productOptionSchema).max(3),
-    variants: z.array(productVariantSchema).min(1).max(250),
-    images: z.array(productImageSchema).max(20),
-    searchText: trimmedText.max(2000),
-    createdAt: isoDateTimeSchema,
-    updatedAt: isoDateTimeSchema,
-    archivedAt: isoDateTimeSchema.nullable(),
-  })
-  .superRefine((product, context) => {
-    const primaryImages = product.images.filter((image) => image.isPrimary);
+/**
+ * The unrefined object shape.
+ *
+ * Zod 4 refuses `.pick()` / `.omit()` on a schema carrying refinements, so the
+ * refinement is applied to derived schemas rather than baked into the base.
+ * Keep this internal — `productSchema` is the public contract.
+ */
+const productBaseSchema = z.object({
+  id: idSchema,
+  sellerId: idSchema,
+  workspaceId: idSchema,
+  title: trimmedText.min(1).max(180),
+  slug: trimmedText.min(3).max(220),
+  description: nullableText.optional(),
+  status: productStatusSchema,
+  tags: z.array(trimmedText.min(1).max(60)).max(30),
+  categoryIds: z.array(idSchema).max(10),
+  options: z.array(productOptionSchema).max(3),
+  variants: z.array(productVariantSchema).min(1).max(250),
+  images: z.array(productImageSchema).max(20),
+  searchText: trimmedText.max(2000),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+  archivedAt: isoDateTimeSchema.nullable(),
+});
 
-    if (primaryImages.length > 1) {
-      context.addIssue({
-        code: "custom",
-        path: ["images"],
-        message: "Only one product image can be marked as primary.",
-      });
-    }
-  });
+function assertSinglePrimaryImage(
+  product: { images: { isPrimary?: boolean | undefined }[] },
+  context: z.RefinementCtx,
+) {
+  const primaryImages = product.images.filter((image) => image.isPrimary);
+
+  if (primaryImages.length > 1) {
+    context.addIssue({
+      code: "custom",
+      path: ["images"],
+      message: "Only one product image can be marked as primary.",
+    });
+  }
+}
+
+export const productSchema = productBaseSchema.superRefine(assertSinglePrimaryImage);
 
 export const createProductImageInputSchema = productImageSchema
   .pick({
@@ -183,17 +195,7 @@ export const createProductInputSchema = z
     variants: z.array(createProductVariantInputSchema).min(1).max(250),
     images: z.array(createProductImageInputSchema).max(20).default([]),
   })
-  .superRefine((product, context) => {
-    const primaryImages = product.images.filter((image) => image.isPrimary);
-
-    if (primaryImages.length > 1) {
-      context.addIssue({
-        code: "custom",
-        path: ["images"],
-        message: "Only one product image can be marked as primary.",
-      });
-    }
-  });
+  .superRefine(assertSinglePrimaryImage);
 
 export const updateProductInputSchema = z.object({
   title: trimmedText.min(1).max(180).optional(),
@@ -230,7 +232,7 @@ export const productSearchQuerySchema = z.object({
   cursor: trimmedText.min(1).max(500).optional(),
 });
 
-export const productListItemSchema = productSchema.pick({
+export const productListItemSchema = productBaseSchema.pick({
   id: true,
   sellerId: true,
   workspaceId: true,

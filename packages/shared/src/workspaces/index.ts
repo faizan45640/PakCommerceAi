@@ -9,19 +9,27 @@ const isoDateTimeSchema = z.iso.datetime({ offset: true });
 
 export const workspaceStatusSchema = z.enum(workspaceStatusValues);
 
-export const workspaceSchema = z
-  .object({
-    id: idSchema,
-    sellerId: idSchema,
-    name: trimmedText.min(2).max(120),
-    slug: trimmedText.min(3).max(80),
-    status: workspaceStatusSchema,
-    isDefault: z.boolean(),
-    createdAt: isoDateTimeSchema,
-    updatedAt: isoDateTimeSchema,
-    archivedAt: isoDateTimeSchema.nullable(),
-  })
-  .superRefine((workspace, context) => {
+/**
+ * The unrefined object shape.
+ *
+ * Zod 4 refuses `.pick()` / `.omit()` on a schema carrying refinements, so the
+ * refinement is applied to derived schemas rather than baked into the base.
+ * Keep this internal — `workspaceSchema` is the public contract.
+ */
+const workspaceBaseSchema = z.object({
+  id: idSchema,
+  sellerId: idSchema,
+  name: trimmedText.min(2).max(120),
+  slug: trimmedText.min(3).max(80),
+  status: workspaceStatusSchema,
+  isDefault: z.boolean(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+  archivedAt: isoDateTimeSchema.nullable(),
+});
+
+export const workspaceSchema = workspaceBaseSchema.superRefine(
+  (workspace, context) => {
     if (workspace.status === "archived" && workspace.archivedAt === null) {
       context.addIssue({
         code: "custom",
@@ -37,7 +45,8 @@ export const workspaceSchema = z
         message: "Active workspaces cannot include archivedAt.",
       });
     }
-  });
+  },
+);
 
 export const createWorkspaceInputSchema = z.object({
   name: trimmedText.min(2).max(120),
@@ -52,7 +61,7 @@ export const updateWorkspaceInputSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
-export const workspaceListItemSchema = workspaceSchema.pick({
+export const workspaceListItemSchema = workspaceBaseSchema.pick({
   id: true,
   sellerId: true,
   name: true,
