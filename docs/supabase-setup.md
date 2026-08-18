@@ -158,11 +158,24 @@ Creates a timestamped file in `supabase/migrations/`. Rules the project follows:
 Regenerate the types the whole monorepo depends on:
 
 ```bash
-npx supabase gen types typescript --local > packages/integrations/src/supabase/database.types.ts
+npx supabase gen types typescript --linked > packages/integrations/src/supabase/database.types.ts
 ```
 
 Commit that file with the migration. If they drift, `apps/web` and `apps/api` are typed
 against a database that no longer exists.
+
+> **`--linked`, not `--local`.** The two do not produce the same file. The linked project
+> runs PostgREST 14.5 and emits an `__InternalSupabase: { PostgrestVersion: "14.5" }` block
+> that the local stack (PostgREST 16.1) omits. Generating from `--local` silently drops it.
+> The apps talk to the hosted project, so that is the one the types must describe.
+>
+> To check the two databases still agree, diff their schemas rather than their types:
+>
+> ```bash
+> npx supabase db dump --linked --schema public -f prod.sql
+> npx supabase db dump --local  --schema public -f local.sql
+> diff prod.sql local.sql
+> ```
 
 ### Testing a migration
 

@@ -52,37 +52,37 @@ must come from `db dump`, never from types.
 
 ---
 
-## BLK-2 — No credentials to apply migrations to the hosted project   [OPEN]
+## BLK-2 — No credentials to apply migrations to the hosted project   [RESOLVED]
 
-**Phase:** 1   **Raised:** 2026-08-18   **Gate:** 6 (Run)
+**Phase:** 1   **Raised:** 2026-08-18   **Resolved:** 2026-08-18   **Gate:** 6 (Run)
 **Where:** the Supabase project `lnznyolcbmqxnweuvawf`
 
-**The question:** Everything in this module was developed and verified against the **local**
-Supabase stack. Nothing has been applied to the hosted database. Doing so needs credentials
-this working tree does not have:
+**The question:** everything was built against a local database. Nothing had been applied to
+the hosted project, and the working tree had no credentials to do so.
 
-| Credential | State | Needed for |
-|---|---|---|
-| `SUPABASE_URL`, publishable/anon key | present in `.env` | client reads — already working |
-| `SUPABASE_SERVICE_ROLE_KEY` | **empty** | admin operations that bypass RLS |
-| `DATABASE_URL` | **empty** | a direct psql connection |
-| Supabase CLI access token | **absent** | `supabase link` and `supabase db push` |
+**Resolution:** _(task owner obtained project access, linked the project, and ran
+`supabase db push`)_
 
-**What the documents say nearest to it:** `docs/RUNBOOK.md` §4 lists these variables and
-marks `DATABASE_URL` as "Present in `.env.example` but unused by any code today". That is
-still true of application code, but it is now needed by tooling.
+Migrations `20260818100003` through `20260818100007` applied to the hosted database.
 
-**Options:**
-- A — The project owner runs `supabase login` and `supabase db push` from their own machine.
-  Migrations stay reviewable in the repository; the push is a deliberate human act.
-- B — Store a service-role key and database URL in the repo's environment. Rejected — it
-  puts a credential that bypasses RLS onto four machines.
+**Verified after the fact, not assumed.** Both databases dumped and compared:
 
-**Recommendation:** A. The commands are in `docs/supabase-setup.md`. Deployment is a human
-decision, the same way pushing to GitHub is.
+```
+production lines: 317   local lines: 317
+ON PRODUCTION BUT NOT LOCAL (0)
+ON LOCAL BUT NOT PRODUCTION (0)
+*** IDENTICAL ***
+```
 
-**Resolution:** _(written by a human)_
+Production now carries five tables, RLS enabled on every one, and 16 policies — 4 each on
+`products` and `product_variants`, 2 on `profiles` (no INSERT policy: `handle_new_auth_user()`
+owns that path), 3 on `seller_profiles`, 3 on `workspaces`.
 
+**One thing this surfaced:** `database.types.ts` had been regenerated with `--local`, which
+silently dropped the `__InternalSupabase: { PostgrestVersion: "14.5" }` block the hosted
+project emits — local PostgREST is 16.1, production is 14.5. Regenerated from `--linked` and
+`docs/supabase-setup.md` corrected: the committed types must describe the database the apps
+actually talk to. Schema drift is checked by diffing dumps, not by diffing types.
 
 ---
 
