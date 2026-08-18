@@ -10,10 +10,10 @@
     "./supabase": "./src/supabase/index.ts"
   },
   "scripts": {
-    "lint": "tsc --noEmit",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"@pakcommerce/integrations: add vitest when tests are written\"",
-    "build": "tsc"
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8"
