@@ -79,13 +79,15 @@ export async function createSeller(client: Client, label: string): Promise<Selle
     [user.id, `${label} Traders`, `${label}-traders`],
   );
 
+  // Do NOT insert a workspace here. Inserting the seller profile fires
+  // seller_profiles_create_default_workspace, which creates one automatically -
+  // that is production behaviour, and creating a second would make every
+  // "reads only their own workspaces" assertion count two rows.
   const {
     rows: [workspace],
   } = await client.query<{ id: string }>(
-    `insert into public.workspaces (seller_id, name, slug, is_default)
-     values ($1, $2, $3, true)
-     returning id`,
-    [user.id, `${label} Store`, `${label}-store`],
+    `select id from public.workspaces where seller_id = $1 and is_default`,
+    [user.id],
   );
 
   return { userId: user.id, sellerId: user.id, workspaceId: workspace.id };

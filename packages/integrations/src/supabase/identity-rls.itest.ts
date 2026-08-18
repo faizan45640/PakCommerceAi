@@ -80,13 +80,16 @@ describe("profiles isolation", () => {
     await withRollback(client, async () => {
       const alice = await createSeller(client, "alice");
 
+      // Denied at the privilege layer: authenticated has SELECT and a column-
+      // scoped UPDATE on profiles, but no INSERT grant at all. Rows are created
+      // only by handle_new_auth_user(), which runs SECURITY DEFINER at signup.
       await expect(
         asUser(client, alice.userId, () =>
           client.query(`insert into public.profiles (id, full_name) values ($1, 'Impostor')`, [
             "99999999-9999-4999-8999-999999999999",
           ]),
         ),
-      ).rejects.toThrow(/row-level security/i);
+      ).rejects.toThrow(/permission denied/i);
     });
   });
 });
@@ -242,9 +245,17 @@ describe("anonymous access to identity tables", () => {
     await withRollback(client, async () => {
       await createSeller(client, "alice");
 
-      await expect(
-        asAnon(client, () => client.query(`select id from public.workspaces`)),
-      ).rejects.toThrow(/permission denied/i);
+      // workspaces is granted to anon (unlike profiles and seller_profiles), so
+      // anon clears the privilege layer and is stopped by RLS instead: no policy
+      // grants anon anything, and RLS denies by default. One barrier here rather
+      // than two - an inconsistency in the pre-existing grants, recorded in
+      // docs/impl-specs/product-catalog/BLOCKERS.md BLK-3.
+      const rows = await asAnon(client, async () => {
+        const result = await client.query(`select id from public.workspaces`);
+        return result.rows;
+      });
+
+      expect(rows).toHaveLength(0);
     });
   });
 });

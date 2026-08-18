@@ -29,6 +29,19 @@
 grant select, insert, update, delete on public.products to authenticated, service_role;
 grant select, insert, update, delete on public.product_variants to authenticated, service_role;
 
+-- REVOKE, not merely "do not grant". Supabase configures
+--   alter default privileges ... grant all on tables to anon
+-- (reproduced in migration 0001), so every table created here is granted to anon
+-- the moment it exists. Staying silent would leave the catalogue readable by
+-- logged-out requests at the privilege layer, and only RLS would be standing
+-- between anon and the data instead of the two independent barriers intended.
+--
+-- Found by dumping the live schema, not by reading the migration - locally the
+-- default privileges did not exist, so the tests passed while production would
+-- have behaved differently.
+revoke all on public.products from anon;
+revoke all on public.product_variants from anon;
+
 alter table public.products enable row level security;
 alter table public.product_variants enable row level security;
 
