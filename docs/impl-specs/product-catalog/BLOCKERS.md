@@ -28,6 +28,12 @@ Everything in the baseline beyond columns and keys is therefore an informed reco
   which fields are optional in the generated `Insert` types.
 - `workspaces_seller_id_idx` — added because every tenant query needs it. May not exist
   upstream.
+- **RLS state is unknown.** Supabase's dashboard enables RLS by default on tables created
+  through it, so the three identity tables may already be protected upstream, possibly with
+  policies under dashboard-generated names. Migration `0008` is written to be idempotent for
+  this reason, but permissive policies are OR-ed together: a pre-existing policy under a
+  different name would survive and could widen access beyond what `0008` defines. The diff
+  must be reviewed for policies, not only for columns.
 
 If the live project differs, a fresh clone and the deployed database diverge silently, and
 the next person to run `supabase db reset` gets a schema that never existed.

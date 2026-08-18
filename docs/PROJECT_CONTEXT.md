@@ -346,10 +346,18 @@ Every seller owns independent:
 
 Tenant isolation must always be preserved.
 
-> **Enforced for the product catalogue only.** `products` and `product_variants` carry RLS
+> **Enforced on every table that exists.** `products` and `product_variants` carry RLS
 > policies plus a composite foreign key that makes `workspace_id`/`seller_id` drift
-> impossible. `profiles`, `seller_profiles` and `workspaces` still have **no RLS** — they
-> predate the decision. Adding it is follow-up work.
+> impossible. `profiles`, `seller_profiles` and `workspaces` gained policies in migration
+> `0008` — before that, any authenticated user could read every seller's business name,
+> phone number and workspace list.
+>
+> 20 tests prove the boundary by attacking it: what seller A can actually do to seller B's
+> rows, not what the policies claim.
+>
+> Hard-deleting a workspace is deliberately denied to clients. It cascades to the entire
+> catalogue, and the contract already models retirement as `status = 'archived'` — reversible
+> and auditable, which a delete is not.
 
 ---
 

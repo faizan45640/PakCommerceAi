@@ -10,10 +10,11 @@ Build record for the module, per
 | 3 | Table grants and RLS policies on both tables | `gates/phase-3.md` — found and fixed a real grant defect | `feat(db): access control` | — |
 | 4 | Regenerated types; 27 integration tests; test tiers | `gates/phase-4.md` — 82 tests total | `test(db)`, `chore(types)` | — |
 | 5 | Migration guide, runbook, project context | `gates/phase-5.md` — Open Decisions #4 and #5 answered | `docs` | **BLK-2 — OPEN** |
+| 6 | RLS on `profiles`, `seller_profiles`, `workspaces` | `gates/phase-6.md` — 10/14 red then 41/41 green | `feat(db)`, `test(db)` | — |
 
 ## Totals
 
-**82 tests**, up from 55.
+**96 tests**, up from 55.
 
 | Suite | Tests | Tier |
 |---|---|---|
@@ -23,7 +24,15 @@ Build record for the module, per
 | `apps/web` | 11 | 1 |
 | `apps/ml` | 2 | 1 |
 | **schema conformance** | **19** | **2** |
-| **tenant isolation** | **8** | **2** |
+| **catalogue isolation** | **8** | **2** |
+| **identity isolation** | **14** | **2** |
+
+## Added beyond the original scope
+
+Phase 6 was not in the task row. It was added because migrations became the source of schema
+truth in phase 1, which made leaving three tables outside that rule an inconsistency rather
+than a deferral — and because no application code queries them yet, so it cost nothing to do
+now and would have cost debugging time later.
 
 ## What the tests found
 
@@ -32,7 +41,10 @@ Two defects that no amount of reading would have surfaced:
 1. **Missing table grants.** RLS was enabled and policies written, but no role could reach
    the tables. Every seller request would have failed with `permission denied`. Caught by the
    isolation tests on their first correct run.
-2. Earlier in the branch, `packages/shared` threw at import — `.pick()` on a refined Zod
+2. **Three identity tables readable by any logged-in user.** `profiles`, `seller_profiles`
+   and `workspaces` had no RLS, so one authenticated seller could read every other seller's
+   business name, phone number and workspace list. Closed in phase 6.
+3. Earlier in the branch, `packages/shared` threw at import — `.pick()` on a refined Zod
    schema. Unrelated to T-020, fixed in the CI work that preceded it.
 
 ## Not done, and why
@@ -41,7 +53,6 @@ Two defects that no amount of reading would have surfaced:
 |---|---|
 | `product_images` table | Its own task. A variant `image_id` pointing at a missing table is worse than no column. |
 | `categories` table | `category_ids` is a uuid array; nothing defines a category yet. |
-| RLS on `profiles`, `seller_profiles`, `workspaces` | They predate the decision; changing them is outside T-020. Should be next. |
 | Full-text index on `search_text` | No query to serve yet; the shape would be a guess. |
 | Applying migrations to the hosted project | BLK-2 — needs credentials and a human. |
 

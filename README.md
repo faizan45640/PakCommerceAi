@@ -48,9 +48,8 @@ Orders, customers, conversations, couriers, and audit tables **do not exist yet*
 `npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are
 append-only — see [`docs/supabase-setup.md`](docs/supabase-setup.md#migrations).
 
-`products` and `product_variants` carry RLS policies, so tenant isolation is enforced by the
-database rather than by remembering a `where` clause. The three older tables predate that
-decision and still have none.
+Every table carries RLS policies, so tenant isolation is enforced by the database rather than
+by remembering a `where` clause on each query.
 
 ---
 
@@ -131,13 +130,14 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 | `apps/web` | 11 | `getInitials`, `formatCurrency`, preference parsing and defaults |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 | **schema conformance** | **19** | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
-| **tenant isolation** | **8** | A seller cannot read, insert, reassign or delete another seller's rows; anonymous access is denied |
+| **catalogue isolation** | **8** | A seller cannot read, insert, reassign or delete another seller's products or variants |
+| **identity isolation** | **14** | A seller cannot read another's profile, business details or workspaces; workspaces cannot be reassigned or hard-deleted |
 
-**82 tests total.** The last two suites need a database — run them with
+**96 tests total.** The last three suites need a database — run them with
 `npx supabase start` then `npm run test:integration`. They are kept out of `npm run test` so
 the unit suite stays runnable without Docker.
 
-**55 unit tests, 27 database tests.** The dashboards are deliberately untested — every component renders
+**55 unit tests, 41 database tests.** The dashboards are deliberately untested — every component renders
 hardcoded mock data, so a test over them would assert that a constant equals itself. Add
 component tests when those pages get real data.
 - **CD** builds artifacts on `main`. All deploy steps are **placeholders** and stay skipped until the repo variable `ENABLE_CD=true` is set.

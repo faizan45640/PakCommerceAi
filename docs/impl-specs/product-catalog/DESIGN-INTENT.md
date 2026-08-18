@@ -87,8 +87,22 @@ what your local database looks like.
 | Options as a table | Capped at 3 by the contract and never queried independently — a child table buys joins and nothing else. | If options ever need to be searched or shared across products |
 | `categories` table | `category_ids` is a uuid array today. Nothing defines a category yet. | When categories become a real entity |
 | External store ids (`product_external_refs`) | See "Identity is ours" below. Needs a `stores` table first. | Phase 4, with the store connectors |
-| RLS on `profiles`, `seller_profiles`, `workspaces` | They predate this decision and changing them is not this task's scope. | Soon — they are the tables holding seller identity |
 | Full-text search index | `search_text` exists and is populated by the backend, but no index yet. Adding one before there is a query to serve would be guessing at the shape. | When product search is implemented |
+
+## Every table gets a policy, including the ones that came first
+
+`profiles`, `seller_profiles` and `workspaces` were built before RLS was chosen, and were
+left open. Migration `0008` closed that. It was done at the one moment it was free: no
+application code queried those tables yet, so there was no behaviour to break.
+
+The pattern to copy for any new table:
+
+- own-row `select`, `insert`, `update`, each scoped by `auth.uid()`
+- `with check` on every `update`, or a row can be handed to someone else
+- **no `delete` policy** unless deletion is genuinely a client action. Deleting a workspace
+  cascades to its whole catalogue; the contract models retirement as `status = 'archived'`,
+  which is reversible and leaves a trail.
+- `anon` granted nothing, so logged-out requests stop at the privilege layer
 
 ## Identity is ours
 
