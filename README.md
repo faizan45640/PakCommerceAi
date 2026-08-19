@@ -116,7 +116,7 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 
 ## CI/CD
 
-- **CI** runs on **every push to every branch** and on PRs into `dev` or `main`: secret scan → install → lint → typecheck → test → build per workspace, plus a Python job (ruff + pytest) for `apps/ml`.
+- **CI** runs on **every pull request** into `dev` or `main`, and on direct pushes to those branches: secret scan → install → lint → typecheck → test → build per workspace, a Python job (ruff + pytest) for `apps/ml`, and a database job that replays the migrations and runs the integration tests. Working on a branch with no PR yet? Run `npm run ci` locally, or trigger CI from the Actions tab.
 
 ### Test suite
 

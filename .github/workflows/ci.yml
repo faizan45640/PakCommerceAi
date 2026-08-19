@@ -1,17 +1,29 @@
 name: CI
 
 on:
-  push:
-    branches: ["**"]
+  # Pull requests are the real gate: every task reaches dev through one
+  # (docs/gitworkflow.md), so this covers every push to a branch once its PR is
+  # open - including the push that opens it.
   pull_request:
     branches: [main, dev]
+  # Direct pushes to the shared branches, which happen on merge.
+  push:
+    branches: [main, dev]
+  # For a branch with no PR yet: Actions tab -> CI -> Run workflow.
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# `head_ref` on a pull_request and `ref_name` on a push both resolve to the
-# branch name, so a PR branch does not run the same commit twice.
+# Why not `push: ["**"]` as well: with a PR open, a single `git push` fires BOTH
+# a push event and a pull_request synchronize event. In one concurrency group the
+# second cancels the first, so the push run always died at ~2s and showed up on
+# the PR as a wall of cancelled checks. Splitting them into separate groups would
+# instead run the whole suite twice per push - and the integration job starts a
+# Supabase stack, so that is real minutes for four people sharing a quota.
+#
+# Cancellation is still wanted WITHIN a branch: push twice in a minute and only
+# the newer commit needs testing.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
