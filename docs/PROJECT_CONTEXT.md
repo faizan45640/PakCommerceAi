@@ -394,7 +394,46 @@ Whenever the system produces:
 
 the seller should be able to understand **why**.
 
-Explainability is a product feature, not an optional enhancement. This is why the COD risk model is a Random Forest — feature importance scores make the output explainable — rather than a black-box model.
+Explainability is a product feature, not an optional enhancement. This is why the COD risk model is a Random Forest (with SHAP / feature importance scores) rather than an unexplainable black-box model.
+
+---
+
+# Machine Learning & Logistics Risk Methodology
+
+The predictive ML components in `apps/ml` (COD Risk Prediction and Courier Routing) operate under strict methodological constraints:
+
+### 1. Decision-Theoretic Economics (PKR Cost-Benefit Thresholding)
+Model metrics are evaluated against real business economics rather than raw accuracy alone:
+* **Cost of False Positive (FP):** An un-risky order is flagged as high-risk $\rightarrow$ Triggers an automated WhatsApp verification message $\rightarrow$ Cost: **~Rs. 3 in API fee** + minor customer friction.
+* **Cost of False Negative (FN):** A risky order is missed $\rightarrow$ Shipped blindly $\rightarrow$ Rejected at customer doorstep $\rightarrow$ Cost: **~Rs. 250 to 400 return shipping loss** + inventory locked in transit for 7 to 10 days.
+* **Decision Rule:** Because a False Negative is ~100x more expensive than a False Positive, the classification probability threshold is calibrated at $p > 0.35$ (minimizing expected monetary loss) rather than an arbitrary $0.50$ default.
+
+### 2. Realistic Performance Expectations
+* Customer doorstep rejection contains real behavioral noise. A realistic, legitimate production AUC-ROC target for this tabular problem is **0.62 to 0.70**.
+* The goal is not unrealistic 95% accuracy, but providing a statistically significant risk ranking that saves merchants thousands of rupees in preventable return fees.
+
+### 3. Core Feature Set
+1. **Product Category / Vertical:** Footwear, unstitched apparel, electronics, cosmetics (product category is a primary driver of sizing and impulse cancellation risk).
+2. **Destination City & City Tier:** Tier 1 (Karachi, Lahore, Islamabad/Rawalpindi) vs Tier 2 vs Tier 3 / remote tehsils.
+3. **Courier Performance Matrix:** Historical route delivery success rates for Trax, PostEx, Leopards, and TCS per city.
+4. **Order Value in PKR:** Low-ticket (< Rs. 1,500) vs high-ticket (> Rs. 5,000 liquid cash hesitation).
+5. **Address Quality Score:** Text length and presence of recognizable landmark/house heuristics.
+6. **Customer Relationship:** First-time buyer vs repeat customer with past successful deliveries.
+7. **Channel of Origin:** Web store checkout vs unverified social media direct message.
+
+### 4. Validation Strategy (Merchant-Holdout & Time-Split)
+To ensure the model learns generalizable logistics and consumer behavior rather than memorizing a single store's quirks:
+* **Merchant-Holdout Cross-Validation:** The model is trained on Merchants A and B, and evaluated on unseen Merchant C.
+* **Time-Based Splitting:** Training on historical orders and testing strictly on subsequent chronological timeframes to prevent data leakage.
+* **Synthetic & Kaggle Data Role:** Synthetic generators and public datasets serve as pipeline scaffolding and baseline smoke tests; final evaluation is validated on holdout merchant test sets.
+
+### 5. Cross-Merchant Pool Security & Framing
+* Standalone SHA-256 hashing of phone numbers has low entropy (~50M Pakistani mobile numbers) and does not constitute full zero-knowledge privacy against brute-force attacks.
+* The system frames cross-store intelligence as **pseudonymous matching via a server-held HMAC broker key** or centralized aggregate reputation scores (`buyer_network_metrics`), ensuring tenant data is isolated while preserving shared risk signals.
+
+### 6. Decision Support vs. Blind Automation
+* Courier routing and risk warnings operate as **decision support with confidence intervals**.
+* The platform recommends optimal couriers and suggests verification actions, maintaining seller override authority at all times.
 
 ---
 
