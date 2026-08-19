@@ -2,6 +2,8 @@
 "use client";
 
 import { useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { Bot, Loader2, Search, Sparkles, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,25 +20,30 @@ const suggestedQueries = [
 ];
 
 export function NaturalLanguageQuery() {
-  const [query, setQuery] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [response, setResponse] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/copilot/chat",
+    }),
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const isProcessing = status === "streaming" || status === "submitted";
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
-
-    setIsProcessing(true);
-    // Simulate AI response
-    setTimeout(() => {
-      setResponse("Based on your sales data for Multan, I can see that sales have decreased by 23% over the last 30 days. The main contributing factors are:\n\n1. Stock availability issues for top-selling products in the region\n2. Higher competition from 3 new sellers in the area\n3. Delivery times increased by 2.5 days on average\n\nI recommend checking stock levels and considering a promotional campaign in Multan to regain market share.");
-      setIsProcessing(false);
-    }, 2000);
+    if (!input.trim() || isProcessing) return;
+    sendMessage({ text: input });
+    setInput("");
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    setQuery(suggestion);
+    if (isProcessing) return;
+    sendMessage({ text: suggestion });
   };
+
+  // Find the latest assistant message
+  const assistantMessages = messages.filter((m) => m.role === "assistant");
+  const latestAssistantMessage = assistantMessages[assistantMessages.length - 1];
 
   return (
     <Card>
@@ -48,7 +55,7 @@ export function NaturalLanguageQuery() {
         <CardAction className="flex items-center gap-1 text-muted-foreground text-xs">
           <span className="flex items-center gap-1">
             <Sparkles className="size-3" />
-            Powered by AI
+            Vercel AI SDK Active
           </span>
         </CardAction>
       </CardHeader>
@@ -59,12 +66,12 @@ export function NaturalLanguageQuery() {
             <Input
               placeholder="Ask anything about your business..."
               className="pl-9 pr-4"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
               disabled={isProcessing}
             />
           </div>
-          <Button type="submit" disabled={isProcessing || !query.trim()}>
+          <Button type="submit" disabled={isProcessing || !input.trim()}>
             {isProcessing ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           </Button>
         </form>
@@ -84,27 +91,44 @@ export function NaturalLanguageQuery() {
           ))}
         </div>
 
-        {response && (
+        {/* Display chat stream */}
+        {latestAssistantMessage && (
           <div className="rounded-lg bg-muted/50 p-4 space-y-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Bot className="size-3.5" />
-              <span>AI Response</span>
+              <span>AI Copilot Response</span>
               <Badge variant="outline" className="text-[10px]">
-                Confidence: 94%
+                {status === "streaming" ? "Streaming..." : "Ready"}
               </Badge>
             </div>
-            <div className="text-sm whitespace-pre-wrap">{response}</div>
-            <div className="flex gap-2 pt-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs">
-                Copy Response
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs">
-                View Details
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs">
-                Take Action
-              </Button>
+
+            <div className="text-sm whitespace-pre-wrap">
+              {latestAssistantMessage.parts.map((part, index) => {
+                if (part.type === "text") {
+                  return <span key={index}>{part.text}</span>;
+                }
+                return null;
+              })}
             </div>
+
+            {status !== "streaming" && (
+              <div className="flex gap-2 pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    const text = latestAssistantMessage.parts
+                      .filter((p) => p.type === "text")
+                      .map((p) => (p.type === "text" ? p.text : ""))
+                      .join("");
+                    if (text) navigator.clipboard.writeText(text);
+                  }}
+                >
+                  Copy Response
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

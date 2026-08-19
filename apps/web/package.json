@@ -11,12 +11,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.46",
+    "@ai-sdk/react": "^4.0.72",
     "@hookform/resolvers": "^5.4.0",
     "@pakcommerce/integrations": "*",
     "@shadcn/react": "^0.1.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tanstack/react-table": "^8.21.3",
+    "ai": "^7.0.69",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
