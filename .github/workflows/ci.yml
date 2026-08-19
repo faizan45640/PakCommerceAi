@@ -1,17 +1,29 @@
 name: CI
 
 on:
-  push:
-    branches: ["**"]
+  # Pull requests are the real gate: every task reaches dev through one
+  # (docs/gitworkflow.md), so this covers every push to a branch once its PR is
+  # open - including the push that opens it.
   pull_request:
     branches: [main, dev]
+  # Direct pushes to the shared branches, which happen on merge.
+  push:
+    branches: [main, dev]
+  # For a branch with no PR yet: Actions tab -> CI -> Run workflow.
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# `head_ref` on a pull_request and `ref_name` on a push both resolve to the
-# branch name, so a PR branch does not run the same commit twice.
+# Why not `push: ["**"]` as well: with a PR open, a single `git push` fires BOTH
+# a push event and a pull_request synchronize event. In one concurrency group the
+# second cancels the first, so the push run always died at ~2s and showed up on
+# the PR as a wall of cancelled checks. Splitting them into separate groups would
+# instead run the whole suite twice per push - and the integration job starts a
+# Supabase stack, so that is real minutes for four people sharing a quota.
+#
+# Cancellation is still wanted WITHIN a branch: push twice in a minute and only
+# the newer commit needs testing.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
@@ -200,18 +212,101 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  integration:
+    name: integration (database)
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Tier-2 tests bind one real dependency: Postgres with the auth schema, so
+      # RLS policies and auth.uid() behave as they do in production. The UI and
+      # edge services are excluded because nothing here uses them.
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,storage-api
+
+      # Proves the migrations rebuild the whole schema on an empty database,
+      # which is the property that was missing before this task.
+      - name: Verify migrations rebuild the schema from scratch
+        run: supabase db reset
+
+      - name: Integration tests
+        id: test
+        if: ${{ !cancelled() }}
+        run: >
+          npm run test:integration -w @pakcommerce/integrations --
+          --reporter=default
+          --reporter=github-actions
+          --reporter=json
+          --outputFile.json=itest-report.json
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## integration (database)"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Integration tests | ${{ steps.test.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          report="$(find . -name itest-report.json -not -path './node_modules/*' | head -1)"
+          if [ -n "$report" ]; then
+            {
+              echo "<details><summary>Individual tests</summary>"
+              echo ""
+              echo "| | Test |"
+              echo "|---|---|"
+              jq -r '.testResults[].assertionResults[]
+                     | "| \(if .status == "passed" then "✅" else "❌" end) | \(.fullName) |"'                  "$report" 2>/dev/null || echo "| ⚠️ | could not parse $report |"
+              echo ""
+              echo "</details>"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   ci-success:
     name: CI passed
     runs-on: ubuntu-latest
-    needs: [node, ml]
-    if: always()
+    needs: [node, ml, integration]
+    # `always()` would also run after the workflow is CANCELLED, and the check
+    # below would then report a cancellation as a failure. A run superseded by a
+    # newer one for the same branch is normal - it should not go red.
+    if: ${{ !cancelled() }}
 
     steps:
       - name: Require all jobs to pass
         run: |
-          if [ "${{ needs.node.result }}" != "success" ] || [ "${{ needs.ml.result }}" != "success" ]; then
-            echo "One or more CI jobs failed. Open the failing job above —"
-            echo "each workspace reports its own lint / typecheck / test / build result."
+          failed=""
+          [ "${{ needs.node.result }}" = "success" ] || failed="$failed node"
+          [ "${{ needs.ml.result }}" = "success" ] || failed="$failed ml"
+          [ "${{ needs.integration.result }}" = "success" ] || failed="$failed integration"
+
+          if [ -n "$failed" ]; then
+            echo "Failed jobs:$failed"
+            echo ""
+            echo "Open the failing job above - each workspace reports its own"
+            echo "lint / typecheck / test / build result, and every individual test"
+            echo "is listed on the run summary."
             exit 1
           fi
+
           echo "All CI jobs passed."

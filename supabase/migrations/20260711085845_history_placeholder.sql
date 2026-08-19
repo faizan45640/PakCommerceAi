@@ -1,0 +1,28 @@
+-- Placeholder for a migration applied to the hosted project on 2026-07-11 08:58:45,
+-- before this repository tracked migrations.
+--
+-- This file is intentionally empty of SQL.
+--
+-- WHY IT EXISTS: the hosted database's migration history records this version as
+-- applied, but its SQL was never committed to git. Without a local file of the
+-- same name, `supabase db push` refuses to run at all -
+-- "Remote migration versions not found in local migrations directory."
+--
+-- The alternative the CLI suggests is
+-- `supabase migration repair --status reverted`, which deletes these rows from
+-- the remote history. That would make the repository claim these migrations
+-- never happened. They did - they are what built profiles, seller_profiles and
+-- workspaces. Recording that honestly is worth five near-empty files.
+--
+-- WHERE THE SCHEMA WENT: their cumulative effect is captured in
+-- 20260818100001_baseline_identity_and_workspaces.sql, taken from
+-- `supabase db dump --linked` and verified by diffing a local rebuild against
+-- production - zero differences. So a fresh `supabase db reset` still produces
+-- the real schema; it is simply produced by the baseline rather than by these.
+--
+-- IF THE ORIGINAL SQL IS EVER FOUND (a teammate's branch, an old clone), prefer
+-- it: it carries the intent, not just the result. Replace this file's contents,
+-- and drop the corresponding section from the baseline.
+--
+-- Recorded under "Known defects" in docs/PROJECT_CONTEXT.md.
+-- Same situation as 20260711085757_history_placeholder.sql; see that file.

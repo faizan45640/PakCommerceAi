@@ -38,9 +38,18 @@ When a document describes a feature, check the status table below before assumin
 
 ### Database
 
-Three tables exist in Supabase: `profiles`, `seller_profiles`, `workspaces` (plus enums `seller_verification_status`, `workspace_status`). Products, inventory, orders, customers, conversations, couriers, and audit tables **do not exist yet**.
+Five tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`.
+Five enums: `seller_verification_status`, `workspace_status`, `product_status`,
+`product_variant_status`, `inventory_state`.
 
-> ⚠️ There is no `supabase/migrations/` directory in this repo. The current schema is **not reproducible from source** — see Open Decisions in [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md).
+Orders, customers, conversations, couriers, and audit tables **do not exist yet**.
+
+✅ The schema is reproducible from source. `supabase/migrations/` holds every change and
+`npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are
+append-only — see [`docs/supabase-setup.md`](docs/supabase-setup.md#migrations).
+
+Every table carries RLS policies, so tenant isolation is enforced by the database rather than
+by remembering a `where` clause on each query.
 
 ---
 
@@ -55,6 +64,9 @@ Three tables exist in Supabase: `profiles`, `seller_profiles`, `workspaces` (plu
 │   ├── shared/                 # Zod domain contracts (products, workspaces)
 │   ├── integrations/           # Supabase clients + generated DB types
 │   └── ai/                     # AI/agent code (empty)
+├── supabase/
+│   ├── config.toml             # Supabase CLI config
+│   └── migrations/             # Schema, append-only — the source of truth
 ├── docs/
 │   ├── PROJECT_CONTEXT.md      # Vision, domain, principles, invariants
 │   ├── RUNBOOK.md              # How to install and run  ← start here
@@ -104,7 +116,7 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 
 ## CI/CD
 
-- **CI** runs on **every push to every branch** and on PRs into `dev` or `main`: secret scan → install → lint → typecheck → test → build per workspace, plus a Python job (ruff + pytest) for `apps/ml`.
+- **CI** runs on **every pull request** into `dev` or `main`, and on direct pushes to those branches: secret scan → install → lint → typecheck → test → build per workspace, a Python job (ruff + pytest) for `apps/ml`, and a database job that replays the migrations and runs the integration tests. Working on a branch with no PR yet? Run `npm run ci` locally, or trigger CI from the Actions tab.
 
 ### Test suite
 
@@ -115,8 +127,15 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 | `apps/api` | 4 | Health route on both mounts, 404 behaviour, CORS origin |
 | `apps/web` | 11 | `getInitials`, `formatCurrency`, preference parsing and defaults |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
+| **schema conformance** | **19** | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
+| **catalogue isolation** | **8** | A seller cannot read, insert, reassign or delete another seller's products or variants |
+| **identity isolation** | **14** | A seller cannot read another's profile, business details or workspaces; workspaces cannot be reassigned or hard-deleted |
 
-**55 tests total.** The dashboards are deliberately untested — every component renders
+**96 tests total.** The last three suites need a database — run them with
+`npx supabase start` then `npm run test:integration`. They are kept out of `npm run test` so
+the unit suite stays runnable without Docker.
+
+**55 unit tests, 41 database tests.** The dashboards are deliberately untested — every component renders
 hardcoded mock data, so a test over them would assert that a constant equals itself. Add
 component tests when those pages get real data.
 - **CD** builds artifacts on `main`. All deploy steps are **placeholders** and stay skipped until the repo variable `ENABLE_CD=true` is set.

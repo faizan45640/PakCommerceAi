@@ -106,8 +106,8 @@ The **Built?** column reflects the actual database schema and code today.
 | **Seller** | Owner of a workspace. Each seller has completely isolated business data. | ✅ `seller_profiles`, `profiles` |
 | **Workspace** | The isolated environment where a seller manages their business. Everything belongs to a workspace. | ✅ `workspaces` table + Zod contract |
 | **Store** | A connected ecommerce platform belonging to a seller. A seller may connect multiple stores. | ❌ Not modelled |
-| **Product** | An item sold by the seller. Products may exist across multiple connected stores. | 🟡 Zod contract only — **no table** |
-| **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Embedded in the product contract — **no table** |
+| **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table + Zod contract (T-020) |
+| **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants`; `inventory_state` is a generated column. No sync engine yet |
 | **Order** | A purchase created by customers or synchronized from connected stores. | ❌ Not modelled |
 | **Customer** | A buyer with order history and conversation history. | ❌ Not modelled |
 | **Conversation** | Communication between customers and sellers. May contain AI interactions. | ❌ Not modelled |
@@ -227,9 +227,16 @@ The proposal defines a 20-week, 8-phase plan. Current position: **end of Phase 3
 
 ## Database schema
 
-Three tables: `profiles`, `seller_profiles`, `workspaces`. Two enums: `seller_verification_status`, `workspace_status`.
+Five tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`.
+Five enums: `seller_verification_status`, `workspace_status`, `product_status`,
+`product_variant_status`, `inventory_state`.
 
-🔴 **There is no `supabase/migrations/` directory.** The schema is not reproducible from source control.
+✅ **`supabase/migrations/` now exists** and `supabase db reset` rebuilds the whole schema
+from source. Migrations are append-only: a mistake in a shipped migration is corrected by a
+new one, never by editing the old one.
+
+RLS is enabled on `products` and `product_variants` — the first tables in the project to
+enforce tenant isolation rather than assume it.
 
 ## Known defects
 
@@ -238,7 +245,10 @@ Three tables: `profiles`, `seller_profiles`, `workspaces`. Two enums: `seller_ve
 | `@shadcn/react` dependency never imported | `apps/web/package.json` | Dead dependency |
 | CD uploads `apps/web/dist` | `.github/workflows/cd.yml` | Next.js builds to `.next` — artifact is always empty |
 | 8 npm advisories (1 moderate, 7 high) | root `package-lock.json` | Untriaged dependency vulnerabilities. Needs audit triage before enabling audit gate. |
-| No branch protection on `dev` / `main` | GitHub repository settings | CI is advisory; a red branch can still be merged. See BLK-1 |
+| No branch protection on `dev` / `main` | GitHub repository settings | CI is advisory; a red branch can still be merged |
+| `workspaces` grants `ALL` to `anon` | `supabase/migrations/20260818100001_...sql`, privileges section | Pre-existing, inherited from the hosted schema. Not a leak — RLS returns zero rows for `anon` — but `profiles` and `seller_profiles` stop `anon` at *both* the privilege layer and RLS, while `workspaces` relies on RLS alone. `ALL` also includes `TRUNCATE`, which RLS does not filter. **Fix:** `revoke all on public.workspaces from anon` in a follow-up migration |
+| `seller_profiles.verification_status` is writable by the seller via RLS | `20260818100001_...sql` | A policy applies per row, so it cannot stop a seller editing one column of *their own* row. Column-level grants already restrict `UPDATE` to display fields, so this is defence-in-depth rather than a live hole. Revisit when the verification feature is built |
+| Five migrations applied to production were never committed | `supabase/migrations/*_history_placeholder.sql` | Versions `20260711085757`–`20260712162600` built the identity tables; their SQL is not in git. Placeholders keep local and remote histories aligned. **If anyone finds the originals, prefer them** — they carry the intent, not just the result |
 
 ### Resolved since the last revision
 
@@ -299,9 +309,9 @@ Unresolved questions that block or shape upcoming work. **Record the answer here
 | 1 | **Where does business logic live** — `apps/api` as the single backend, or Next.js server actions/route handlers for seller-facing reads with Express only for webhooks and AI? | Web currently bypasses the API entirely. Unresolved, this duplicates business logic across two runtimes. |
 | 2 | **Where does LangGraph run** — LangGraph.js in `packages/ai`, Python LangGraph in `apps/ml`, or a separate service? | `packages/ai` is a Node package; LangGraph is Python-first. Decides the language boundary of the agent. |
 | 3 | **Supabase Auth or custom JWT?** | `.env.example` carries both `JWT_SECRET`/`DATABASE_URL` and Supabase keys. Only one should survive. |
-| 4 | **How is tenant isolation enforced** — Postgres RLS policies, or application-layer `workspace_id` filtering? | Determines whether `createApiSupabaseAdminClient()` (RLS-bypassing) is the norm or the exception. Tenant isolation is an invariant. |
-| 5 | **Who owns migrations, and where do they live?** | Schema is currently not reproducible from the repo. |
-| 6 | **Currency** — `moneySchema` hard-codes `PKR`. What happens to a USD-denominated Shopify store? | Fail, convert, or stay PKR-only — needs to be a decision, not an accident. |
+| 4 | ~~**How is tenant isolation enforced**~~ **ANSWERED (T-020): Postgres RLS.** Policies ship in the same migration as the table. `createApiSupabaseAdminClient()` is the exception, for trusted server code only. | Set by `supabase/migrations/20260818100007_product_catalog_rls.sql`. Every new table follows it. |
+| 5 | ~~**Who owns migrations, and where do they live?**~~ **ANSWERED (T-020): `supabase/migrations/`,** Supabase CLI, append-only, one file per responsibility. | Schema is reproducible with `supabase db reset`. The baseline of the three original tables was **captured** from the live project with `supabase db dump --linked`, then verified by diffing both databases — identical. |
+| 6 | **Currency** — `moneySchema` hard-codes `PKR`. What happens to a USD-denominated Shopify store? | **Partly answered (T-020):** storage keeps an explicit `price_currency` column with an ISO-shape check, so the schema does not need a migration to widen. The application contract is still PKR-only — that part is still open. |
 | 7 | **Seller credential storage** — encrypted at rest, Supabase Vault, or plain columns behind RLS? | Sellers hand over Twilio API Key Secrets and Shopify tokens in Phase 4. |
 | 8 | **Courier API access** — do we have PostEx/TCS/BlueEx credentials, or does courier scoring start on synthetic data? | Blocks Phase 7 planning. |
 
@@ -339,7 +349,19 @@ Every seller owns independent:
 
 Tenant isolation must always be preserved.
 
-> ⚠️ **Not yet enforced anywhere.** `workspaces.seller_id` is a foreign key, but no RLS policy or application-layer guard exists in the repo. See Open Decision #4.
+> **Enforced on every table that exists.** `products` and `product_variants` carry RLS
+> policies plus a composite foreign key that makes `workspace_id`/`seller_id` drift
+> impossible. `profiles`, `seller_profiles` and `workspaces` already carried RLS and eight
+> policies on the hosted project; the repository did not know until the live schema was
+> dumped. They are now captured in the baseline migration, so a local database enforces the
+> same rules.
+>
+> 20 tests prove the boundary by attacking it: what seller A can actually do to seller B's
+> rows, not what the policies claim.
+>
+> Hard-deleting a workspace is deliberately denied to clients. It cascades to the entire
+> catalogue, and the contract already models retirement as `status = 'archived'` — reversible
+> and auditable, which a delete is not.
 
 ---
 
