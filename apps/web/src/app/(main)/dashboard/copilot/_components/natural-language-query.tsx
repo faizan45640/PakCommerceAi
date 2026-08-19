@@ -21,9 +21,13 @@ const suggestedQueries = [
 
 export function NaturalLanguageQuery() {
   const [input, setInput] = useState("");
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/copilot/chat`
+    : "http://localhost:4000/api/v1/copilot/chat";
+
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
-      api: "/api/copilot/chat",
+      api: apiUrl,
     }),
   });
 

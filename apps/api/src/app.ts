@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 
+import { copilotRouter } from "./routes/copilot.js";
 import { healthRouter } from "./routes/health.js";
 
 export interface CreateAppOptions {
@@ -23,6 +24,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use(express.json());
 
   app.use("/health", healthRouter);
+  app.use("/api/v1/copilot", copilotRouter);
+  app.use("/copilot", copilotRouter);
   app.use("/api/v1", healthRouter);
 
   return app;
