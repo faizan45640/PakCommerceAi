@@ -3,7 +3,8 @@
  *
  * profiles, seller_profiles and workspaces hold who a seller is: their name,
  * phone number, business details and the workspaces their whole catalogue hangs
- * off. Before migration 0008 any authenticated user could read all of it.
+ * off. These policies came from the hosted project and are captured in the
+ * baseline migration.
  *
  * As with the catalogue tests, these check the boundary from the outside — what
  * seller A can actually do to seller B's rows — rather than reading policy
@@ -248,8 +249,8 @@ describe("anonymous access to identity tables", () => {
       // workspaces is granted to anon (unlike profiles and seller_profiles), so
       // anon clears the privilege layer and is stopped by RLS instead: no policy
       // grants anon anything, and RLS denies by default. One barrier here rather
-      // than two - an inconsistency in the pre-existing grants, recorded in
-      // docs/impl-specs/product-catalog/BLOCKERS.md BLK-3.
+      // than two - an inconsistency in the pre-existing grants, recorded under
+      // "Known defects" in docs/PROJECT_CONTEXT.md.
       const rows = await asAnon(client, async () => {
         const result = await client.query(`select id from public.workspaces`);
         return result.rows;

@@ -245,7 +245,10 @@ enforce tenant isolation rather than assume it.
 | `@shadcn/react` dependency never imported | `apps/web/package.json` | Dead dependency |
 | CD uploads `apps/web/dist` | `.github/workflows/cd.yml` | Next.js builds to `.next` — artifact is always empty |
 | 8 npm advisories (1 moderate, 7 high) | root `package-lock.json` | Untriaged dependency vulnerabilities. Needs audit triage before enabling audit gate. |
-| No branch protection on `dev` / `main` | GitHub repository settings | CI is advisory; a red branch can still be merged. See BLK-1 |
+| No branch protection on `dev` / `main` | GitHub repository settings | CI is advisory; a red branch can still be merged |
+| `workspaces` grants `ALL` to `anon` | `supabase/migrations/20260818100001_...sql`, privileges section | Pre-existing, inherited from the hosted schema. Not a leak — RLS returns zero rows for `anon` — but `profiles` and `seller_profiles` stop `anon` at *both* the privilege layer and RLS, while `workspaces` relies on RLS alone. `ALL` also includes `TRUNCATE`, which RLS does not filter. **Fix:** `revoke all on public.workspaces from anon` in a follow-up migration |
+| `seller_profiles.verification_status` is writable by the seller via RLS | `20260818100001_...sql` | A policy applies per row, so it cannot stop a seller editing one column of *their own* row. Column-level grants already restrict `UPDATE` to display fields, so this is defence-in-depth rather than a live hole. Revisit when the verification feature is built |
+| Five migrations applied to production were never committed | `supabase/migrations/*_history_placeholder.sql` | Versions `20260711085757`–`20260712162600` built the identity tables; their SQL is not in git. Placeholders keep local and remote histories aligned. **If anyone finds the originals, prefer them** — they carry the intent, not just the result |
 
 ### Resolved since the last revision
 
@@ -307,7 +310,7 @@ Unresolved questions that block or shape upcoming work. **Record the answer here
 | 2 | **Where does LangGraph run** — LangGraph.js in `packages/ai`, Python LangGraph in `apps/ml`, or a separate service? | `packages/ai` is a Node package; LangGraph is Python-first. Decides the language boundary of the agent. |
 | 3 | **Supabase Auth or custom JWT?** | `.env.example` carries both `JWT_SECRET`/`DATABASE_URL` and Supabase keys. Only one should survive. |
 | 4 | ~~**How is tenant isolation enforced**~~ **ANSWERED (T-020): Postgres RLS.** Policies ship in the same migration as the table. `createApiSupabaseAdminClient()` is the exception, for trusted server code only. | Set by `supabase/migrations/20260818100007_product_catalog_rls.sql`. Every new table follows it. |
-| 5 | ~~**Who owns migrations, and where do they live?**~~ **ANSWERED (T-020): `supabase/migrations/`,** Supabase CLI, append-only, one file per responsibility. | Schema is reproducible with `supabase db reset`. The baseline of the three original tables is reconstructed, not captured — see `docs/impl-specs/product-catalog/BLOCKERS.md` BLK-1. |
+| 5 | ~~**Who owns migrations, and where do they live?**~~ **ANSWERED (T-020): `supabase/migrations/`,** Supabase CLI, append-only, one file per responsibility. | Schema is reproducible with `supabase db reset`. The baseline of the three original tables was **captured** from the live project with `supabase db dump --linked`, then verified by diffing both databases — identical. |
 | 6 | **Currency** — `moneySchema` hard-codes `PKR`. What happens to a USD-denominated Shopify store? | **Partly answered (T-020):** storage keeps an explicit `price_currency` column with an ISO-shape check, so the schema does not need a migration to widen. The application contract is still PKR-only — that part is still open. |
 | 7 | **Seller credential storage** — encrypted at rest, Supabase Vault, or plain columns behind RLS? | Sellers hand over Twilio API Key Secrets and Shopify tokens in Phase 4. |
 | 8 | **Courier API access** — do we have PostEx/TCS/BlueEx credentials, or does courier scoring start on synthetic data? | Blocks Phase 7 planning. |

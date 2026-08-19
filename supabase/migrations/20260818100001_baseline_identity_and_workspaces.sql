@@ -11,8 +11,10 @@
 -- constraint, all four triggers, two of the three functions, the unique
 -- constraints, the column-level grants, and the fact that RLS was already
 -- enabled with eight policies. This version is taken from
--- `supabase db dump --linked --schema public` against the live project.
--- See docs/impl-specs/product-catalog/BLOCKERS.md BLK-1.
+-- `supabase db dump --linked --schema public` against the live project, then
+-- verified by diffing both databases - identical.
+-- The lesson is written up under "Schema design rules" in docs/supabase-setup.md:
+-- generated types are not a schema.
 --
 -- KNOWN GAP: handle_new_auth_user() below is called by a trigger on auth.users.
 -- That trigger lives in the `auth` schema, which a public-schema dump does not

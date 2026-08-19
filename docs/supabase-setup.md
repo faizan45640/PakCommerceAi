@@ -188,6 +188,53 @@ npm run test:integration -w @pakcommerce/integrations
 These are tier-2 tests — they need the local stack running. The default `npm run test` skips
 them so a teammate without Docker can still run the unit suite.
 
+### Schema design rules this project follows
+
+Learned the expensive way while building the product catalogue. They apply to every table
+added from here on.
+
+**1. Identity is ours.** `products.id` is a UUID we generate, never Shopify's or Daraz's id.
+The same product can live on several platforms at once — that is the point of multi-store
+sync — and a primary key can only be one of them. External ids also collide across providers
+(WooCommerce `445` and Daraz `445` are unrelated), arrive in incompatible formats, are absent
+for products created inside PakCommerce AI, and can change when a seller reconnects a store
+while our orders still point at `product_id`.
+
+External ids belong in a **mapping table**, one row per store a product appears in — arriving
+in Phase 4 with the connectors. Never add a provider-specific column such as `shopify_id` to
+a domain table: it works right up until the second platform arrives.
+
+**2. Derived data is derived.** `product_variants.inventory_state` is a generated column
+computed from `track_inventory`, `quantity_on_hand` and `low_stock_threshold`. A writable
+status column would be a second source of truth for stock and would eventually disagree with
+the quantity — which surfaces as a customer buying something that is not there.
+
+**3. Money is an integer.** Prices are stored in minor units (paisa), never floats. Currency
+is its own column with an ISO-shape check rather than a hard-coded `PKR`.
+
+**4. Constraints go in the database too.** The Zod contract in `packages/shared` guards the
+application, but sync jobs, admin clients and hand-written SQL all bypass it. A rule that
+protects data integrity is expressed in both places, because only one of them cannot be
+skipped.
+
+**5. Tenant isolation is structural.** RLS policies, plus a composite foreign key
+`(workspace_id, seller_id) → workspaces (id, seller_id)` that makes a product whose seller and
+workspace disagree unrepresentable. Neither depends on a developer remembering anything.
+
+**6. Grants are not the same as policies.** A policy decides *which rows* a role may touch; a
+grant decides whether it may touch the table **at all**. Two consequences:
+
+- Supabase configures `alter default privileges ... grant all on tables to anon`, so every new
+  table is reachable by logged-out requests unless you **`revoke`** explicitly. Staying silent
+  is not the same as granting nothing.
+- A policy cannot restrict a *column*, only a row — so a seller could always edit
+  `verification_status` on their own row. Only `grant update (col, col)` stops that.
+
+**7. Generated types are not a schema.** `database.types.ts` describes columns, types and
+foreign keys. It says nothing about defaults, indexes, triggers, constraints, RLS or grants.
+A baseline of an existing database must come from `db dump`, never from types — reconstructing
+one from types produced a file that was wrong in eleven ways.
+
 ### Deploying to the hosted project
 
 ```bash

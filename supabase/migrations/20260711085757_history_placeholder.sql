@@ -24,4 +24,4 @@
 -- it: it carries the intent, not just the result. Replace this file's contents,
 -- and drop the corresponding section from the baseline.
 --
--- See docs/impl-specs/product-catalog/BLOCKERS.md BLK-4.
+-- Recorded under "Known defects" in docs/PROJECT_CONTEXT.md.
