@@ -84,7 +84,7 @@ Always ground answers in real business facts and use PKR (Rs.) for currency.`,
       },
     });
 
-    result.pipeDataStreamToResponse(res);
+    await result.pipeUIMessageStreamToResponse(res);
   } catch (error) {
     console.error("Copilot stream error:", error);
     if (!res.headersSent) {
