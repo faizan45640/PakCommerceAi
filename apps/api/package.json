@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.46",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
     "@pakcommerce/integrations": "*",
     "ai": "^7.0.69",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "ollama-ai-provider": "^1.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

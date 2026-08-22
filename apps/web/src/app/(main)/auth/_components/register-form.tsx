@@ -20,7 +20,7 @@ const formSchema = z
       .string()
       .min(2, { message: "Business name must be at least 2 characters." })
       .max(120, { message: "Business name must be at most 120 characters." }),
-    email: z.email({ message: "Please enter a valid email address." }),
+    email: z.string().email({ message: "Please enter a valid email address." }),
     password: z.string().min(8, { message: "Password must be at least 8 characters." }),
     confirmPassword: z.string().min(8, { message: "Confirm Password must be at least 8 characters." }),
   })
