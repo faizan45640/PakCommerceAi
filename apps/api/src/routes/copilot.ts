@@ -1,33 +1,36 @@
 import { Router, type Request, type Response } from "express";
-import { google } from "@ai-sdk/google";
 import {
   convertToModelMessages,
   streamText,
   type UIMessage,
 } from "ai";
 
+import { getAiConfig, getLanguageModel } from "../lib/ai/provider.js";
 import { copilotTools } from "../tools/index.js";
 
 export const copilotRouter = Router();
 
 copilotRouter.post("/chat", async (req: Request, res: Response) => {
   const messages: UIMessage[] = req.body?.messages ?? [];
+  const aiConfig = getAiConfig();
 
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-
-  // Fallback mock stream if no API key is set in local environment
-  if (!apiKey) {
+  // Fallback mock stream if the selected provider is not configured
+  if (!aiConfig.isConfigured) {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("X-Vercel-AI-Data-Stream", "v1");
 
     const sampleText =
-      "🤖 **PakCommerce AI Business Copilot (Express Backend Active)**\n\n" +
-      "The Copilot route in `apps/api` on port 4000 is running with modular tools!\n\n" +
-      "To enable live Gemini streaming, add `GOOGLE_GENERATIVE_AI_API_KEY` to `.env`.\n\n" +
-      "*Available Modular Tools:*\n" +
-      "• `queryDatabase` (Safe Read-Only SQL & Analytics)\n" +
-      "• `getCourierPerformance` (City delivery metrics)\n" +
-      "• `updateProductStock` (Guarded mutation with confirmation)";
+      `🤖 **PakCommerce AI Business Copilot (Express Backend Active)**\n\n` +
+      `Current AI Provider: \`${aiConfig.provider}\` (Model: \`${aiConfig.model}\`)\n\n` +
+      `${aiConfig.missingConfigReason ?? "Provider not configured."}\n\n` +
+      `*Supported Providers (configure in \`.env\`):*\n` +
+      `• **Google Gemini:** Set \`AI_PROVIDER=google\` and \`GOOGLE_GENERATIVE_AI_API_KEY\`\n` +
+      `• **OpenRouter:** Set \`AI_PROVIDER=openrouter\` and \`OPENROUTER_API_KEY\`\n` +
+      `• **Ollama (Free/Local):** Set \`AI_PROVIDER=ollama\` and run \`ollama run qwen2.5:7b\`\n\n` +
+      `*Available Modular Tools:*\n` +
+      `• \`queryDatabase\` (Safe Read-Only SQL & Analytics)\n` +
+      `• \`getCourierPerformance\` (City delivery metrics)\n` +
+      `• \`updateProductStock\` (Guarded mutation with confirmation)`;
 
     const chunks = sampleText.split(" ");
     let i = 0;
@@ -47,8 +50,9 @@ copilotRouter.post("/chat", async (req: Request, res: Response) => {
   }
 
   try {
+    const model = getLanguageModel();
     const result = streamText({
-      model: google("gemini-1.5-flash"),
+      model,
       system: `You are the PakCommerce AI Business Copilot running on the central Express backend.
 You assist Pakistani ecommerce sellers with sales insights, stock levels, and Cash-on-Delivery (COD) risks.
 Always ground answers in real business facts and use PKR (Rs.) for currency.`,
@@ -64,3 +68,4 @@ Always ground answers in real business facts and use PKR (Rs.) for currency.`,
     }
   }
 });
+
