@@ -8,6 +8,15 @@
 -- The function is SECURITY DEFINER because inserts happen in the context
 -- of the auth flow (often the anonymous key), which has no grant to write
 -- these tables directly.
+--
+-- Replaces the earlier manual handle_new_auth_user() (which only inserted
+-- a profiles row) that was applied to some environments outside of
+-- migrations. Dropped here so every database converges on this version.
+
+drop trigger if exists on_auth_user_created on auth.users;
+drop function if exists public.handle_new_auth_user();
+drop trigger if exists on_auth_user_created on auth.users;
+drop function if exists public.handle_new_user();
 
 create or replace function public.handle_new_user()
 returns trigger
