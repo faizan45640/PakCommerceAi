@@ -21,11 +21,23 @@ describe("health routes", () => {
     expect(response.body).toEqual({ status: "ok", service: "api" });
   });
 
-  it("unknown route returns 404", async () => {
-    // Guards against a catch-all that would make every future typo look healthy.
+  it("protected API routes reject anonymous requests", async () => {
+    // The requireAuth mount sits below /health and /api/v1 health in app.ts;
+    // anything reaching it without a bearer token must be a 401 envelope.
     const response = await request(createApp()).get("/api/v1/orders");
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("unauthorized");
+  });
+
+  it("public mounts stay reachable without a token", async () => {
+    const copilot = await request(createApp()).post("/api/v1/copilot/chat");
+
+    expect(copilot.status).not.toBe(401);
+
+    const apiRoot = await request(createApp()).get("/api/v1");
+
+    expect(apiRoot.status).toBe(200);
   });
 
   it("cors origin honours APP_URL", async () => {

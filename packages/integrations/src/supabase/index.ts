@@ -6,6 +6,7 @@ export {
   createSupabaseAdminClient,
   createSupabaseBrowserClient,
   createSupabaseClient,
+  createSupabaseUserClient,
   type AppSupabaseClient,
 } from "./client.js";
 export { SupabaseService } from "./service.js";

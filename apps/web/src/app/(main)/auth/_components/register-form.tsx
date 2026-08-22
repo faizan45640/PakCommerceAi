@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 const formSchema = z
   .object({
@@ -20,16 +21,6 @@ const formSchema = z
     path: ["confirmPassword"],
   });
 
-function onSubmit(data: z.infer<typeof formSchema>) {
-  toast("You submitted the following values", {
-    description: (
-      <pre className="mt-2 w-[320px] rounded-md bg-neutral-950 p-4">
-        <code className="text-white">{JSON.stringify(data, null, 2)}</code>
-      </pre>
-    ),
-  });
-}
-
 export function RegisterForm() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -39,6 +30,36 @@ export function RegisterForm() {
       confirmPassword: "",
     },
   });
+
+  async function onSubmit(data: z.infer<typeof formSchema>) {
+    const supabase = createClient();
+
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/v1/login`,
+      },
+    });
+
+    if (error) {
+      toast.error("Registration failed", { description: error.message });
+      return;
+    }
+
+    if (!authData.session) {
+      // Email confirmation is enabled: the account exists but there is no
+      // session until the user clicks the confirmation link.
+      toast.success("Check your inbox", {
+        description: "We sent a confirmation link to activate your account.",
+      });
+      form.reset();
+      return;
+    }
+
+    toast.success("Account created!");
+    window.location.assign("/dashboard");
+  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -98,8 +119,8 @@ export function RegisterForm() {
           )}
         />
       </FieldGroup>
-      <Button className="w-full" type="submit">
-        Register
+      <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
+        {form.formState.isSubmitting ? "Creating account..." : "Register"}
       </Button>
     </form>
   );

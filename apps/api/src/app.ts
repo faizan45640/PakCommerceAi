@@ -1,6 +1,8 @@
 import cors from "cors";
 import express from "express";
 
+import { requireAuth } from "./middleware/auth.js";
+import { supabaseTokenVerifier } from "./middleware/verify-supabase-token.js";
 import { copilotRouter } from "./routes/copilot.js";
 import { healthRouter } from "./routes/health.js";
 
@@ -27,6 +29,18 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/v1/copilot", copilotRouter);
   app.use("/copilot", copilotRouter);
   app.use("/api/v1", healthRouter);
+
+  // Everything mounted below requires a valid Supabase access token.
+  // Keep public routes above this line; add protected routers below it.
+  app.use(
+    "/api/v1",
+    requireAuth(supabaseTokenVerifier),
+    (_req, res) => {
+      res.status(404).json({
+        error: { code: "not_found", message: "Unknown API endpoint." },
+      });
+    },
+  );
 
   return app;
 }

@@ -2,6 +2,7 @@ import {
   assertSupabaseConfig,
   createSupabaseAdminClient,
   createSupabaseClient,
+  createSupabaseUserClient,
   getSupabaseConfigFromEnv,
 } from "@pakcommerce/integrations/supabase";
 
@@ -17,4 +18,11 @@ export function createApiSupabaseAdminClient() {
   assertSupabaseConfig(config);
 
   return createSupabaseAdminClient(config);
+}
+
+export function createApiSupabaseUserClient(accessToken: string) {
+  const config = getSupabaseConfigFromEnv();
+  assertSupabaseConfig(config);
+
+  return createSupabaseUserClient(config, accessToken);
 }
