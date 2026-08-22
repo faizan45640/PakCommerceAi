@@ -214,7 +214,7 @@ The proposal defines a 20-week, 8-phase plan. Current position: **end of Phase 3
 
 - Well-developed Zod contracts for products (variants, images, options, inventory state, search queries) and workspaces, versioned `2026-07-12`
 - Covered by 24 tests as of 2026-08-17. Those tests found — and the fix removed — a crash that made the package unimportable
-- 🔴 **Still orphaned** — neither `apps/web` nor `apps/api` declares it as a dependency, and nothing imports it. Open Decision #1 governs when that changes
+- 🔴 **Still orphaned** — neither `apps/web` nor `apps/api` declares it as a dependency, and nothing imports it. Unblocked by the answer to Open Decision #1 (hybrid, 2026-08-22): wire it into both apps as real server actions and API endpoints land. Treat "shared is imported by ≥1 app" as an exit criterion for Phase 4.
 
 **`packages/integrations`**
 
@@ -306,14 +306,14 @@ Unresolved questions that block or shape upcoming work. **Record the answer here
 
 | # | Decision | Why it matters |
 |---|---|---|
-| 1 | **Where does business logic live** — `apps/api` as the single backend, or Next.js server actions/route handlers for seller-facing reads with Express only for webhooks and AI? | Web currently bypasses the API entirely. Unresolved, this duplicates business logic across two runtimes. |
+| 1 | ~~**Where does business logic live**~~ **ANSWERED (2026-08-22): Hybrid.** Next.js server actions / route handlers own seller-facing reads and writes against RLS-protected Supabase. `apps/api` (Express) owns webhooks, the AI copilot/agent, and background jobs only. Consequence: `packages/shared` Zod contracts get consumed by whichever runtime validates a given payload — both apps should declare it as a dependency as server actions are built out. | Web already bypassed the API; this ratifies reality instead of forcing an extra hop. |
 | 2 | **Where does LangGraph run** — LangGraph.js in `packages/ai`, Python LangGraph in `apps/ml`, or a separate service? | `packages/ai` is a Node package; LangGraph is Python-first. Decides the language boundary of the agent. |
-| 3 | **Supabase Auth or custom JWT?** | `.env.example` carries both `JWT_SECRET`/`DATABASE_URL` and Supabase keys. Only one should survive. |
+| 3 | ~~**Supabase Auth or custom JWT?**~~ **ANSWERED (2026-08-22): Supabase Auth only.** RLS policies depend on `auth.uid()` and `@supabase/ssr` cookie sessions are already wired in `apps/web`. Cleanup: remove `JWT_SECRET`/`DATABASE_URL` from `.env.example` once no code references them. | Custom JWTs would require rewriting every RLS policy. |
 | 4 | ~~**How is tenant isolation enforced**~~ **ANSWERED (T-020): Postgres RLS.** Policies ship in the same migration as the table. `createApiSupabaseAdminClient()` is the exception, for trusted server code only. | Set by `supabase/migrations/20260818100007_product_catalog_rls.sql`. Every new table follows it. |
 | 5 | ~~**Who owns migrations, and where do they live?**~~ **ANSWERED (T-020): `supabase/migrations/`,** Supabase CLI, append-only, one file per responsibility. | Schema is reproducible with `supabase db reset`. The baseline of the three original tables was **captured** from the live project with `supabase db dump --linked`, then verified by diffing both databases — identical. |
 | 6 | **Currency** — `moneySchema` hard-codes `PKR`. What happens to a USD-denominated Shopify store? | **Partly answered (T-020):** storage keeps an explicit `price_currency` column with an ISO-shape check, so the schema does not need a migration to widen. The application contract is still PKR-only — that part is still open. |
-| 7 | **Seller credential storage** — encrypted at rest, Supabase Vault, or plain columns behind RLS? | Sellers hand over Twilio API Key Secrets and Shopify tokens in Phase 4. |
-| 8 | **Courier API access** — do we have PostEx/TCS/BlueEx credentials, or does courier scoring start on synthetic data? | Blocks Phase 7 planning. |
+| 7 | **Seller credential storage** — encrypted at rest, Supabase Vault, or plain columns behind RLS? | Sellers hand over per-seller credentials for **multiple carriers and stores** (confirmed 2026-08-22): each seller may connect Shopify/WooCommerce plus several couriers (PostEx/TCS/BlueEx), so the credential store must be keyed by `(seller, provider)` and support many providers per seller. Storage mechanism itself still undecided. |
+| 8 | ~~**Courier API access**~~ **ANSWERED (2026-08-22):** No carrier credentials in hand today. Real credentials will arrive **per seller, later** — sellers supply their own courier accounts, possibly across different carriers. Consequence: Phase 7 starts on synthetic data; the courier adapter layer (Integration Philosophy) must accept per-tenant credentials, not project-level ones. Blocks nothing until Phase 7 planning. | Shapes the adapter interface and ties into Decision #7 storage design. |
 
 ---
 
