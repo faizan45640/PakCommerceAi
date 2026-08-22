@@ -12,9 +12,17 @@ import { createClient } from "@/lib/supabase/client";
 
 const formSchema = z
   .object({
+    fullName: z
+      .string()
+      .min(2, { message: "Name must be at least 2 characters." })
+      .max(100, { message: "Name must be at most 100 characters." }),
+    businessName: z
+      .string()
+      .min(2, { message: "Business name must be at least 2 characters." })
+      .max(120, { message: "Business name must be at most 120 characters." }),
     email: z.email({ message: "Please enter a valid email address." }),
-    password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-    confirmPassword: z.string().min(6, { message: "Confirm Password must be at least 6 characters." }),
+    password: z.string().min(8, { message: "Password must be at least 8 characters." }),
+    confirmPassword: z.string().min(8, { message: "Confirm Password must be at least 8 characters." }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match.",
@@ -25,6 +33,8 @@ export function RegisterForm() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      fullName: "",
+      businessName: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -39,6 +49,10 @@ export function RegisterForm() {
       password: data.password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/v1/login`,
+        data: {
+          full_name: data.fullName,
+          business_name: data.businessName,
+        },
       },
     });
 
@@ -64,6 +78,42 @@ export function RegisterForm() {
   return (
     <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
       <FieldGroup className="gap-4">
+        <Controller
+          control={form.control}
+          name="fullName"
+          render={({ field, fieldState }) => (
+            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor="register-full-name">Full Name</FieldLabel>
+              <Input
+                {...field}
+                id="register-full-name"
+                type="text"
+                placeholder="Ahmed Raza"
+                autoComplete="name"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
+        />
+        <Controller
+          control={form.control}
+          name="businessName"
+          render={({ field, fieldState }) => (
+            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor="register-business-name">Business Name</FieldLabel>
+              <Input
+                {...field}
+                id="register-business-name"
+                type="text"
+                placeholder="Raza Textiles"
+                autoComplete="organization"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
+        />
         <Controller
           control={form.control}
           name="email"
