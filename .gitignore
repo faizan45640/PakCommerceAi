@@ -2,6 +2,7 @@
 node_modules/
 .cursor/
 .vscode/
+.opencode/
 # Build output
 dist/
 build/
