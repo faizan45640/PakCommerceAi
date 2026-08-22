@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 const formSchema = z.object({
   email: z.email({ message: "Please enter a valid email address." }),
@@ -16,17 +18,8 @@ const formSchema = z.object({
   remember: z.boolean().optional(),
 });
 
-function onSubmit(data: z.infer<typeof formSchema>) {
-  toast("You submitted the following values", {
-    description: (
-      <pre className="mt-2 w-[320px] rounded-md bg-neutral-950 p-4">
-        <code className="text-white">{JSON.stringify(data, null, 2)}</code>
-      </pre>
-    ),
-  });
-}
-
 export function LoginForm() {
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -35,6 +28,24 @@ export function LoginForm() {
       remember: false,
     },
   });
+
+  async function onSubmit(data: z.infer<typeof formSchema>) {
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    });
+
+    if (error) {
+      toast.error("Login failed", { description: error.message });
+      return;
+    }
+
+    toast.success("Welcome back!");
+    router.push("/dashboard");
+    router.refresh();
+  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -97,8 +108,8 @@ export function LoginForm() {
           )}
         />
       </FieldGroup>
-      <Button className="w-full" type="submit">
-        Login
+      <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
+        {form.formState.isSubmitting ? "Logging in..." : "Login"}
       </Button>
     </form>
   );

@@ -13,6 +13,29 @@ export function createSupabaseClient(config: SupabaseConfig): AppSupabaseClient 
   });
 }
 
+export function createSupabaseUserClient(
+  config: SupabaseConfig,
+  accessToken: string,
+): AppSupabaseClient {
+  if (!accessToken) {
+    throw new Error(
+      "Supabase user client requires a verified user access token.",
+    );
+  }
+
+  return createClient<Database>(config.url, config.anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+}
+
 export function createSupabaseAdminClient(config: SupabaseConfig): AppSupabaseClient {
   if (!config.serviceRoleKey) {
     throw new Error(

@@ -69,13 +69,17 @@ export async function createSeller(client: Client, label: string): Promise<Selle
     [`${label}@pakcommerce.test`],
   );
 
-  await client.query(`insert into public.profiles (id, full_name) values ($1, $2)`, [
+  // handle_new_user() fires on this insert and creates profiles,
+  // seller_profiles, and the default workspace from signup-derived values.
+  // Align them with the deterministic fixture names below instead of
+  // inserting second rows (that would violate the primary keys).
+  await client.query(`update public.profiles set full_name = $2 where id = $1`, [
     user.id,
     label,
   ]);
 
   await client.query(
-    `insert into public.seller_profiles (id, business_name, slug) values ($1, $2, $3)`,
+    `update public.seller_profiles set business_name = $2, slug = $3 where id = $1`,
     [user.id, `${label} Traders`, `${label}-traders`],
   );
 
