@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./api": "./src/api/index.ts",
+    "./inventory": "./src/inventory/index.ts",
     "./products": "./src/products/index.ts",
     "./workspaces": "./src/workspaces/index.ts"
   },
