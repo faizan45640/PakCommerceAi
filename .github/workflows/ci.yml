@@ -246,11 +246,23 @@ jobs:
       - name: Verify migrations rebuild the schema from scratch
         run: supabase db reset
 
-      - name: Integration tests
-        id: test
+      # Two steps rather than the root fan-out, so a failure names the workspace
+      # and each suite writes its own report file for the summary below.
+      - name: Integration tests (database)
+        id: test_db
         if: ${{ !cancelled() }}
         run: >
           npm run test:integration -w @pakcommerce/integrations --
+          --reporter=default
+          --reporter=github-actions
+          --reporter=json
+          --outputFile.json=itest-report.json
+
+      - name: Integration tests (api)
+        id: test_api
+        if: ${{ !cancelled() }}
+        run: >
+          npm run test:integration -w @pakcommerce/api --
           --reporter=default
           --reporter=github-actions
           --reporter=json
@@ -264,12 +276,12 @@ jobs:
             echo ""
             echo "| Check | Result |"
             echo "|---|---|"
-            echo "| Integration tests | ${{ steps.test.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| Database tests | ${{ steps.test_db.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
+            echo "| API tests | ${{ steps.test_api.outcome == 'success' && '✅ pass' || '❌ fail' }} |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          report="$(find . -name itest-report.json -not -path './node_modules/*' | head -1)"
-          if [ -n "$report" ]; then
+          for report in $(find . -name itest-report.json -not -path './node_modules/*'); do
             {
               echo "<details><summary>Individual tests</summary>"
               echo ""
@@ -281,7 +293,7 @@ jobs:
               echo "</details>"
               echo ""
             } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          done
 
   ci-success:
     name: CI passed
