@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -108,6 +103,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "product_variants_product_workspace_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "product_list_view"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "product_variants_product_workspace_fkey"
             columns: ["product_id", "workspace_id"]
@@ -302,10 +304,41 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      product_list_view: {
+        Row: {
+          archived_at: string | null
+          category_ids: string[] | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          max_price_amount_minor: number | null
+          min_price_amount_minor: number | null
+          price_currency: string | null
+          search_text: string | null
+          seller_id: string | null
+          slug: string | null
+          status: Database["public"]["Enums"]["product_status"] | null
+          tags: string[] | null
+          title: string | null
+          total_quantity_on_hand: number | null
+          updated_at: string | null
+          variant_count: number | null
+          variant_states: string[] | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
     }
     Functions: {
-      [_ in never]: never
+      create_product: { Args: { payload: Json }; Returns: string }
     }
     Enums: {
       inventory_state: "in_stock" | "low_stock" | "out_of_stock" | "untracked"
@@ -460,3 +493,4 @@ export const Constants = {
     },
   },
 } as const
+
