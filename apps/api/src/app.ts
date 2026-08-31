@@ -3,6 +3,8 @@ import express from "express";
 
 import { requireAuth } from "./middleware/auth.js";
 import { supabaseTokenVerifier } from "./middleware/verify-supabase-token.js";
+import { errorHandler } from "./middleware/error-handler.js";
+import { productRouter } from "./products/product-router.js";
 import { copilotRouter } from "./routes/copilot.js";
 import { healthRouter } from "./routes/health.js";
 
@@ -32,6 +34,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   // Everything mounted below requires a valid Supabase access token.
   // Keep public routes above this line; add protected routers below it.
+  app.use("/api/v1/products", requireAuth(supabaseTokenVerifier), productRouter);
+
   app.use(
     "/api/v1",
     requireAuth(supabaseTokenVerifier),
@@ -41,6 +45,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       });
     },
   );
+
+  // Last, and after every route: Express picks error handlers by arity and only
+  // consults the ones registered after the route that threw.
+  app.use(errorHandler);
 
   return app;
 }
