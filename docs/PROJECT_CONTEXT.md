@@ -106,7 +106,7 @@ The **Built?** column reflects the actual database schema and code today.
 | **Seller** | Owner of a workspace. Each seller has completely isolated business data. | ✅ `seller_profiles`, `profiles` |
 | **Workspace** | The isolated environment where a seller manages their business. Everything belongs to a workspace. | ✅ `workspaces` table + Zod contract |
 | **Store** | A connected ecommerce platform belonging to a seller. A seller may connect multiple stores. | ❌ Not modelled |
-| **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table + Zod contract (T-020) |
+| **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table, Zod contract, and CRUD API (T-020, T-021) |
 | **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants`; `inventory_state` is a generated column. No sync engine yet |
 | **Order** | A purchase created by customers or synchronized from connected stores. | ❌ Not modelled |
 | **Customer** | A buyer with order history and conversation history. | ❌ Not modelled |
@@ -198,6 +198,8 @@ The proposal defines a 20-week, 8-phase plan. Current position: **end of Phase 3
 
 **`apps/api` — Express 5, port 4000**
 
+- Product CRUD at `/api/v1/products` - create, list/search, read, update, archive. Documented in `docs/api.md`
+- Seller scoping is not done in handler code: `requireAuth` verifies the token, and each request builds a Supabase client carrying it so the RLS policies filter inside Postgres
 - One router (`healthRouter`), mounted at both `/health` and `/api/v1`
 - `src/app.ts` exports `createApp()`; `src/index.ts` loads env and binds the port. Split so the app can be driven in-process by tests
 - CORS restricted to `APP_URL`, JSON body parsing enabled
