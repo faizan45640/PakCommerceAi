@@ -16,6 +16,18 @@ export default tseslint.config(
   {
     files: ["**/*.ts"],
     rules: {
+      // A leading underscore means "required by a signature I do not control,
+      // deliberately unused". Express identifies an error handler by its arity,
+      // so dropping the unused `next` parameter silently turns it into ordinary
+      // middleware that never runs - the parameter has to stay.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
       // TypeScript resolves identifiers itself. ESLint's no-undef cannot see Node or
       // DOM globals in a flat config without a globals package, so it only produces
       // false positives here.
