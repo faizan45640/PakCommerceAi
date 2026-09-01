@@ -29,10 +29,10 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. 6 dashboard pages, all rendering **hardcoded mock data**. Login/register **UI only** — the forms do not authenticate. |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. 6 dashboard pages rendering **mock data**, plus wired login/register against Supabase Auth with an SSR session proxy. |
 | `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD at `/api/v1/products` with bearer-token auth and seller scoping enforced by RLS, plus health, copilot and AI tools. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
-| `packages/shared` | `@pakcommerce/shared` | 🟡 **Written, unused, tested** | Zod contracts for products + workspaces, covered by 24 tests. **No app depends on it yet.** |
+| `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory and API envelopes. Consumed by `apps/api` (request/response validation) and `apps/web` (response types). |
 | `packages/integrations` | `@pakcommerce/integrations` | 🟢 **Working** | Supabase client/admin factories + generated DB types. Used by both web and api. |
 | `packages/ai` | `@pakcommerce/ai` | ⚪ **Empty stub** | Placeholder scripts only. |
 

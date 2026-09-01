@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 const suggestedQueries = [
   "Why are sales low in Multan?",
@@ -28,6 +29,15 @@ export function NaturalLanguageQuery() {
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: apiUrl,
+      // The API requires a Supabase access token on every copilot call — the
+      // chat streams through tools that read seller data. Resolve the session
+      // per request so a fresh token is sent even after a refresh.
+      headers: async () => {
+        const { data } = await createClient().auth.getSession();
+        return {
+          Authorization: `Bearer ${data.session?.access_token ?? ""}`,
+        };
+      },
     }),
   });
 
