@@ -53,7 +53,10 @@ const FORBIDDEN_KEYWORDS =
   /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|replace|copy|vacuum|analyze|set|reset|do|call|execute|comment|listen|notify|merge|upsert)\b/i;
 
 function preflightCheck(sql: string): string | null {
-  const normalized = sql.trim().toLowerCase();
+  // Trim all whitespace, not just spaces: SQL built in template literals (and
+  // by the model) routinely starts with a newline, which would fail the
+  // startsWith checks below.
+  const normalized = sql.trim().replace(/^\s+/, "").toLowerCase();
 
   if (normalized === "") return "Empty query.";
   if (!normalized.startsWith("select") && !normalized.startsWith("with")) {

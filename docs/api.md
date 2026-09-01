@@ -194,11 +194,20 @@ The copilot at `POST /api/v1/copilot/chat` (auth required, streams via the Verce
 | Tool | What it does | Safety |
 |---|---|---|
 | `searchProducts` | Structured search over the seller's catalogue (text, status, inventory state, tags, sort). Returns `ProductListItem[]` validated against the shared contract. | Reuses the product service + RLS; the model never supplies a `workspaceId` — it is resolved from the seller context. |
+| `getSchema` | Lists the seller's queryable tables and their real columns/types, so the model can confirm what exists before writing SQL. | Runs a fixed introspection query (never model-authored) through `run_readonly_query`; input capped to the owned tables by an enum. |
 | `queryDatabase` | Executes a single read-only SELECT the model wrote, for questions no structured tool covers. | Runs via the `run_readonly_query` Postgres function (SECURITY INVOKER): RLS applies, semicolons and mutating keywords are rejected, bounded to 10s / 200 rows. |
 | `getCourierPerformance` | City delivery metrics. **Demo stub** — returns fixed sample values until courier data exists. | Read-only. |
 | `updateProductStock` | Stock adjustment request. **Scaffold** — returns a confirmation card; the mutation itself lands with the inventory task. | Write-side; intentionally returns a confirmation request rather than mutating. |
 
 Tools are built per request from the seller context (`createCopilotTools(auth)`), so a seller can only ever read their own data through them — the same RLS boundary as the REST endpoints.
+
+### How the model writes correct SQL
+
+Three mechanisms work together:
+
+1. **Schema in the system prompt.** The copilot prompt embeds the real schema (tables, columns, types, the "money is integer paisa" rule, the note that `inventory_state` is generated). A model that can see `price_amount_minor` stops guessing `price`. Kept honest by a drift-guard test that pins the document to the migrations (`schema-document.test.ts`).
+2. **Runtime introspection.** `getSchema` queries `information_schema` through the safe read-only RPC, so the model can confirm a column exists even if the prompt document is stale.
+3. **A bounded retry loop.** `streamText` runs with `stopWhen: isStepCount(3)`. When `queryDatabase` fails, the Postgres error is returned to the model as a structured tool result, and the model corrects the SQL and retries — up to 3 steps, so a confused model cannot run away. This execution-feedback loop is the biggest reliability win for text-to-SQL.
 
 ## Trying it by hand
 
