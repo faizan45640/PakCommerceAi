@@ -30,7 +30,7 @@ When a document describes a feature, check the status table below before assumin
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
 | `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. 6 dashboard pages, all rendering **hardcoded mock data**. Login/register **UI only** — the forms do not authenticate. |
-| `apps/api` | `@pakcommerce/api` | 🔴 **Skeleton** | Express 5 server. Exactly one route (`health`), mounted at `/health` and `/api/v1`. No business endpoints. |
+| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD at `/api/v1/products` with bearer-token auth and seller scoping enforced by RLS, plus health, copilot and AI tools. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
 | `packages/shared` | `@pakcommerce/shared` | 🟡 **Written, unused, tested** | Zod contracts for products + workspaces, covered by 24 tests. **No app depends on it yet.** |
 | `packages/integrations` | `@pakcommerce/integrations` | 🟢 **Working** | Supabase client/admin factories + generated DB types. Used by both web and api. |
@@ -124,7 +124,7 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 |---|---|---|
 | `packages/shared` | 24 | Product and workspace Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
 | `packages/integrations` | 14 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 4 | Health route on both mounts, 404 behaviour, CORS origin |
+| `apps/api` | 44 | Auth middleware, health and copilot routes, slug generation, search-document building, and the database⇄contract mapper |
 | `apps/web` | 11 | `getInitials`, `formatCurrency`, preference parsing and defaults |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 | **schema conformance** | **19** | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
