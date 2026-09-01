@@ -21,8 +21,13 @@
 --    subquery wrap above is the real guarantee.
 -- 4. statement_timeout and a row cap. A runaway query is bounded to 10s and
 --    200 rows, so one bad prompt cannot hang a request or flood the response.
--- 5. search_path pinned empty and names schema-qualified, so the caller cannot
---    redirect execution at their own functions (the classic plpgsql trap).
+-- 5. search_path pinned. `''` would be ideal (nothing resolvable that the
+--    caller does not name), but the whole point of this function is to run
+--    SQL the model wrote, and that SQL references the tables by their plain
+--    names (`from products`). So the path is pinned to `public` — the schema
+--    where the seller's tables live — rather than inherited. `pg_temp` and
+--    any attacker-controlled schema stay excluded, so the query cannot be
+--    redirected at a table the seller did not intend.
 --
 -- It is a safety *checkpoint*, not a sandbox: the LLM is trusted to write
 -- valid SQL and the validator is a regex. The row/time caps and RLS are the
@@ -32,7 +37,7 @@ create or replace function public.run_readonly_query(p_sql text)
 returns jsonb
 language plpgsql
 security invoker
-set search_path = ''
+set search_path = public
 as $$
 declare
   normalized text;
