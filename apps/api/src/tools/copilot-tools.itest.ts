@@ -8,8 +8,10 @@
  * Requires the local Supabase stack: `npx supabase start`.
  */
 
+import request from "supertest";
 import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 
+import { createApp } from "../app.js";
 import { createApiSupabaseUserClient } from "../lib/supabase.js";
 import type { TestSeller } from "../testing/api-test-env.js";
 import {
@@ -20,6 +22,9 @@ import {
 } from "../testing/api-test-env.js";
 import { sellerContext } from "../products/seller-context.js";
 import { createCopilotTools } from "../tools/index.js";
+
+const app = () => createApp();
+const PRODUCTS = "/api/v1/products";
 
 let alice: TestSeller;
 let bob: TestSeller;
@@ -45,14 +50,21 @@ afterEach(async () => {
   await deleteTestSeller(bob);
 });
 
+/**
+ * Creates a product through the real HTTP API, exactly like products.itest.
+ *
+ * Calling the create_product RPC directly would need the DB-shaped payload
+ * (workspace_id, seller_id) that the API service builds from the contract —
+ * passing the contract payload to the RPC leaves seller_id null and trips RLS.
+ */
 async function createProduct(seller: TestSeller, overrides: Record<string, unknown> = {}) {
-  const { data, error } = await createApiSupabaseUserClient(seller.accessToken)
-    .rpc("create_product", {
-      payload: productPayload(seller.workspaceId, overrides),
-    });
+  const response = await request(app())
+    .post(PRODUCTS)
+    .set("Authorization", `Bearer ${seller.accessToken}`)
+    .send(productPayload(seller.workspaceId, overrides));
 
-  expect(error).toBeNull();
-  return data as string;
+  expect(response.status).toBe(201);
+  return response.body.data.id as string;
 }
 
 describe("searchProducts tool", () => {
