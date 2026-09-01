@@ -173,4 +173,79 @@ describe("queryDatabase tool", () => {
     if (result.status !== "success") return;
     expect(result.rows).toEqual([{ title: "Alice Kurta" }]);
   });
+
+  it("returns the real Postgres error so the model can correct and retry", async () => {
+    // The retry loop works because the tool surfaces the database error as a
+    // structured message the model can act on. This test pins that contract:
+    // a wrong column name must come back as a readable error, not a 500.
+    const result = await toolsFor(alice).queryDatabase.execute({
+      queryDescription: "titles with a made-up column",
+      sql: "select product_name from products",
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status !== "error") return;
+    expect(result.message).toMatch(/rejected/i);
+  });
+
+  it("can query an aggregate over variants (non-obvious column names)", async () => {
+    await createProduct(alice, {
+      title: "Lawn Kurta",
+      variants: [
+        { title: "Medium", sku: "KURTA-M", price: { amountMinor: 250000 } },
+        { title: "Large", sku: "KURTA-L", price: { amountMinor: 275000 } },
+      ],
+    });
+
+    // The schema document tells the model about price_amount_minor; this proves
+    // a query that would fail without that knowledge actually runs.
+    const result = await toolsFor(alice).queryDatabase.execute({
+      queryDescription: "average variant price in paisa",
+      sql: "select avg(price_amount_minor)::int as avg_price_paisa from product_variants",
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") return;
+    const row = result.rows[0] as { avg_price_paisa: string };
+    expect(Number(row.avg_price_paisa)).toBe(262500);
+  });
+});
+
+describe("getSchema tool", () => {
+  it("lists the owned tables with their real columns", async () => {
+    const result = await toolsFor(alice).getSchema.execute({});
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") return;
+
+    const tables = result.tables as { table_name: string }[];
+    const names = tables.map((t) => t.table_name);
+
+    expect(names).toContain("products");
+    expect(names).toContain("product_variants");
+  });
+
+  it("describes one table on request", async () => {
+    const result = await toolsFor(alice).getSchema.execute({ table: "products" });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") return;
+
+    const rows = result.tables as { table_name: string; column_name: string; data_type: string }[];
+    expect(rows.every((r) => r.table_name === "products")).toBe(true);
+    expect(rows.map((r) => r.column_name)).toContain("title");
+    expect(rows.map((r) => r.column_name)).toContain("workspace_id");
+    expect(rows.map((r) => r.column_name)).toContain("search_text");
+  });
+
+  it("cannot be tricked into describing tables outside the owned set", async () => {
+    // The input schema caps the table name to QUERYABLE_TABLES; a model cannot
+    // ask about auth tables or inject SQL through the tool input.
+    const result = await toolsFor(alice).getSchema.execute({
+      // @ts-expect-error - the enum rejects anything outside the owned tables
+      table: "auth.users",
+    });
+
+    expect(result.status).toBe("error");
+  });
 });

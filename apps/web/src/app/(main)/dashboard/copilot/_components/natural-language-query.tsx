@@ -13,6 +13,7 @@ import {
   Search,
   Send,
   Sparkles,
+  Table2,
   Terminal,
 } from "lucide-react";
 
@@ -51,7 +52,15 @@ function ToolCallCard({ part }: { part: ToolPartShape }) {
 
   const input = part.input as Record<string, unknown> | undefined;
   const output = part.output as
-    | { status?: string; count?: number; total?: number; products?: unknown[]; rowCount?: number; message?: string }
+    | {
+        status?: string;
+        count?: number;
+        total?: number;
+        products?: unknown[];
+        rowCount?: number;
+        tables?: unknown[];
+        message?: string;
+      }
     | undefined;
 
   const icon =
@@ -59,6 +68,8 @@ function ToolCallCard({ part }: { part: ToolPartShape }) {
       <PackageSearch className="size-3.5" />
     ) : toolName === "queryDatabase" ? (
       <Database className="size-3.5" />
+    ) : toolName === "getSchema" ? (
+      <Table2 className="size-3.5" />
     ) : (
       <Terminal className="size-3.5" />
     );
@@ -73,7 +84,9 @@ function ToolCallCard({ part }: { part: ToolPartShape }) {
           ? `${output.count ?? output.products.length} product(s) found (${output.total ?? "?"} total)`
           : output?.rowCount !== undefined
             ? `${output.rowCount} row(s) returned`
-            : "Done";
+            : output?.tables !== undefined
+              ? `${(output.tables as unknown[]).length} column(s) listed`
+              : "Done";
 
   return (
     <div
