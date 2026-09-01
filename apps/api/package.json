@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.46",
+    "@ai-sdk/openai-compatible": "^3.0.41",
     "@openrouter/ai-sdk-provider": "^3.0.0",
     "@pakcommerce/integrations": "*",
     "@pakcommerce/shared": "*",

@@ -58,6 +58,28 @@ describe("AI Provider Factory", () => {
     expect(model.modelId).toBe("meta-llama/llama-3.3-70b-instruct");
   });
 
+  it("configures DeepSeek provider when AI_PROVIDER=deepseek", () => {
+    process.env.AI_PROVIDER = "deepseek";
+    delete process.env.DEEPSEEK_API_KEY;
+
+    const unconfigured = getAiConfig();
+    expect(unconfigured.provider).toBe("deepseek");
+    expect(unconfigured.model).toBe("deepseek-chat");
+    expect(unconfigured.isConfigured).toBe(false);
+    expect(unconfigured.missingConfigReason).toContain("DEEPSEEK_API_KEY");
+
+    process.env.DEEPSEEK_API_KEY = "mock-deepseek-key";
+    process.env.AI_MODEL = "deepseek-reasoner";
+
+    const configured = getAiConfig();
+    expect(configured.isConfigured).toBe(true);
+    expect(configured.model).toBe("deepseek-reasoner");
+
+    const model = getLanguageModel() as { modelId?: string };
+    expect(model).toBeDefined();
+    expect(model.modelId).toBe("deepseek-reasoner");
+  });
+
   it("configures local Ollama provider when AI_PROVIDER=ollama", () => {
     process.env.AI_PROVIDER = "ollama";
     process.env.AI_MODEL = "qwen2.5:7b";

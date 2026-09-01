@@ -27,6 +27,7 @@ copilotRouter.post("/chat", async (req: Request, res: Response) => {
       `${aiConfig.missingConfigReason ?? "Provider not configured."}\n\n` +
       `*Supported Providers (configure in \`.env\`):*\n` +
       `• **Google Gemini:** Set \`AI_PROVIDER=google\` and \`GOOGLE_GENERATIVE_AI_API_KEY\`\n` +
+      `• **DeepSeek:** Set \`AI_PROVIDER=deepseek\` and \`DEEPSEEK_API_KEY\`\n` +
       `• **OpenRouter:** Set \`AI_PROVIDER=openrouter\` and \`OPENROUTER_API_KEY\`\n` +
       `• **Ollama (Free/Local):** Set \`AI_PROVIDER=ollama\` and run \`ollama run qwen2.5:7b\`\n\n` +
       `*Available Modular Tools:*\n` +
