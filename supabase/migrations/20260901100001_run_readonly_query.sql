@@ -43,7 +43,10 @@ declare
   normalized text;
   result jsonb;
 begin
-  normalized := lower(btrim(p_sql));
+  -- btrim's default strips only spaces; a leading newline (which both the model
+  -- and our own tools routinely produce in template literals) would otherwise
+  -- fail the select% check below. Strip all whitespace.
+  normalized := lower(btrim(p_sql, E' \t\n\r'));
 
   if normalized = '' then
     raise exception 'empty query' using errcode = 'check_violation';
