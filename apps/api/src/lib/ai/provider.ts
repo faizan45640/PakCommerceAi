@@ -1,9 +1,10 @@
 import { google } from "@ai-sdk/google";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createOllama } from "ollama-ai-provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 
-export type AiProviderName = "google" | "openrouter" | "ollama";
+export type AiProviderName = "google" | "openrouter" | "ollama" | "deepseek";
 
 export interface AiConfig {
   provider: AiProviderName;
@@ -32,6 +33,16 @@ export function getAiConfig(): AiConfig {
         model,
         isConfigured: Boolean(apiKey && apiKey.trim().length > 0),
         missingConfigReason: "Missing OPENROUTER_API_KEY in environment variables.",
+      };
+    }
+    case "deepseek": {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      const model = process.env.AI_MODEL || "deepseek-chat";
+      return {
+        provider: "deepseek",
+        model,
+        isConfigured: Boolean(apiKey && apiKey.trim().length > 0),
+        missingConfigReason: "Missing DEEPSEEK_API_KEY in environment variables.",
       };
     }
     case "google":
@@ -67,6 +78,20 @@ export function getLanguageModel(): LanguageModel {
       }
       const openrouter = createOpenRouter({ apiKey });
       return openrouter(config.model);
+    }
+    case "deepseek": {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) {
+        throw new Error("Cannot instantiate DeepSeek model: DEEPSEEK_API_KEY is not set.");
+      }
+      // DeepSeek serves an OpenAI-compatible API, so it plugs in through the
+      // generic OpenAI-compatible provider rather than a DeepSeek-specific SDK.
+      const deepseek = createOpenAICompatible({
+        name: "deepseek",
+        baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+        apiKey,
+      });
+      return deepseek(config.model);
     }
     case "google":
     default: {

@@ -187,6 +187,19 @@ Honest list of what this does not do yet.
 
 ---
 
+## Copilot tools
+
+The copilot at `POST /api/v1/copilot/chat` (auth required, streams via the Vercel AI SDK) exposes tools the model can call to ground answers in the seller's real data:
+
+| Tool | What it does | Safety |
+|---|---|---|
+| `searchProducts` | Structured search over the seller's catalogue (text, status, inventory state, tags, sort). Returns `ProductListItem[]` validated against the shared contract. | Reuses the product service + RLS; the model never supplies a `workspaceId` — it is resolved from the seller context. |
+| `queryDatabase` | Executes a single read-only SELECT the model wrote, for questions no structured tool covers. | Runs via the `run_readonly_query` Postgres function (SECURITY INVOKER): RLS applies, semicolons and mutating keywords are rejected, bounded to 10s / 200 rows. |
+| `getCourierPerformance` | City delivery metrics. **Demo stub** — returns fixed sample values until courier data exists. | Read-only. |
+| `updateProductStock` | Stock adjustment request. **Scaffold** — returns a confirmation card; the mutation itself lands with the inventory task. | Write-side; intentionally returns a confirmation request rather than mutating. |
+
+Tools are built per request from the seller context (`createCopilotTools(auth)`), so a seller can only ever read their own data through them — the same RLS boundary as the REST endpoints.
+
 ## Trying it by hand
 
 Get a token (browser console on a signed-in dashboard, or via the Supabase client):
