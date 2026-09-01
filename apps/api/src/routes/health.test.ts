@@ -31,13 +31,22 @@ describe("health routes", () => {
   });
 
   it("public mounts stay reachable without a token", async () => {
-    const copilot = await request(createApp()).post("/api/v1/copilot/chat");
-
-    expect(copilot.status).not.toBe(401);
-
     const apiRoot = await request(createApp()).get("/api/v1");
 
     expect(apiRoot.status).toBe(200);
+  });
+
+  it("copilot is no longer a public mount", async () => {
+    // Copilot streams through tools that read seller data and mutate inventory,
+    // so it requires auth like every other protected router. The bare /copilot
+    // alias must be equally protected.
+    const copilot = await request(createApp()).post("/api/v1/copilot/chat");
+
+    expect(copilot.status).toBe(401);
+
+    const alias = await request(createApp()).post("/copilot/chat");
+
+    expect(alias.status).toBe(401);
   });
 
   it("cors origin honours APP_URL", async () => {

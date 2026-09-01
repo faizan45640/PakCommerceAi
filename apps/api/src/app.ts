@@ -28,12 +28,14 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use(express.json());
 
   app.use("/health", healthRouter);
-  app.use("/api/v1/copilot", copilotRouter);
-  app.use("/copilot", copilotRouter);
   app.use("/api/v1", healthRouter);
 
   // Everything mounted below requires a valid Supabase access token.
   // Keep public routes above this line; add protected routers below it.
+  // Copilot is protected too: its tools will mutate inventory and read seller
+  // data, so the endpoint must not be callable by anyone off the street.
+  app.use("/api/v1/copilot", requireAuth(supabaseTokenVerifier), copilotRouter);
+  app.use("/copilot", requireAuth(supabaseTokenVerifier), copilotRouter);
   app.use("/api/v1/products", requireAuth(supabaseTokenVerifier), productRouter);
 
   app.use(
