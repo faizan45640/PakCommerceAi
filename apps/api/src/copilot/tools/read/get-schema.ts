@@ -16,6 +16,22 @@ import { QUERYABLE_TABLES } from "../../schema-document.js";
  * from QUERYABLE_TABLES). information_schema would leak nothing the seller
  * cannot already see, but scoping to the owned tables keeps the answer small
  * and focused on what the copilot can actually query.
+ *
+ * FUTURE / DEFERRED SCALING ARCHITECTURE (Intent-Based Schema Partitioning):
+ * As the database schema grows larger (orders, logistics, customers, payments, discounts),
+ * returning all tables or embedding the entire schema in the system prompt will bloat context
+ * windows, increase token costs, and degrade LLM reasoning quality.
+ *
+ * Future Evolution:
+ * Divide/slice schemas based on seller intent or functional domains:
+ * - "catalog_inventory": ['products', 'product_variants']
+ * - "orders_fulfillment": ['orders', 'order_items', 'shipments', 'courier_status']
+ * - "marketing_discounts": ['coupons', 'campaigns', 'discounts']
+ * - "finance_analytics": ['payouts', 'transactions', 'daily_metrics']
+ *
+ * Instead of exposing every table at once, `getSchema` can accept an `intent` or `domain` parameter
+ * (or dynamically route based on query classification), returning only the schema slice relevant
+ * to that specific question.
  */
 
 export const getSchemaInputSchema = z.object({

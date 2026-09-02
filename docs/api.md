@@ -211,6 +211,14 @@ Tools are built per request from the seller context (`createCopilotTools(auth)`)
 3. **Execution-feedback retry loop.** `streamText` runs with `stopWhen: isStepCount(8)`. When SQL execution fails, the Postgres error is returned to the model as a structured tool result, and the model corrects the SQL and retries.
 4. **Native Vercel AI SDK Human-in-the-Loop (HITL) approvals.** All write actions halt server execution with `toolApproval: 'user-approval'`. The frontend presents an interactive confirmation card (showing product details, proposed values, and SQL preview) with Approve and Deny buttons. The mutation commits only after the merchant clicks Approve.
 
+### Future Architecture / Deferred: Intent-Based Schema Partitioning
+
+As the database grows larger with subsequent slices (orders, shipments, payouts, discounts, customers, conversations), embedding the entire database schema into the system prompt or returning every table in a single `getSchema` call will make the context window excessively heavy, increase token latency, and introduce hallucinations.
+
+**Planned Architecture:**
+- **Domain / Intent Slicing:** Partition database tables by functional intent (e.g. `catalog_inventory`, `orders_logistics`, `marketing_discounts`, `finance_analytics`).
+- **Dynamic Schema Slicing:** `getSchema` will accept an `intent` or `domain` parameter (or classify the user prompt), returning only the tables, columns, and foreign keys relevant to that specific request rather than the entire database.
+
 ## Trying it by hand
 
 Get a token (browser console on a signed-in dashboard, or via the Supabase client):
