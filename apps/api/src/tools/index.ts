@@ -32,7 +32,7 @@ export function createCopilotTools(auth: SellerContext) {
     getCourierPerformance: getCourierPerformanceTool,
 
     // Write side (Guarded Mutations)
-    updateProductStock: updateProductStockTool,
+    updateProductStock: updateProductStockTool(auth),
   };
 }
 

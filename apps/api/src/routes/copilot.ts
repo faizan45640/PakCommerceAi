@@ -97,6 +97,9 @@ copilotRouter.post("/chat", async (req: Request, res: Response) => {
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
       tools: createCopilotTools(auth),
+      toolApproval: {
+        updateProductStock: "user-approval",
+      },
       // Multi-step tool calling: let the model fix its own SQL after a failed
       // queryDatabase call, bounded so a looping model cannot run away.
       stopWhen: isStepCount(MAX_TOOL_STEPS),
