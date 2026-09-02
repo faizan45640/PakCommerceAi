@@ -43,11 +43,11 @@ const LIST_ITEM: ProductListItem = {
   inventoryState: "in_stock",
 };
 
-vi.mock("../../products/product-service.js", () => ({
+vi.mock("../../../products/product-service.js", () => ({
   listProducts: vi.fn(),
 }));
 
-import { listProducts } from "../../products/product-service.js";
+import { listProducts } from "../../../products/product-service.js";
 
 const mockedList = vi.mocked(listProducts);
 

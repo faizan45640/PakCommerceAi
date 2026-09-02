@@ -1,4 +1,4 @@
-import type { SellerContext } from "../products/seller-context.js";
+import type { SellerContext } from "../../middleware/seller-context.js";
 import { getCourierPerformanceTool } from "./read/courier-performance.js";
 import { getSchemaTool } from "./read/get-schema.js";
 import { queryDatabaseTool } from "./read/query-database.js";

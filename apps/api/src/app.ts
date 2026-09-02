@@ -5,7 +5,7 @@ import { requireAuth } from "./middleware/auth.js";
 import { supabaseTokenVerifier } from "./middleware/verify-supabase-token.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { productRouter } from "./products/product-router.js";
-import { copilotRouter } from "./routes/copilot.js";
+import { copilotRouter } from "./copilot/copilot-router.js";
 import { healthRouter } from "./routes/health.js";
 
 export interface CreateAppOptions {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { SellerContext } from "../../products/seller-context.js";
+import type { SellerContext } from "../../../middleware/seller-context.js";
 
 export const updateProductStockInputSchema = z.object({
   variantId: z.string().describe("UUID of the product variant to update"),

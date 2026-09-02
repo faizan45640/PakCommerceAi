@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { SellerContext } from "../../products/seller-context.js";
+import type { SellerContext } from "../../../middleware/seller-context.js";
 import {
   updateProductStockInputSchema,
   updateProductStockTool,

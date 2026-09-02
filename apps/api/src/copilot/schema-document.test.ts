@@ -10,7 +10,7 @@ import { QUERYABLE_TABLES, SCHEMA_DOCUMENT } from "./schema-document.js";
  * migrations — every column it claims must actually exist in SQL source.
  */
 
-const MIGRATIONS_DIR = join(__dirname, "../../../../../supabase/migrations");
+const MIGRATIONS_DIR = join(__dirname, "../../../../supabase/migrations");
 
 function migrationSql(): string {
   return readdirSync(MIGRATIONS_DIR)

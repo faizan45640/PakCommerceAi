@@ -6,10 +6,10 @@ import {
   type UIMessage,
 } from "ai";
 
-import { getAiConfig, getLanguageModel } from "../lib/ai/provider.js";
-import { SCHEMA_DOCUMENT } from "../lib/ai/schema-document.js";
-import { sellerContext } from "../products/seller-context.js";
-import { createCopilotTools } from "../tools/index.js";
+import { getAiConfig, getLanguageModel } from "./provider.js";
+import { SCHEMA_DOCUMENT } from "./schema-document.js";
+import { sellerContext } from "../middleware/seller-context.js";
+import { createCopilotTools } from "./tools/index.js";
 
 export const copilotRouter = Router();
 
