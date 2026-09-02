@@ -95,27 +95,35 @@ function ToolCallCard({
 }) {
   const toolName = part.type.replace(/^tool-/, "");
 
-  // Native Vercel AI SDK Human-in-the-Loop approval card for stock mutations
-  if (toolName === "updateProductStock") {
-    const inputData = (part.input ?? {}) as {
-      productTitle?: string;
-      newQuantity?: number;
-      reason?: string;
-      variantId?: string;
-    };
-    const outputData = (part.output ?? {}) as {
-      status?: string;
-      message?: string;
-      quantityOnHand?: number;
-      inventoryState?: string;
-    };
+  // Native Vercel AI SDK Human-in-the-Loop approval cards for guarded mutations
+  if (
+    toolName === "updateProductStock" ||
+    toolName === "updateProductPrice" ||
+    toolName === "updateProductDetails"
+  ) {
+    const inputData = (part.input ?? {}) as Record<string, unknown>;
+    const outputData = (part.output ?? {}) as Record<string, unknown>;
+
+    const actionTitle =
+      toolName === "updateProductStock"
+        ? "Action Approval: Adjust Stock Level"
+        : toolName === "updateProductPrice"
+          ? "Action Approval: Update Selling Price"
+          : "Action Approval: Update Product Details";
+
+    const executedTitle =
+      toolName === "updateProductStock"
+        ? "Stock Level Updated"
+        : toolName === "updateProductPrice"
+          ? "Price Updated"
+          : "Product Details Updated";
 
     if (part.state === "approval-requested") {
       return (
         <div className="my-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs shadow-sm">
           <div className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
             <ShieldAlert className="size-4 shrink-0" />
-            <span className="text-sm">Action Approval Required</span>
+            <span className="text-sm font-semibold">{actionTitle}</span>
             <Badge
               variant="outline"
               className="ml-auto border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400"
@@ -124,28 +132,50 @@ function ToolCallCard({
             </Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            The Copilot is requesting permission to update live stock levels in your database:
+            The Copilot is requesting your authorization before writing these changes to your store database:
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-background/80 p-2.5">
             <div>
               <span className="text-muted-foreground">Product:</span>
-              <p className="font-semibold text-foreground truncate">
-                {inputData.productTitle || "Catalogue Variant"}
+              <p className="truncate font-semibold text-foreground">
+                {String(inputData.productTitle || inputData.currentTitle || "Catalogue Item")}
               </p>
             </div>
-            <div>
-              <span className="text-muted-foreground">Target Stock:</span>
-              <p className="font-mono font-semibold text-foreground">
-                {inputData.newQuantity ?? "?"} units
-              </p>
-            </div>
-            {inputData.reason && (
-              <div className="col-span-2 border-t border-border/40 pt-1.5 mt-1">
-                <span className="text-muted-foreground">Reason:</span>{" "}
-                <span className="text-foreground">{inputData.reason}</span>
+
+            {toolName === "updateProductStock" && (
+              <div>
+                <span className="text-muted-foreground">Target Stock:</span>
+                <p className="font-mono font-semibold text-foreground">
+                  {String(inputData.newQuantity ?? "?")} units
+                </p>
               </div>
             )}
+
+            {toolName === "updateProductPrice" && (
+              <div>
+                <span className="text-muted-foreground">New Price:</span>
+                <p className="font-mono font-semibold text-foreground">
+                  Rs. {Number(inputData.newPricePkr ?? 0).toLocaleString()}
+                </p>
+              </div>
+            )}
+
+            {toolName === "updateProductDetails" && Boolean(inputData.newTitle) ? (
+              <div>
+                <span className="text-muted-foreground">New Name:</span>
+                <p className="truncate font-semibold text-foreground">
+                  {String(inputData.newTitle)}
+                </p>
+              </div>
+            ) : null}
+
+            {inputData.reason ? (
+              <div className="col-span-2 mt-1 border-t border-border/40 pt-1.5">
+                <span className="text-muted-foreground">Reason:</span>{" "}
+                <span className="text-foreground">{String(inputData.reason)}</span>
+              </div>
+            ) : null}
           </div>
 
           {part.approval?.id && onApprovalResponse && (
@@ -185,7 +215,7 @@ function ToolCallCard({
           ) : (
             <>
               <XCircle className="size-3.5 text-muted-foreground" />
-              <span>Inventory update cancelled by merchant.</span>
+              <span>Action cancelled by merchant.</span>
             </>
           )}
         </div>
@@ -197,7 +227,7 @@ function ToolCallCard({
         <div className="my-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 text-xs shadow-sm">
           <div className="flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="size-4 shrink-0" />
-            <span className="text-sm">Stock Level Updated</span>
+            <span className="text-sm font-semibold">{executedTitle}</span>
             <Badge
               variant="outline"
               className="ml-auto border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-600 dark:text-emerald-400"
@@ -206,8 +236,7 @@ function ToolCallCard({
             </Badge>
           </div>
           <p className="mt-1 text-muted-foreground">
-            {outputData.message ||
-              `Successfully updated stock to ${outputData.quantityOnHand} units (${outputData.inventoryState ?? "updated"}).`}
+            {String(outputData.message || "Database changes successfully committed.")}
           </p>
         </div>
       );
