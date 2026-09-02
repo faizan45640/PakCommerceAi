@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { productListItemSchema } from "@pakcommerce/shared";
 
-import { listProducts } from "../../products/product-service.js";
-import type { SellerContext } from "../../products/seller-context.js";
+import { listProducts } from "../../../products/product-service.js";
+import type { SellerContext } from "../../../middleware/seller-context.js";
 
 /**
  * Read-Side AI Tool: search the seller's product catalogue.

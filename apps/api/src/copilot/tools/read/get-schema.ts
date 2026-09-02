@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { SellerContext } from "../../products/seller-context.js";
-import { QUERYABLE_TABLES } from "../../lib/ai/schema-document.js";
+import type { SellerContext } from "../../../middleware/seller-context.js";
+import { QUERYABLE_TABLES } from "../../schema-document.js";
 
 /**
  * Read-Side AI Tool: introspect the seller's schema at runtime.

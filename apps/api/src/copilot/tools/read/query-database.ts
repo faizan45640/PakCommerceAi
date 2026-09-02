@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { SellerContext } from "../../products/seller-context.js";
+import type { SellerContext } from "../../../middleware/seller-context.js";
 
 /**
  * Read-Side AI Tool: Natural Language to Safe Read-Only Database Query.

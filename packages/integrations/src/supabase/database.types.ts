@@ -340,6 +340,7 @@ export type Database = {
     Functions: {
       create_product: { Args: { payload: Json }; Returns: string }
       run_readonly_query: { Args: { p_sql: string }; Returns: Json }
+      run_guarded_mutation: { Args: { p_sql: string }; Returns: Json }
     }
     Enums: {
       inventory_state: "in_stock" | "low_stock" | "out_of_stock" | "untracked"

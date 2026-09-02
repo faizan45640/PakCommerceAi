@@ -11,17 +11,17 @@
 import request from "supertest";
 import { beforeAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 
-import { createApp } from "../app.js";
-import { createApiSupabaseUserClient } from "../lib/supabase.js";
-import type { TestSeller } from "../testing/api-test-env.js";
+import { createApp } from "../../app.js";
+import { createApiSupabaseUserClient } from "../../lib/supabase.js";
+import type { TestSeller } from "../../testing/api-test-env.js";
 import {
   applyTestEnv,
   createTestSeller,
   deleteTestSeller,
   productPayload,
-} from "../testing/api-test-env.js";
-import { sellerContext } from "../products/seller-context.js";
-import { createCopilotTools } from "../tools/index.js";
+} from "../../testing/api-test-env.js";
+import { sellerContext } from "../../middleware/seller-context.js";
+import { createCopilotTools } from "./index.js";
 
 const app = () => createApp();
 const PRODUCTS = "/api/v1/products";
