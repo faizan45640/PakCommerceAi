@@ -72,11 +72,13 @@ export function updateProductPriceTool(auth: SellerContext) {
       }
 
       const updatedPricePkr = (data.price_amount_minor / 100).toLocaleString("en-PK");
+      const displayVariant = data.title || variantTitle;
       return {
         status: "success",
-        message: `Successfully updated price for "${productTitle}${data.title ? ` (${data.title})` : ""}" to Rs. ${updatedPricePkr}.`,
+        message: `Successfully updated price for "${productTitle}${displayVariant ? ` (${displayVariant})` : ""}" to Rs. ${updatedPricePkr}.`,
         variantId: data.id,
         productId: data.product_id,
+        variantTitle: displayVariant,
         newPricePkr,
         compareAtPricePkr,
         reason: reason ?? "Manual price update via Copilot",
