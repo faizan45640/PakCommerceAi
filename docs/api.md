@@ -189,7 +189,7 @@ Honest list of what this does not do yet.
 
 ## Copilot tools
 
-The copilot at `POST /api/v1/copilot/chat` (auth required, streams via the Vercel AI SDK) exposes tools the model can call to ground answers in the seller's real data:
+The copilot at `POST /api/v1/copilot/chat` (auth required, streams via the Vercel AI SDK) exposes tools the model can call to ground answers in the seller's real data and execute guarded business mutations:
 
 | Tool | What it does | Safety |
 |---|---|---|
@@ -197,17 +197,19 @@ The copilot at `POST /api/v1/copilot/chat` (auth required, streams via the Verce
 | `getSchema` | Lists the seller's queryable tables and their real columns/types, so the model can confirm what exists before writing SQL. | Runs a fixed introspection query (never model-authored) through `run_readonly_query`; input capped to the owned tables by an enum. |
 | `queryDatabase` | Executes a single read-only SELECT the model wrote, for questions no structured tool covers. | Runs via the `run_readonly_query` Postgres function (SECURITY INVOKER): RLS applies, semicolons and mutating keywords are rejected, bounded to 10s / 200 rows. |
 | `getCourierPerformance` | City delivery metrics. **Demo stub** — returns fixed sample values until courier data exists. | Read-only. |
-| `updateProductStock` | Stock adjustment request. **Scaffold** — returns a confirmation card; the mutation itself lands with the inventory task. | Write-side; intentionally returns a confirmation request rather than mutating. |
+| `mutateDatabase` | Universal guarded write-side mutation tool (UPDATE, INSERT, DELETE). Enables modifying any catalogue or inventory attribute. | Strictly requires Human-in-the-Loop (`user-approval`) in the UI before execution. Runs via `run_guarded_mutation` (SECURITY INVOKER) with Postgres RLS; destructive DDL (`DROP`, `ALTER`, `TRUNCATE`) is forbidden. |
+| `updateProductStock` | Updates quantity on hand for a variant. | Requires Human-in-the-Loop (`user-approval`). Updates `product_variants` directly via caller's authenticated RLS client. |
+| `updateProductPrice` | Updates selling price and compare-at price in PKR. | Requires Human-in-the-Loop (`user-approval`). Updates `product_variants` directly via caller's authenticated RLS client. |
+| `updateProductDetails` | Updates product title, description, status, or tags. | Requires Human-in-the-Loop (`user-approval`). Updates `products` directly via caller's authenticated RLS client. |
 
-Tools are built per request from the seller context (`createCopilotTools(auth)`), so a seller can only ever read their own data through them — the same RLS boundary as the REST endpoints.
+Tools are built per request from the seller context (`createCopilotTools(auth)`), so a seller can only ever read or mutate their own data through them — the same RLS boundary as the REST endpoints.
 
-### How the model writes correct SQL
-
-Three mechanisms work together:
+### How the model writes correct SQL and executes actions
 
 1. **Schema in the system prompt.** The copilot prompt embeds the real schema (tables, columns, types, the "money is integer paisa" rule, the note that `inventory_state` is generated). A model that can see `price_amount_minor` stops guessing `price`. Kept honest by a drift-guard test that pins the document to the migrations (`schema-document.test.ts`).
 2. **Runtime introspection.** `getSchema` queries `information_schema` through the safe read-only RPC, so the model can confirm a column exists even if the prompt document is stale.
-3. **A bounded retry loop.** `streamText` runs with `stopWhen: isStepCount(3)`. When `queryDatabase` fails, the Postgres error is returned to the model as a structured tool result, and the model corrects the SQL and retries — up to 3 steps, so a confused model cannot run away. This execution-feedback loop is the biggest reliability win for text-to-SQL.
+3. **Execution-feedback retry loop.** `streamText` runs with `stopWhen: isStepCount(8)`. When SQL execution fails, the Postgres error is returned to the model as a structured tool result, and the model corrects the SQL and retries.
+4. **Native Vercel AI SDK Human-in-the-Loop (HITL) approvals.** All write actions halt server execution with `toolApproval: 'user-approval'`. The frontend presents an interactive confirmation card (showing product details, proposed values, and SQL preview) with Approve and Deny buttons. The mutation commits only after the merchant clicks Approve.
 
 ## Trying it by hand
 
