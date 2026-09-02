@@ -29,6 +29,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
@@ -314,11 +315,14 @@ function MessageBubble({
       >
         {message.parts.map((part, index) => {
           if (part.type === "text") {
-            return (
-              <div key={index} className="whitespace-pre-wrap">
-                {part.text}
-              </div>
-            );
+            if (isUser) {
+              return (
+                <div key={index} className="whitespace-pre-wrap">
+                  {part.text}
+                </div>
+              );
+            }
+            return <MarkdownRenderer key={index} content={part.text} />;
           }
 
           if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
