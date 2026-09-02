@@ -3,6 +3,7 @@ import { getCourierPerformanceTool } from "./read/courier-performance.js";
 import { getSchemaTool } from "./read/get-schema.js";
 import { queryDatabaseTool } from "./read/query-database.js";
 import { searchProductsTool } from "./read/search-products.js";
+import { mutateDatabaseTool } from "./write/mutate-database.js";
 import { updateProductDetailsTool } from "./write/update-product.js";
 import { updateProductPriceTool } from "./write/update-price.js";
 import { updateProductStockTool } from "./write/update-stock.js";
@@ -33,7 +34,8 @@ export function createCopilotTools(auth: SellerContext) {
     queryDatabase: queryDatabaseTool(auth),
     getCourierPerformance: getCourierPerformanceTool,
 
-    // Write side (Guarded Mutations)
+    // Write side (Universal & Guarded Mutations)
+    mutateDatabase: mutateDatabaseTool(auth),
     updateProductStock: updateProductStockTool(auth),
     updateProductPrice: updateProductPriceTool(auth),
     updateProductDetails: updateProductDetailsTool(auth),

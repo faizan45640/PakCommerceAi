@@ -97,6 +97,7 @@ function ToolCallCard({
 
   // Native Vercel AI SDK Human-in-the-Loop approval cards for guarded mutations
   if (
+    toolName === "mutateDatabase" ||
     toolName === "updateProductStock" ||
     toolName === "updateProductPrice" ||
     toolName === "updateProductDetails"
@@ -105,18 +106,22 @@ function ToolCallCard({
     const outputData = (part.output ?? {}) as Record<string, unknown>;
 
     const actionTitle =
-      toolName === "updateProductStock"
-        ? "Action Approval: Adjust Stock Level"
-        : toolName === "updateProductPrice"
-          ? "Action Approval: Update Selling Price"
-          : "Action Approval: Update Product Details";
+      toolName === "mutateDatabase"
+        ? "Action Approval: Database Mutation"
+        : toolName === "updateProductStock"
+          ? "Action Approval: Adjust Stock Level"
+          : toolName === "updateProductPrice"
+            ? "Action Approval: Update Selling Price"
+            : "Action Approval: Update Product Details";
 
     const executedTitle =
-      toolName === "updateProductStock"
-        ? "Stock Level Updated"
-        : toolName === "updateProductPrice"
-          ? "Price Updated"
-          : "Product Details Updated";
+      toolName === "mutateDatabase"
+        ? "Database Mutation Committed"
+        : toolName === "updateProductStock"
+          ? "Stock Level Updated"
+          : toolName === "updateProductPrice"
+            ? "Price Updated"
+            : "Product Details Updated";
 
     if (part.state === "approval-requested") {
       return (
@@ -135,43 +140,64 @@ function ToolCallCard({
             The Copilot is requesting your authorization before writing these changes to your store database:
           </p>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-background/80 p-2.5">
-            <div>
-              <span className="text-muted-foreground">Product:</span>
-              <p className="truncate font-semibold text-foreground">
-                {String(inputData.productTitle || inputData.currentTitle || "Catalogue Item")}
-              </p>
-            </div>
+          <div className="mt-3 rounded-lg border border-border/60 bg-background/80 p-2.5">
+            {toolName === "mutateDatabase" ? (
+              <div className="space-y-2">
+                <div>
+                  <span className="text-muted-foreground">Proposed Change:</span>
+                  <p className="font-semibold text-foreground">
+                    {String(inputData.summary || "Database Mutation")}
+                  </p>
+                </div>
+                {Boolean(inputData.sql) ? (
+                  <div>
+                    <span className="text-muted-foreground">SQL Statement:</span>
+                    <pre className="mt-1 overflow-x-auto rounded border border-border/40 bg-muted/60 p-2 font-mono text-[11px] text-foreground">
+                      {String(inputData.sql)}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-muted-foreground">Product:</span>
+                  <p className="truncate font-semibold text-foreground">
+                    {String(inputData.productTitle || inputData.currentTitle || "Catalogue Item")}
+                  </p>
+                </div>
 
-            {toolName === "updateProductStock" && (
-              <div>
-                <span className="text-muted-foreground">Target Stock:</span>
-                <p className="font-mono font-semibold text-foreground">
-                  {String(inputData.newQuantity ?? "?")} units
-                </p>
+                {toolName === "updateProductStock" && (
+                  <div>
+                    <span className="text-muted-foreground">Target Stock:</span>
+                    <p className="font-mono font-semibold text-foreground">
+                      {String(inputData.newQuantity ?? "?")} units
+                    </p>
+                  </div>
+                )}
+
+                {toolName === "updateProductPrice" && (
+                  <div>
+                    <span className="text-muted-foreground">New Price:</span>
+                    <p className="font-mono font-semibold text-foreground">
+                      Rs. {Number(inputData.newPricePkr ?? 0).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                {toolName === "updateProductDetails" && Boolean(inputData.newTitle) ? (
+                  <div>
+                    <span className="text-muted-foreground">New Name:</span>
+                    <p className="truncate font-semibold text-foreground">
+                      {String(inputData.newTitle)}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             )}
 
-            {toolName === "updateProductPrice" && (
-              <div>
-                <span className="text-muted-foreground">New Price:</span>
-                <p className="font-mono font-semibold text-foreground">
-                  Rs. {Number(inputData.newPricePkr ?? 0).toLocaleString()}
-                </p>
-              </div>
-            )}
-
-            {toolName === "updateProductDetails" && Boolean(inputData.newTitle) ? (
-              <div>
-                <span className="text-muted-foreground">New Name:</span>
-                <p className="truncate font-semibold text-foreground">
-                  {String(inputData.newTitle)}
-                </p>
-              </div>
-            ) : null}
-
-            {inputData.reason ? (
-              <div className="col-span-2 mt-1 border-t border-border/40 pt-1.5">
+            {Boolean(inputData.reason) ? (
+              <div className="mt-2 border-t border-border/40 pt-1.5">
                 <span className="text-muted-foreground">Reason:</span>{" "}
                 <span className="text-foreground">{String(inputData.reason)}</span>
               </div>

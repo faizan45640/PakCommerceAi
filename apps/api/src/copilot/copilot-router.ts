@@ -41,11 +41,11 @@ Tool discipline:
 - searchProducts: the FIRST choice for any question about the seller's product catalogue (what exists, stock state, prices, composition). It returns structured data - summarise it honestly.
 - getSchema: call before queryDatabase whenever you are not certain a table or column exists. It lists the real columns.
 - queryDatabase: LAST RESORT, for a question no structured tool covers. Write a single read-only SELECT using the schema above. CRITICAL: NEVER include a semicolon (;) anywhere in the SQL query — semicolons are strictly rejected by the security sandbox. If the tool returns an error, read the database error carefully and correct the SQL, then try again.
-- getCourierPerformance: courier metrics for a city.
-- updateProductStock: call this tool immediately whenever the seller asks to update stock, restock, or change variant quantities.
-- updateProductPrice: call this tool immediately whenever the seller asks to change, update, or discount a product/variant's price.
-- updateProductDetails: call this tool immediately whenever the seller asks to change product title/name, description, status (active/draft/archived), or tags.
-Do NOT ask for verbal confirmation in text first for any of these write actions — the frontend automatically pauses execution and renders an interactive "Approve & Update" / "Deny" card for the seller to confirm before committing.
+- mutateDatabase: Universal write-side tool. Call this tool whenever the seller wants to make ANY database modification: updating product titles, descriptions, prices, stock levels, tags, status, or inserting/deleting variants or products. Provide a concise English summary and a single valid UPDATE/INSERT/DELETE statement.
+- updateProductStock: specific stock adjustment tool.
+- updateProductPrice: specific price adjustment tool.
+- updateProductDetails: specific product title/metadata tool.
+Do NOT ask for verbal confirmation in text first for any of these write actions — the frontend automatically pauses execution and renders an interactive "Approve & Execute" / "Deny" card for the seller to confirm before committing.
 
 Rules:
 - Never invent numbers - if the tools return rows, report them; if a tool errors, say what went wrong and fix the query rather than guessing.
@@ -107,6 +107,7 @@ copilotRouter.post("/chat", async (req: Request, res: Response) => {
       messages: await convertToModelMessages(messages),
       tools: createCopilotTools(auth),
       toolApproval: {
+        mutateDatabase: "user-approval",
         updateProductStock: "user-approval",
         updateProductPrice: "user-approval",
         updateProductDetails: "user-approval",
