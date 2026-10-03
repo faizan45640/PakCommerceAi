@@ -81,6 +81,7 @@ export function mutateDatabaseTool(auth: SellerContext) {
     description:
       "Execute a guarded UPDATE, INSERT, or DELETE statement against the seller's database (products, product_variants). Use this universal tool for ANY modification: updating product names, descriptions, prices, stock levels, tags, or statuses. Requires seller approval via Human-in-the-Loop before executing.",
     inputSchema: mutateDatabaseInputSchema,
+    needsApproval: true,
     execute: async ({
       summary,
       sql,

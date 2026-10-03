@@ -147,24 +147,24 @@ The WhatsApp Sales Agent represents the seller but never replaces them. It shoul
 
 ---
 
-## Seller-Facing AI (Business Copilot)
+## Seller-Facing AI (Rafiq)
 
-The Seller-Facing AI is the **Business Copilot** available inside the seller dashboard.
+The Seller-Facing AI is **Rafiq**, the shop assistant inside the seller dashboard. The product code, route (`/dashboard/copilot`), and API module stay named `copilot`.
 
 Its responsibilities include:
 
-- answering business questions
-- explaining business performance
-- summarizing operational data
-- assisting with platform workflows
-- recommending improvements
-- helping sellers understand their business
+- answering shop questions in plain seller language (rupees, pieces)
+- looking up live catalogue data (stock, prices, sizes)
+- assisting with guarded shop changes (stock, price, product details)
+- helping sellers understand what is on their shop
 
-The Business Copilot is an intelligent assistant, not an autonomous business manager.
+Rafiq is an intelligent assistant, not an autonomous business manager. Nothing writes until the seller says yes.
 
 **Runtime:** Vercel AI SDK, streaming into the dashboard. Providers: Google, DeepSeek, OpenRouter, and local Ollama. If none is configured, the route streams a setup message instead of calling a model.
 
-The copilot can search the seller's catalogue, inspect the schema, and run a single read-only SQL query through `run_readonly_query`. Stock, price, product-detail, and generic SQL writes pause for seller approval, then run as that seller so RLS still applies. `getCourierPerformance` is a **demo stub**: it returns the same sample rates for every city. It must not be treated as courier data. Full tool notes are in [`api.md`](api.md).
+**UI:** Sidekick-style empty state (full-body mascot) and a face mark next to assistant messages. Chat history rail with new chat, archive, and delete. Conversations persist as `UIMessage[]` in `copilot_chats`.
+
+Rafiq can search the seller's catalogue, inspect the schema, and run a single read-only SQL query through `run_readonly_query`. Stock, price, product-detail, and generic SQL writes pause for seller approval, then run as that seller so RLS still applies. `getCourierPerformance` is a **demo stub**: it returns the same sample rates for every city. It must not be treated as courier data. Full tool and chat-API notes are in [`api.md`](api.md).
 
 A decision model (Jev, or any classifier that returns a choice, a score, or a yes/no) is **deferred**. It would sit in front of `streamText` to pick the path, hide overlapping write tools, label the approval card, and choose the model for that request. It must not write SQL, write the seller-facing answer, or press Approve. The slots, and which parts of the current loop are already backed by the text-to-SQL literature, are in [`api.md`](api.md#deferred-decision-models). Do not build this until the catalogue loop is the thing being optimized.
 
@@ -185,7 +185,7 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 | 3 | 5–7 | Backend setup, database, auth, dashboard base | ✅ Done. Auth is wired. Most dashboard screens still render mock data |
 | 4 | 8–10 | Shopify/WooCommerce connectors, product/order/inventory sync, selective SKU rules | ❌ Not started |
 | 5 | 11–13 | WhatsApp AI agent, Twilio webhooks, conversation memory, draft orders, begin ML training | ❌ Not started |
-| 6 | 14–15 | Seller copilot, RAG pipeline, tool calls, approval system, finalize COD model | 🟡 Copilot, tool calls, and write approval are in. RAG and the COD model are not |
+| 6 | 14–15 | Seller copilot, RAG pipeline, tool calls, approval system, finalize COD model | 🟡 Rafiq (copilot) UI, persistence, tool calls, and write approval are in. RAG and the COD model are not |
 | 7 | 16–17 | COD/risk scoring integration, AI insights, courier selection engine, audit logs | ❌ Not started. Logistics UI and `getCourierPerformance` are hardcoded |
 | 8 | 18–20 | Testing, bug fixing, final report, presentation, live demo | ❌ Not started |
 
@@ -199,14 +199,14 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 - Products and customers are empty placeholders. The product API is not wired to the products page
 - Login and register call Supabase Auth (`signInWithPassword` / sign-up). Sign-out is wired in the sidebar
 - `proxy.ts` (Next 16's renamed middleware) refreshes the Supabase SSR session
-- The copilot page posts to `POST /api/v1/copilot/chat` with the session access token
-- `apps/web/src/lib/api/api-client.ts` can call the API with that token. Nothing else imports it yet
+- The Rafiq page (`/dashboard/copilot`) lists/creates chats, streams turns to `POST /api/v1/copilot/chat`, and archives or deletes history — all with the session access token
+- `apps/web/src/lib/api/api-client.ts` can call the API with that token. Products UI is not wired yet
 - `apps/web/src/architecture.test.ts` fails CI if web source queries Supabase tables, calls `.rpc()`, or touches the service-role key
 
 **`apps/api` — Express 5, port 4000**
 
 - Product CRUD at `/api/v1/products` — create, list/search, read, update, archive. Documented in [`api.md`](api.md)
-- Copilot chat at `POST /api/v1/copilot/chat` (also mounted at `/copilot/chat`). Streams with the Vercel AI SDK. Write tools require seller approval before they run
+- Rafiq (copilot) at `POST /api/v1/copilot/chat` plus `/api/v1/copilot/chats` CRUD/archive. Streams with the Vercel AI SDK. Write tools require seller approval before they run. Transcripts live in `copilot_chats`
 - Seller scoping is not done in handler code: `requireAuth` verifies the token, and each request builds a Supabase client carrying it so RLS filters inside Postgres
 - `healthRouter` is mounted at `/health` and `/api/v1`. Protected routers sit below `requireAuth`
 - `src/app.ts` exports `createApp()`; `src/index.ts` loads env and binds the port. Split so tests can drive the app in-process

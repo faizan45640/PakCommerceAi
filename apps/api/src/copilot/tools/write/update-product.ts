@@ -28,6 +28,7 @@ export function updateProductDetailsTool(auth: SellerContext) {
     description:
       "Update product information such as title/name, description, status (active/draft/archived), or tags. Requires seller approval via Human-in-the-Loop before executing.",
     inputSchema: updateProductDetailsInputSchema,
+    needsApproval: true,
     execute: async ({
       productId,
       currentTitle,

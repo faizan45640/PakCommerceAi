@@ -5,10 +5,19 @@ import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
+  getToolName,
+  isToolUIPart,
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type UIMessage,
 } from "ai";
 import { CheckCircle2, Loader2, PackageSearch, Truck, XCircle } from "lucide-react";
+
+const WRITE_TOOLS = new Set([
+  "mutateDatabase",
+  "updateProductStock",
+  "updateProductPrice",
+  "updateProductDetails",
+]);
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,6 +129,16 @@ interface ApprovalCallback {
   (args: { id: string; approved: boolean; reason?: string }): void;
 }
 
+function resolveToolName(part: ToolPartShape): string {
+  if (part.type === "dynamic-tool" && typeof part.toolName === "string") {
+    return part.toolName;
+  }
+  if (part.type.startsWith("tool-")) {
+    return part.type.slice("tool-".length);
+  }
+  return part.toolName ?? part.type;
+}
+
 /** Renders a single tool call or approval card inside an assistant message. */
 function ToolCallCard({
   part,
@@ -128,20 +147,24 @@ function ToolCallCard({
   part: ToolPartShape;
   onApprovalResponse?: ApprovalCallback;
 }) {
-  const toolName = part.type.replace(/^tool-/, "");
+  const toolName = resolveToolName(part);
 
   // Native Vercel AI SDK Human-in-the-Loop approval cards for guarded mutations
-  if (
-    toolName === "mutateDatabase" ||
-    toolName === "updateProductStock" ||
-    toolName === "updateProductPrice" ||
-    toolName === "updateProductDetails"
-  ) {
+  if (WRITE_TOOLS.has(toolName)) {
     const inputData = (part.input ?? {}) as Record<string, unknown>;
     const outputData = (part.output ?? {}) as Record<string, unknown>;
 
     const lines = changeLines(toolName, inputData);
     const savedOk = outputData.status !== "error";
+
+    if (part.state === "input-streaming" || part.state === "input-available") {
+      return (
+        <div className="my-2 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin text-amber-700" />
+          <span>Preparing a change for your OK…</span>
+        </div>
+      );
+    }
 
     if (part.state === "approval-requested") {
       return (
@@ -165,7 +188,7 @@ function ToolCallCard({
             ))}
           </ul>
 
-          {part.approval?.id && onApprovalResponse && (
+          {part.approval?.id && onApprovalResponse ? (
             <div className="mt-3.5 flex items-center gap-2">
               <Button
                 size="sm"
@@ -185,6 +208,8 @@ function ToolCallCard({
                 No, leave it
               </Button>
             </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">Waiting for confirmation…</p>
           )}
         </div>
       );
@@ -243,6 +268,15 @@ function ToolCallCard({
         <div className="my-2 flex items-center gap-2 rounded-lg border border-muted bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           <XCircle className="size-3.5 text-muted-foreground" />
           <span>Nothing was changed.</span>
+        </div>
+      );
+    }
+
+    if (part.state === "output-error") {
+      return (
+        <div className="my-2 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <XCircle className="size-3.5 shrink-0" />
+          <span>Rafiq could not prepare that change.</span>
         </div>
       );
     }
@@ -305,14 +339,28 @@ function ToolCallCard({
   );
 }
 
+function messageHasVisibleContent(message: UIMessage): boolean {
+  return message.parts.some((part) => {
+    if (part.type === "text") return part.text.trim().length > 0;
+    if (isToolUIPart(part)) {
+      const name = getToolName(part);
+      return name !== "getSchema";
+    }
+    return false;
+  });
+}
+
 function MessageBubble({
   message,
   onApprovalResponse,
+  waiting,
 }: {
   message: UIMessage;
   onApprovalResponse?: ApprovalCallback;
+  waiting?: boolean;
 }) {
   const isUser = message.role === "user";
+  const visible = messageHasVisibleContent(message);
 
   return (
     <div className={cn("flex w-full gap-3", isUser ? "justify-end" : "justify-start")}>
@@ -328,6 +376,7 @@ function MessageBubble({
       >
         {message.parts.map((part, index) => {
           if (part.type === "text") {
+            if (!part.text.trim()) return null;
             if (isUser) {
               return (
                 <div key={index} className="whitespace-pre-wrap">
@@ -338,7 +387,7 @@ function MessageBubble({
             return <MarkdownRenderer key={index} content={part.text} />;
           }
 
-          if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
+          if (isToolUIPart(part)) {
             const toolPart = part as unknown as ToolPartShape;
             // Hide a failed attempt when a later call of the same tool succeeded.
             // Keeps retries from flashing red after the corrected call works.
@@ -347,13 +396,12 @@ function MessageBubble({
               (toolPart.state === "output-available" &&
                 (toolPart.output as { status?: string } | undefined)?.status === "error");
             if (toolFailed) {
-              const toolName = toolPart.type.replace(/^tool-/, "");
+              const toolName = getToolName(part);
               const laterOk = message.parts.slice(index + 1).some((later) => {
-                if (!(later.type.startsWith("tool-") || later.type === "dynamic-tool")) return false;
-                const next = later as unknown as ToolPartShape;
-                if (next.type.replace(/^tool-/, "") !== toolName) return false;
-                if (next.state !== "output-available") return false;
-                const out = next.output as { status?: string } | undefined;
+                if (!isToolUIPart(later)) return false;
+                if (getToolName(later) !== toolName) return false;
+                if (later.state !== "output-available") return false;
+                const out = later.output as { status?: string } | undefined;
                 return out?.status !== "error";
               });
               if (laterOk) return null;
@@ -370,8 +418,14 @@ function MessageBubble({
 
           return null;
         })}
-      </div>
 
+        {!isUser && !visible && waiting ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            <span>Rafiq is looking through your shop…</span>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -477,20 +531,27 @@ export function NaturalLanguageQuery({
         className="flex-1 overflow-y-auto px-4 py-6"
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-5 pb-28">
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onApprovalResponse={addToolApprovalResponse}
-            />
-          ))}
+          {messages.map((message, index) => {
+            const isLast = index === messages.length - 1;
+            return (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onApprovalResponse={addToolApprovalResponse}
+                waiting={isProcessing && isLast && message.role === "assistant"}
+              />
+            );
+          })}
 
-          {isProcessing && status === "streaming" && (
-            <div className="flex items-center gap-2 pl-10 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
-              <span>Rafiq is looking through your shop…</span>
+          {isProcessing && messages[messages.length - 1]?.role !== "assistant" ? (
+            <div className="flex items-center gap-3">
+              <RafiqMark size="md" />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                <span>Rafiq is looking through your shop…</span>
+              </div>
             </div>
-          )}
+          ) : null}
 
           {error && (
             <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">

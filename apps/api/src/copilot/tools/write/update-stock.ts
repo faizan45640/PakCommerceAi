@@ -24,6 +24,7 @@ export function updateProductStockTool(auth: SellerContext) {
     description:
       "Update the quantity on hand for a specific product variant in the seller's inventory. Requires seller approval via Human-in-the-Loop before executing.",
     inputSchema: updateProductStockInputSchema,
+    needsApproval: true,
     execute: async ({
       variantId,
       productTitle,

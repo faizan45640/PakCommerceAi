@@ -31,6 +31,7 @@ export function updateProductPriceTool(auth: SellerContext) {
     description:
       "Update the regular selling price (and optional compare-at price) for a product variant. Requires seller approval via Human-in-the-Loop before executing.",
     inputSchema: updateProductPriceInputSchema,
+    needsApproval: true,
     execute: async ({
       variantId,
       productTitle,

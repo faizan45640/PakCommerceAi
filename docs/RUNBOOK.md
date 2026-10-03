@@ -200,7 +200,7 @@ also exist, and both require a Supabase access token. See [`api.md`](api.md).
 | `/dashboard` | 307 redirect → `/dashboard/orders` |
 | `/dashboard/orders` | 200, mock data |
 | `/dashboard/inventory` | 200, mock data |
-| `/dashboard/copilot` | 200, live chat when the API is running |
+| `/dashboard/copilot` | 200, Rafiq live chat (persisted history) when the API is running |
 | `/dashboard/logistics-and-courier` | 200, mock data |
 | `/dashboard/settings` | 200 |
 | `/dashboard/sales-and-orders` | 307 redirect → `/dashboard/orders` |
