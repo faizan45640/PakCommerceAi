@@ -17,6 +17,7 @@ Start only the web workspace:
 npm run dev --workspace @pakcommerce/web
 ```
 
-The retained template surface includes the seller store overview, analytics,
-authentication UI, dashboard shell, preferences, and reusable UI primitives.
-Authentication forms are visual placeholders until Supabase Auth is connected.
+The dashboard shell, preferences, and UI primitives are in place. Login and
+register call Supabase Auth. The copilot page is the screen that calls the
+API. Orders, inventory, logistics, conversations, approvals, and analytics
+still render mock data. Products and customers are empty placeholders.
