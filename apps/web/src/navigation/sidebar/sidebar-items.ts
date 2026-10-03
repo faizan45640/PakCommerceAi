@@ -117,7 +117,7 @@ export const sidebarItems: NavGroup[] = [
       },
       {
         id: "copilot",
-        title: "Copilot",
+        title: "Rafiq",
         url: "/dashboard/copilot",
         icon: Zap,
       },

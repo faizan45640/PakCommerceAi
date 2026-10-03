@@ -35,4 +35,27 @@ describe("copilot routes", () => {
 
     expect(response.status).toBe(401);
   });
+
+  it("chat list and chat creation reject a request with no token", async () => {
+    const app = createApp();
+
+    const list = await request(app).get("/api/v1/copilot/chats");
+    const created = await request(app).post("/api/v1/copilot/chats");
+
+    expect(list.status).toBe(401);
+    expect(created.status).toBe(401);
+  });
+
+  it("chat archive and delete reject a request with no token", async () => {
+    const app = createApp();
+    const id = "11111111-1111-4111-8111-111111111111";
+
+    const archived = await request(app).post(`/api/v1/copilot/chats/${id}/archive`);
+    const restored = await request(app).post(`/api/v1/copilot/chats/${id}/unarchive`);
+    const deleted = await request(app).delete(`/api/v1/copilot/chats/${id}`);
+
+    expect(archived.status).toBe(401);
+    expect(restored.status).toBe(401);
+    expect(deleted.status).toBe(401);
+  });
 });

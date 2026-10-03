@@ -84,7 +84,7 @@ export function updateProductDetailsTool(auth: SellerContext) {
 
       return {
         status: "success",
-        message: `Successfully updated product "${data.title}" (status: ${data.status}).`,
+        message: `Updated "${data.title}".`,
         productId: data.id,
         title: data.title,
         productStatus: data.status,

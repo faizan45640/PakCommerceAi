@@ -27,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { RafiqMark } from "@/app/(main)/dashboard/copilot/_components/rafiq-mark";
 import type {
   NavBadge,
   NavGroup,
@@ -182,6 +183,10 @@ function NavLinkItem({ item, isActive, showIconFallback }: NavLinkItemProps) {
 }
 
 function NavLinkIcon({ item, showFallback }: NavLinkIconProps) {
+  if (item.id === "copilot") {
+    return <RafiqMark size="sm" />;
+  }
+
   const Icon = item.icon;
 
   if (Icon) {

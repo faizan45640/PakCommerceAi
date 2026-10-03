@@ -49,7 +49,7 @@ export function updateProductStockTool(auth: SellerContext) {
 
       return {
         status: "success",
-        message: `Successfully updated stock for "${productTitle || data.title}" to ${data.quantity_on_hand} units.`,
+        message: `Stock for "${productTitle || data.title}" is now ${data.quantity_on_hand} pieces.`,
         variantId: data.id,
         productId: data.product_id,
         quantityOnHand: data.quantity_on_hand,

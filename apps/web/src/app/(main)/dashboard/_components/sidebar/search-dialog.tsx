@@ -17,6 +17,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { RafiqMark } from "@/app/(main)/dashboard/copilot/_components/rafiq-mark";
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 
@@ -121,7 +122,7 @@ export function SearchDialog() {
               onSelect={() => handleSelect(item)}
             >
               <span className="flex min-w-0 items-center gap-2">
-                {item.icon && <item.icon />}
+                {item.id === "copilot" ? <RafiqMark size="sm" /> : item.icon && <item.icon />}
                 <span className="truncate">{item.label}</span>
               </span>
             </CommandItem>

@@ -75,7 +75,7 @@ export function updateProductPriceTool(auth: SellerContext) {
       const displayVariant = data.title || variantTitle;
       return {
         status: "success",
-        message: `Successfully updated price for "${productTitle}${displayVariant ? ` (${displayVariant})` : ""}" to Rs. ${updatedPricePkr}.`,
+        message: `The price of "${productTitle}${displayVariant ? ` (${displayVariant})` : ""}" is now Rs. ${updatedPricePkr}.`,
         variantId: data.id,
         productId: data.product_id,
         variantTitle: displayVariant,
