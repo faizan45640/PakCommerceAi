@@ -300,7 +300,7 @@ export function CopilotScreen() {
 
           {historyOpen ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+              <div className="scrollbar-hover min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 <p className="px-2.5 pb-2 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
                   Recent
                 </p>
