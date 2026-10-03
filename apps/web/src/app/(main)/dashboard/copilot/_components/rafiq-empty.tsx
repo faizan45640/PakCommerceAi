@@ -66,7 +66,7 @@ export function RafiqEmpty({
           />
         </div>
 
-        <div className="mt-3 flex w-full flex-wrap justify-center gap-2">
+        <div className="mt-3 grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
           {RAFIQ_SUGGESTIONS.map((item) => {
             const Icon = item.icon;
             return (
@@ -75,10 +75,10 @@ export function RafiqEmpty({
                 type="button"
                 disabled={busy}
                 onClick={() => onSuggestion(item.prompt)}
-                className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border/70 bg-background px-3.5 py-2 text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
               >
                 <Icon className="size-3.5 shrink-0" />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}
