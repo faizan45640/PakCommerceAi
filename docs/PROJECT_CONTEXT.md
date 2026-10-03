@@ -166,6 +166,8 @@ The Business Copilot is an intelligent assistant, not an autonomous business man
 
 The copilot can search the seller's catalogue, inspect the schema, and run a single read-only SQL query through `run_readonly_query`. Stock, price, product-detail, and generic SQL writes pause for seller approval, then run as that seller so RLS still applies. `getCourierPerformance` is a **demo stub**: it returns the same sample rates for every city. It must not be treated as courier data. Full tool notes are in [`api.md`](api.md).
 
+A decision model (Jev, or any classifier that returns a choice, a score, or a yes/no) is **deferred**. It would sit in front of `streamText` to pick the path, hide overlapping write tools, label the approval card, and choose the model for that request. It must not write SQL, write the seller-facing answer, or press Approve. The slots, and which parts of the current loop are already backed by the text-to-SQL literature, are in [`api.md`](api.md#deferred-decision-models). Do not build this until the catalogue loop is the thing being optimized.
+
 ---
 
 # Implementation Status

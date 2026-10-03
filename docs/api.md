@@ -219,6 +219,37 @@ As the database grows larger with subsequent slices (orders, shipments, payouts,
 - **Domain / Intent Slicing:** Partition database tables by functional intent (e.g. `catalog_inventory`, `orders_logistics`, `marketing_discounts`, `finance_analytics`).
 - **Dynamic Schema Slicing:** `getSchema` will accept an `intent` or `domain` parameter (or classify the user prompt), returning only the tables, columns, and foreign keys relevant to that specific request rather than the entire database.
 
+This is the later form of schema selection. It is not useful while the database is five tables. See the research note below.
+
+### Deferred: decision models
+
+**Not required now.** The catalogue copilot is a single `streamText` loop. Record the slots here so a later slice can add a decision model without redesigning that loop.
+
+A decision model returns a typed choice, a score, or a yes/no with a probability. It does not write SQL and it does not write the sentence the seller reads. [Jev](https://vercel.com/i/jev-agent-control) (TypeSafe, model id `typesafe-ai/jev`, AI SDK `experimental_evaluate`) is one implementation. A small chat model forced to a structured output can sit in the same slots. Application code still authorizes every tool call. A probability is not a permission.
+
+| Slot | Question | What the code would do | Leave alone |
+|---|---|---|---|
+| Before `streamText` in `copilot-router.ts` | Catalogue, analytics SQL, a write, or not answerable yet | Catalogue calls `searchProducts` only. SQL is the only path that receives `queryDatabase` and the schema document. Writes receive the typed update tools. Orders, COD, and couriers are refused until those tables exist. | The written answer |
+| The `tools` object for that request | Which tools this turn may call | Hide `mutateDatabase` when `updateProductStock`, `updateProductPrice`, or `updateProductDetails` can express the change. Hide `getCourierPerformance` until it reads a real table. | RLS and the SQL sandbox |
+| After `queryDatabase` returns an error | Retry once, or stop and tell the seller | One correction step for a bad column name. Stop when the same database error comes back. | The eight-step cap, which stays as the hard budget |
+| The approval card | Routine single-SKU edit, or a broad or destructive change | Both still wait for Approve. The card shows the score. | `toolApproval: "user-approval"`. The decision model must not approve stock or price changes |
+| `getLanguageModel()` in `provider.ts` | Small model, or the model that writes joins | One provider key. The pick is per request. | Provider credentials |
+
+The same yes/no fits the WhatsApp agent later, for “hand this conversation to a person.” There is no agent loop there yet.
+
+Offline, the same judge can score a fixed set of seller questions: right tool, numbers copied from the tool result, write not executed before approval, out-of-scope question refused. That set does not exist yet. Unit tests only show that the tools are wired.
+
+### What the current loop already takes from the research
+
+Checked October 2026. The loop is the current production pattern, not an older one that has been replaced.
+
+- **Schema in the prompt, plus executing the SQL and feeding the error back.** CHESS (Talaei et al., Stanford, 2024) found that removing the revision step cost 6.80 execution-accuracy points on their BIRD subsample. This copilot’s retry is that idea in the cheap form: one query, the database error, one correction. CHESS itself is several model stages (retrieve, select a schema, generate, revise). That stack is for benchmark-scale databases, not a seller chat.
+- **Sending the whole schema.** The same line of work, including Distillery (Maamari et al., 2024) as discussed in the CHESS follow-up, finds that a modern model can take a schema on the order of a hundred columns without a separate linking step. Linking starts to pay off around thousands of columns (their synthetic schema of 4,337 columns gained about 2 points from a schema-selection agent). Five tables do not need that. Intent partitioning above is the note for when orders and shipments arrive.
+- **A person approves writes, and tools stay narrow.** Vercel’s 2026 production guidance is the same rule this API already enforces with `toolApproval`, and it warns that overlapping tools and an open-ended writer increase wrong calls. `mutateDatabase` beside the three typed update tools is the known weak spot. A decision model can hide it later. Removing the overlap does not require Jev.
+- **Durable workflows and a tool-protocol gateway.** `WorkflowAgent` matters when an approval must survive a crashed request. This approval lives in the open chat. A Model Context Protocol gateway matters at thousands of tools. This route has eight.
+
+TypeSafe’s speed and cost figures for Jev are the vendor’s claim. They are not a measurement on this repository, and they are not a reason to replace the chat model.
+
 ## Trying it by hand
 
 Get a token (browser console on a signed-in dashboard, or via the Supabase client):
