@@ -106,6 +106,29 @@ describe("searchProductsInputSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("maps seller status words to DB enums", () => {
+    const live = searchProductsInputSchema.safeParse({ statuses: ["live"] });
+    const hidden = searchProductsInputSchema.safeParse({ statuses: ["Hidden"] });
+    const single = searchProductsInputSchema.safeParse({ statuses: "Live" });
+
+    expect(live.success && live.data.statuses).toEqual(["active"]);
+    expect(hidden.success && hidden.data.statuses).toEqual(["archived"]);
+    expect(single.success && single.data.statuses).toEqual(["active"]);
+  });
+
+  it("maps seller stock words and coerces string limits", () => {
+    const result = searchProductsInputSchema.safeParse({
+      inventoryStates: ["low", "finished"],
+      limit: "15",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.inventoryStates).toEqual(["low_stock", "out_of_stock"]);
+      expect(result.data.limit).toBe(15);
+    }
+  });
 });
 
 describe("searchProductsTool", () => {

@@ -59,7 +59,7 @@ describe("updateProductStockTool", () => {
     expect(eqMock).toHaveBeenCalledWith("id", "var-1");
     expect(result).toEqual({
       status: "success",
-      message: 'Successfully updated stock for "Test Kurta" to 50 units.',
+      message: 'Stock for "Test Kurta" is now 50 pieces.',
       variantId: "var-1",
       productId: "prod-1",
       quantityOnHand: 50,

@@ -187,9 +187,25 @@ Honest list of what this does not do yet.
 
 ---
 
+## Rafiq (seller copilot) chats
+
+Seller-facing name is **Rafiq**. Routes and tables stay `copilot`. Auth required on every endpoint below.
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/api/v1/copilot/chats` | Recent chats (`archived_at` is null). Pass `?archived=1` for archived. |
+| `POST` | `/api/v1/copilot/chats` | Create an empty chat. Returns `{ id, title, updatedAt, archivedAt }`. |
+| `GET` | `/api/v1/copilot/chats/:id` | Load one chat’s `UIMessage[]` transcript. |
+| `POST` | `/api/v1/copilot/chats/:id/archive` | Soft-archive (sets `archived_at`). |
+| `POST` | `/api/v1/copilot/chats/:id/unarchive` | Restore from archive. |
+| `DELETE` | `/api/v1/copilot/chats/:id` | Hard delete. |
+| `POST` | `/api/v1/copilot/chat` | Stream one turn. Body: `{ id, message }` (last `UIMessage` only). Server loads history, merges, streams, and saves. |
+
+Persistence is the Vercel AI SDK `UIMessage[]` in `public.copilot_chats.messages` (jsonb). The first save that has a user message asks the model for a short sidebar title once. RLS scopes every row to `seller_id = auth.uid()`.
+
 ## Copilot tools
 
-The copilot at `POST /api/v1/copilot/chat` (auth required, streams via the Vercel AI SDK) exposes tools the model can call to ground answers in the seller's real data and execute guarded business mutations:
+The chat turn at `POST /api/v1/copilot/chat` (auth required, streams via the Vercel AI SDK) exposes tools the model can call to ground answers in the seller's real data and execute guarded business mutations:
 
 | Tool | What it does | Safety |
 |---|---|---|
@@ -209,7 +225,8 @@ Tools are built per request from the seller context (`createCopilotTools(auth)`)
 1. **Schema in the system prompt.** The copilot prompt embeds the real schema (tables, columns, types, the "money is integer paisa" rule, the note that `inventory_state` is generated). A model that can see `price_amount_minor` stops guessing `price`. Kept honest by a drift-guard test that pins the document to the migrations (`schema-document.test.ts`).
 2. **Runtime introspection.** `getSchema` queries `information_schema` through the safe read-only RPC, so the model can confirm a column exists even if the prompt document is stale.
 3. **Execution-feedback retry loop.** `streamText` runs with `stopWhen: isStepCount(8)`. When SQL execution fails, the Postgres error is returned to the model as a structured tool result, and the model corrects the SQL and retries.
-4. **Native Vercel AI SDK Human-in-the-Loop (HITL) approvals.** All write actions halt server execution with `toolApproval: 'user-approval'`. The frontend presents an interactive confirmation card (showing product details, proposed values, and SQL preview) with Approve and Deny buttons. The mutation commits only after the merchant clicks Approve.
+4. **Native Vercel AI SDK Human-in-the-Loop (HITL) approvals.** All write actions halt with `toolApproval: 'user-approval'` (and `needsApproval` on the write tools). The dashboard shows a seller-facing Yes / No card — no SQL. The mutation commits only after the seller clicks Yes.
+5. **Seller speech in tool args.** `searchProducts` maps Live→`active`, Hidden→`archived`, low/finished→stock enums, and coerces string limits so the first tool call does not fail Zod validation.
 
 ### Future Architecture / Deferred: Intent-Based Schema Partitioning
 

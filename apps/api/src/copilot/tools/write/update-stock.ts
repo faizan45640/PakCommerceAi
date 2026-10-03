@@ -24,6 +24,7 @@ export function updateProductStockTool(auth: SellerContext) {
     description:
       "Update the quantity on hand for a specific product variant in the seller's inventory. Requires seller approval via Human-in-the-Loop before executing.",
     inputSchema: updateProductStockInputSchema,
+    needsApproval: true,
     execute: async ({
       variantId,
       productTitle,
@@ -49,7 +50,7 @@ export function updateProductStockTool(auth: SellerContext) {
 
       return {
         status: "success",
-        message: `Successfully updated stock for "${productTitle || data.title}" to ${data.quantity_on_hand} units.`,
+        message: `Stock for "${productTitle || data.title}" is now ${data.quantity_on_hand} pieces.`,
         variantId: data.id,
         productId: data.product_id,
         quantityOnHand: data.quantity_on_hand,

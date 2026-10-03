@@ -1,4 +1,4 @@
-import { apiErrorSchema } from "@pakcommerce/shared";
+import { apiErrorSchema } from "@pakcommerce/shared/api";
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -55,5 +55,14 @@ export async function apiFetch<TResponse>(path: string, init: RequestInit = {}):
     throw new ApiRequestError(`Request failed with status ${response.status}.`, "internal_error", response.status);
   }
 
-  return response.json() as Promise<TResponse>;
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as TResponse;
+  }
+
+  return JSON.parse(text) as TResponse;
 }

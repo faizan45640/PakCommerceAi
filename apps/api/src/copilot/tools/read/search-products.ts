@@ -21,6 +21,65 @@ import type { SellerContext } from "../../../middleware/seller-context.js";
 
 const MAX_AI_RESULTS = 25;
 
+const PRODUCT_STATUSES = ["draft", "active", "archived"] as const;
+const INVENTORY_STATES = ["in_stock", "low_stock", "out_of_stock", "untracked"] as const;
+
+type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+type InventoryState = (typeof INVENTORY_STATES)[number];
+
+/** Seller speech the model often copies into tool args. Map before Zod enums. */
+const STATUS_ALIASES: Record<string, ProductStatus> = {
+  draft: "draft",
+  active: "active",
+  archived: "archived",
+  live: "active",
+  published: "active",
+  listed: "active",
+  hidden: "archived",
+  "not listed": "draft",
+  "not_listed": "draft",
+  "not listed yet": "draft",
+};
+
+const INVENTORY_ALIASES: Record<string, InventoryState> = {
+  in_stock: "in_stock",
+  "in stock": "in_stock",
+  available: "in_stock",
+  low_stock: "low_stock",
+  low: "low_stock",
+  "low stock": "low_stock",
+  out_of_stock: "out_of_stock",
+  "out of stock": "out_of_stock",
+  finished: "out_of_stock",
+  "sold out": "out_of_stock",
+  untracked: "untracked",
+};
+
+function asStringList(value: unknown): unknown[] | null {
+  if (value == null) return null;
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") return [value];
+  return null;
+}
+
+function normalizeStatuses(value: unknown): unknown {
+  const list = asStringList(value);
+  if (!list) return value;
+  return list.map((item) => {
+    if (typeof item !== "string") return item;
+    return STATUS_ALIASES[item.trim().toLowerCase()] ?? item;
+  });
+}
+
+function normalizeInventoryStates(value: unknown): unknown {
+  const list = asStringList(value);
+  if (!list) return value;
+  return list.map((item) => {
+    if (typeof item !== "string") return item;
+    return INVENTORY_ALIASES[item.trim().toLowerCase()] ?? item;
+  });
+}
+
 /**
  * LLM-facing input: a trimmed version of `productSearchQuerySchema`.
  *
@@ -29,6 +88,10 @@ const MAX_AI_RESULTS = 25;
  * it asks questions), and `searchFields` is omitted until the list endpoint
  * implements it. `limit` is capped so the model cannot ask for 100 rows of
  * context it will never read.
+ *
+ * Status/inventory aliases exist because the system prompt speaks to sellers
+ * ("Live", "low") and the model often copies those words into tool args. Without
+ * coercion the AI SDK rejects the call, burns a retry, and flashes a red card.
  */
 export const searchProductsInputSchema = z.object({
   query: z
@@ -38,23 +101,33 @@ export const searchProductsInputSchema = z.object({
     .max(120)
     .optional()
     .describe("Free-text search across product title, SKU, tags and description"),
-  statuses: z
-    .array(z.enum(["draft", "active", "archived"]))
-    .max(3)
-    .optional()
-    .describe("Only products in these statuses. Omit for all statuses."),
-  inventoryStates: z
-    .array(z.enum(["in_stock", "low_stock", "out_of_stock", "untracked"]))
-    .max(4)
-    .optional()
-    .describe("Only products whose rolled-up stock state matches. A product is as available as its most available variant."),
+  statuses: z.preprocess(
+    normalizeStatuses,
+    z
+      .array(z.enum(PRODUCT_STATUSES))
+      .max(3)
+      .optional()
+      .describe(
+        'DB statuses only after aliasing: draft|active|archived. Seller words map as Live→active, Hidden→archived, "Not listed"→draft.',
+      ),
+  ),
+  inventoryStates: z.preprocess(
+    normalizeInventoryStates,
+    z
+      .array(z.enum(INVENTORY_STATES))
+      .max(4)
+      .optional()
+      .describe(
+        "Stock states: in_stock|low_stock|out_of_stock|untracked. Seller words like low / finished are accepted.",
+      ),
+  ),
   categoryIds: z.array(z.uuid()).max(10).optional().describe("Only products in these categories"),
   tags: z.array(z.string().trim().min(1).max(60)).max(20).optional().describe("Only products carrying any of these tags"),
   sort: z
     .enum(["newest", "updated_desc", "title_asc", "title_desc", "price_asc", "price_desc", "stock_asc", "stock_desc"])
     .default("updated_desc")
     .describe("Order of results. price/stock sorts use the rolled-up variant facts."),
-  limit: z
+  limit: z.coerce
     .number()
     .int()
     .min(1)
@@ -121,27 +194,35 @@ export function searchProductsTool(auth: SellerContext) {
         };
       }
 
-      const { items, meta } = await listProducts(auth, {
-        workspaceId,
-        query: input.query,
-        statuses: input.statuses,
-        inventoryStates: input.inventoryStates,
-        categoryIds: input.categoryIds,
-        tags: input.tags,
-        sort: input.sort ?? "updated_desc",
-        limit: input.limit ?? 10,
-      });
+      try {
+        const parsedInput = searchProductsInputSchema.parse(input);
+        const { items, meta } = await listProducts(auth, {
+          workspaceId,
+          query: parsedInput.query,
+          statuses: parsedInput.statuses,
+          inventoryStates: parsedInput.inventoryStates,
+          categoryIds: parsedInput.categoryIds,
+          tags: parsedInput.tags,
+          sort: parsedInput.sort ?? "updated_desc",
+          limit: parsedInput.limit ?? 10,
+        });
 
-      // Structured output: validate what we return against the shared contract,
-      // so the model summarises real catalogue data, never a malformed row.
-      const parsed = z.array(productListItemSchema).safeParse(items);
+        // Structured output: validate what we return against the shared contract,
+        // so the model summarises real catalogue data, never a malformed row.
+        const parsed = z.array(productListItemSchema).safeParse(items);
 
-      return {
-        status: "success",
-        count: items.length,
-        total: meta.total,
-        products: parsed.success ? parsed.data : [],
-      };
+        return {
+          status: "success",
+          count: items.length,
+          total: meta.total,
+          products: parsed.success ? parsed.data : [],
+        };
+      } catch (error) {
+        return {
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not search products.",
+        };
+      }
     },
   };
 }

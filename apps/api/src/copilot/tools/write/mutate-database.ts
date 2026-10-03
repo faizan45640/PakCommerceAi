@@ -8,7 +8,7 @@ export const mutateDatabaseInputSchema = z.object({
     .min(1)
     .max(500)
     .describe(
-      "A clear, plain-English summary of the proposed database change so the merchant knows exactly what will happen before approving.",
+      "One plain sentence the seller reads before saying yes. Example: Set Lawn Kurta, Medium, to 12 pieces. Do not mention SQL, tables, or databases.",
     ),
   sql: z
     .string()
@@ -81,10 +81,10 @@ export function mutateDatabaseTool(auth: SellerContext) {
     description:
       "Execute a guarded UPDATE, INSERT, or DELETE statement against the seller's database (products, product_variants). Use this universal tool for ANY modification: updating product names, descriptions, prices, stock levels, tags, or statuses. Requires seller approval via Human-in-the-Loop before executing.",
     inputSchema: mutateDatabaseInputSchema,
+    needsApproval: true,
     execute: async ({
       summary,
       sql,
-      affectedTable,
       reason,
     }: MutateDatabaseInput): Promise<MutateDatabaseResult> => {
       const cleanSql = sql.trim().replace(/;+\s*$/, "");
@@ -119,7 +119,7 @@ export function mutateDatabaseTool(auth: SellerContext) {
 
       return {
         status: "success",
-        message: `Successfully executed: ${summary} (${rowsAffected} row(s) updated in ${affectedTable}).`,
+        message: summary,
         summary,
         sql: cleanSql,
         rowsAffected,
