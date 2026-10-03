@@ -10,16 +10,18 @@ Written and verified on **Windows 10 + PowerShell**, Node 22.13.0, npm 11.11.0. 
 
 | Service | Workspace | Port | State |
 |---|---|---|---|
-| Seller dashboard | `apps/web` | **3000** | ✅ Runs. All pages render mock data. |
-| Backend API | `apps/api` | **4000** | ✅ Runs. Health endpoint only. |
+| Seller dashboard | `apps/web` | **3000** | ✅ Runs. Copilot chat calls the API. Other screens render mock data or empty placeholders. |
+| Backend API | `apps/api` | **4000** | ✅ Runs. Health, product CRUD, and copilot chat. |
 | Local database | `supabase/` | **54322** | ✅ Runs via Docker. `npx supabase start`. |
 | ML service | `apps/ml` | — | ❌ **Nothing to run.** Not scaffolded yet. |
 
-The local database is only needed for schema work and integration tests — the dashboards do
-not read from it yet. Setup, migration rules and deploy steps are in
-[`supabase-setup.md`](supabase-setup.md#migrations).
+Login uses Supabase Auth, so the web app needs its env file even to sign in. The copilot
+also needs the API running, and a configured model provider if you want a real answer
+instead of the setup message. Orders, inventory, logistics, conversations, approvals, and
+analytics do not read the database. Products and customers are empty placeholders.
 
-Do not expect the dashboards to show real data — none of them are wired to a database or to the API. See the status table in the [README](../README.md).
+Setup, migration rules and deploy steps are in
+[`supabase-setup.md`](supabase-setup.md#migrations). See the status table in the [README](../README.md).
 
 ---
 
@@ -187,22 +189,27 @@ Both must return:
 {"status":"ok","service":"api"}
 ```
 
-These are the **only two endpoints that exist**, and they share one handler.
+Those two share one handler. They are the public routes. Product CRUD and copilot chat
+also exist, and both require a Supabase access token. See [`api.md`](api.md).
 
 ### Web
 
 | Route | Expected |
 |---|---|
-| `/` | 307 redirect → `/dashboard/sales-and-orders` |
-| `/dashboard` | 307 redirect → `/dashboard/sales-and-orders` |
-| `/dashboard/sales-and-orders` | 200 |
-| `/dashboard/inventory-management` | 200 |
-| `/dashboard/ai-insights-and-copilot` | 200 |
-| `/dashboard/ai-sales-agent` | 200 |
-| `/dashboard/logistics-and-courier` | 200 |
-| `/dashboard/account-settings` | 200 |
-| `/auth/v1/login` | 200 (UI only — submitting shows a toast, does not log in) |
-| `/auth/v1/register` | 200 (UI only) |
+| `/` | 307 redirect → `/dashboard/orders` |
+| `/dashboard` | 307 redirect → `/dashboard/orders` |
+| `/dashboard/orders` | 200, mock data |
+| `/dashboard/inventory` | 200, mock data |
+| `/dashboard/copilot` | 200, live chat when the API is running |
+| `/dashboard/logistics-and-courier` | 200, mock data |
+| `/dashboard/settings` | 200 |
+| `/dashboard/sales-and-orders` | 307 redirect → `/dashboard/orders` |
+| `/dashboard/inventory-management` | 307 redirect → `/dashboard/inventory` |
+| `/dashboard/ai-insights-and-copilot` | 307 redirect → `/dashboard/copilot` |
+| `/dashboard/ai-sales-agent` | 307 redirect → `/dashboard/conversations` |
+| `/dashboard/account-settings` | 307 redirect → `/dashboard/settings` |
+| `/auth/v1/login` | 200. Submitting signs in with Supabase |
+| `/auth/v1/register` | 200. Submitting signs up with Supabase |
 
 The first request to each route compiles it on demand and can take 5–20 seconds. Subsequent loads are fast.
 
@@ -215,7 +222,7 @@ The first request to each route compiles it on demand and can take 5–20 second
 ```bash
 npm run lint         # all workspaces — ✅ passes (real ESLint everywhere)
 npm run typecheck    # all workspaces — ✅ passes
-npm run test         # all workspaces — ✅ 53 Node tests pass
+npm run test         # all workspaces — 180 Node unit tests
 npm run build        # all workspaces — ✅ passes
 npm run ci           # lint + typecheck + test + build
 ```
@@ -223,10 +230,10 @@ npm run ci           # lint + typecheck + test + build
 Run one workspace's tests while you work:
 
 ```bash
-npm run test -w @pakcommerce/shared          # 24 tests
-npm run test -w @pakcommerce/integrations    # 14 tests
-npm run test -w @pakcommerce/api             #  4 tests
-npm run test -w @pakcommerce/web             # 11 tests
+npm run test -w @pakcommerce/shared          # 58 tests
+npm run test -w @pakcommerce/integrations    # 16 tests
+npm run test -w @pakcommerce/api             # 94 tests
+npm run test -w @pakcommerce/web             # 12 tests
 ```
 
 Watch mode, for the workspace you are editing:
@@ -242,7 +249,7 @@ Schema and row-level-security tests need a real Postgres, so they are kept out o
 
 ```bash
 npx supabase start                                     # Docker must be running
-npm run test:integration -w @pakcommerce/integrations
+npm run test:integration                               # integrations (41) and api (37)
 ```
 
 > **Historical note.** Earlier revisions of this runbook said `npm run build` failed while
@@ -263,7 +270,7 @@ npm run typecheck -w @pakcommerce/web
 npm run ci:ml
 ```
 
-Runs `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest tests/ -q` inside `apps/ml`. Only a placeholder test exists.
+Runs `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest tests/ -q` inside `apps/ml`. Two toolchain tests exist. There is no model.
 
 > Uses `python3`. On Windows, where the executable is usually `python`, run the steps manually from `apps/ml` or use WSL/Git Bash.
 
@@ -392,7 +399,7 @@ Your `package-lock.json` is out of sync. Run `npm install` locally and commit th
 
 ### Login form does not log me in
 
-Working as built. `login-form.tsx` currently just displays a toast with the submitted values — Supabase authentication is not wired up yet.
+Login calls `supabase.auth.signInWithPassword`. A toast with the Supabase error means the credentials were rejected or the project is unreachable. Check `apps/web/.env.local` (`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), restart the dev server after changing it, and confirm the user exists in that Supabase project.
 
 ---
 
@@ -401,7 +408,8 @@ Working as built. `login-form.tsx` currently just displays a toast with the subm
 | What | URL |
 |---|---|
 | Seller dashboard | <http://localhost:3000> |
-| Dashboard landing | <http://localhost:3000/dashboard/sales-and-orders> |
+| Dashboard landing | <http://localhost:3000/dashboard/orders> |
+| Copilot | <http://localhost:3000/dashboard/copilot> |
 | Login page | <http://localhost:3000/auth/v1/login> |
 | API health | <http://localhost:4000/health> |
 | API v1 root | <http://localhost:4000/api/v1> |

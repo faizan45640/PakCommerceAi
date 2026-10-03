@@ -15,9 +15,9 @@ This repository is **early-stage**. The target system describes the **complete o
 | | |
 |---|---|
 | **Proposal** | The 20-week target. Aspirational. |
-| **This codebase** | Roughly **end of Phase 3 of 8**. |
-| **Built so far** | Auth + workspace DB schema, 6 dashboard screens on **mock data**, a health-check API. |
-| **Not started** | Store connectors, sync engine, WhatsApp agent, Business Copilot, RAG, ML/COD risk model, courier scoring, audit logs. |
+| **This codebase** | Phase 3 is done. The catalogue API and seller copilot are in. Store sync, WhatsApp, RAG, and the COD model are not. |
+| **Built so far** | Supabase Auth, workspace and product schema, product CRUD, a streaming Business Copilot with guarded writes, and the dashboard shell. |
+| **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, orders, audit logs. |
 
 When a document describes a feature, check the status table below before assuming it exists.
 
@@ -29,10 +29,10 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. 6 dashboard pages rendering **mock data**, plus wired login/register against Supabase Auth with an SSR session proxy. |
-| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD at `/api/v1/products` with bearer-token auth and seller scoping enforced by RLS, plus health, copilot and AI tools. See [`docs/api.md`](docs/api.md). |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot page calls the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Products and customers are empty placeholders. |
+| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD at `/api/v1/products` and streaming copilot chat at `/api/v1/copilot/chat`, both behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
-| `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory and API envelopes. Consumed by `apps/api` (request/response validation) and `apps/web` (response types). |
+| `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
 | `packages/integrations` | `@pakcommerce/integrations` | 🟢 **Working** | Supabase client/admin factories + generated DB types. Used by both web and api. |
 | `packages/ai` | `@pakcommerce/ai` | ⚪ **Empty stub** | Placeholder scripts only. |
 
@@ -92,7 +92,9 @@ by remembering a `where` clause on each query.
 | ML | Python 3.12, ruff, pytest — *scikit-learn / FastAPI not yet added* |
 | Monorepo | npm workspaces (no Turborepo/Nx) |
 
-Planned but **not yet installed**: LangGraph, Vercel AI SDK, Twilio, scikit-learn, pgvector, Redis/BullMQ, courier SDKs.
+Installed for the seller copilot: Vercel AI SDK, with Google, DeepSeek, OpenRouter, and Ollama providers. The chat falls back to a setup message when no provider key is set.
+
+Planned but **not yet installed**: LangGraph, Twilio, scikit-learn, pgvector, Redis/BullMQ, courier SDKs.
 
 ---
 
@@ -120,24 +122,28 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 
 ### Test suite
 
-| Workspace | Tests | Covers |
+| Workspace | Unit tests | Covers |
 |---|---|---|
-| `packages/shared` | 24 | Product and workspace Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
-| `packages/integrations` | 14 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 44 | Auth middleware, health and copilot routes, slug generation, search-document building, and the database⇄contract mapper |
-| `apps/web` | 11 | `getInitials`, `formatCurrency`, preference parsing and defaults |
+| `packages/shared` | 58 | Product, workspace, inventory, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
+| `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
+| `apps/api` | 94 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
+| `apps/web` | 12 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
-| **schema conformance** | **19** | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
-| **catalogue isolation** | **8** | A seller cannot read, insert, reassign or delete another seller's products or variants |
-| **identity isolation** | **14** | A seller cannot read another's profile, business details or workspaces; workspaces cannot be reassigned or hard-deleted |
 
-**96 tests total.** The last three suites need a database — run them with
-`npx supabase start` then `npm run test:integration`. They are kept out of `npm run test` so
-the unit suite stays runnable without Docker.
+**180 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**55 unit tests, 41 database tests.** The dashboards are deliberately untested — every component renders
-hardcoded mock data, so a test over them would assert that a constant equals itself. Add
-component tests when those pages get real data.
+**78 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `packages/integrations` schema conformance | 19 | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
+| `packages/integrations` catalogue isolation | 8 | A seller cannot read, insert, reassign, or delete another seller's products or variants |
+| `packages/integrations` identity isolation | 14 | A seller cannot read another's profile, business details, or workspaces; workspaces cannot be reassigned or hard-deleted |
+| `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
+| `apps/api` copilot tools | 13 | Read and guarded-write tools against a real database |
+
+**260 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
+
 - **CD** builds artifacts on `main`. All deploy steps are **placeholders** and stay skipped until the repo variable `ENABLE_CD=true` is set.
 
 > ✅ **CI is green.** `lint`, `typecheck`, `test` and `build` all pass. The production

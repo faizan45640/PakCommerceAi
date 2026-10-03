@@ -15,13 +15,13 @@ This project has two layers, and confusing them causes real bugs:
 | Layer | Source | Status |
 |---|---|---|
 | **The target system** | The product vision sections below | **Planned.** Mostly not built. |
-| **The current codebase** | This repository | **Phase 3 of 8.** See [Implementation Status](#implementation-status). |
+| **The current codebase** | This repository | **Phase 3 is done.** Catalogue API and seller copilot are in; store sync, WhatsApp, RAG, and the COD model are not. See [Implementation Status](#implementation-status). |
 
 Sections describing vision, domain, philosophy, and invariants describe **where the project is going**. They are binding as *principles* — follow them when writing new code — but they do **not** describe what exists today.
 
 Before writing code that depends on a feature, check [Implementation Status](#implementation-status). When in doubt, assume it does not exist.
 
-**Last verified against the codebase: 2026-08-17** — including a full `lint` / `typecheck` / `test` / `build` run, not a reading.
+**Last verified against the codebase: 2026-10-03.** `npm run test` passed: 180 Node unit tests (api 94, shared 58, integrations 16, web 12). The 78 database-test count is from the `*.itest.ts` files and was not re-run that day. The 2 Python tests live in `apps/ml` and run under `npm run ci:ml`.
 
 ---
 
@@ -122,7 +122,7 @@ The **Built?** column reflects the actual database schema and code today.
 
 PakCommerce AI contains two primary AI systems. They serve different users but operate on the same centralized business platform.
 
-> 🔴 **Neither is implemented.** No AI SDK, LLM provider, agent framework, or vector store is installed. The dashboard pages named "AI Sales Agent" and "AI Insights and Copilot" are **static mock UI**.
+> The **seller copilot is implemented**. The **WhatsApp sales agent is not**. There is no vector store and no RAG pipeline. `/dashboard/ai-sales-agent` redirects to the conversations screen, which is still static mock UI. `/dashboard/copilot` is a live chat against `POST /api/v1/copilot/chat`.
 
 ---
 
@@ -162,61 +162,67 @@ Its responsibilities include:
 
 The Business Copilot is an intelligent assistant, not an autonomous business manager.
 
-**Planned runtime:** Vercel AI SDK, chosen for low-latency streaming responses in the dashboard.
+**Runtime:** Vercel AI SDK, streaming into the dashboard. Providers: Google, DeepSeek, OpenRouter, and local Ollama. If none is configured, the route streams a setup message instead of calling a model.
+
+The copilot can search the seller's catalogue, inspect the schema, and run a single read-only SQL query through `run_readonly_query`. Stock, price, product-detail, and generic SQL writes pause for seller approval, then run as that seller so RLS still applies. `getCourierPerformance` is a **demo stub**: it returns the same sample rates for every city. It must not be treated as courier data. Full tool notes are in [`api.md`](api.md).
 
 ---
 
 # Implementation Status
 
-**As of 2026-08-17.** Update this section whenever a slice lands.
+**As of 2026-10-03.** Update this section whenever a slice lands.
 
 ## Proposal phase tracking
 
-The proposal defines a 20-week, 8-phase plan. Current position: **end of Phase 3**.
+The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is complete. The catalogue API and seller copilot landed before store sync and the WhatsApp agent.** Phases 4, 5, and 7 have not started.
 
 | Phase | Weeks | Scope | Status |
 |---|---|---|---|
 | 1 | 1–2 | Requirements, competitor study, scope | ✅ Done (proposal submitted) |
 | 2 | 3–4 | Architecture, ERD, UI wireframes, API feasibility | 🟡 Partial — no ERD in repo |
-| 3 | 5–7 | Backend setup, database, auth, dashboard base | 🟡 Mostly done — auth logic missing |
+| 3 | 5–7 | Backend setup, database, auth, dashboard base | ✅ Done. Auth is wired. Most dashboard screens still render mock data |
 | 4 | 8–10 | Shopify/WooCommerce connectors, product/order/inventory sync, selective SKU rules | ❌ Not started |
 | 5 | 11–13 | WhatsApp AI agent, Twilio webhooks, conversation memory, draft orders, begin ML training | ❌ Not started |
-| 6 | 14–15 | Seller copilot, RAG pipeline, tool calls, approval system, finalize COD model | ❌ Not started |
-| 7 | 16–17 | COD/risk scoring integration, AI insights, courier selection engine, audit logs | ❌ Not started |
+| 6 | 14–15 | Seller copilot, RAG pipeline, tool calls, approval system, finalize COD model | 🟡 Copilot, tool calls, and write approval are in. RAG and the COD model are not |
+| 7 | 16–17 | COD/risk scoring integration, AI insights, courier selection engine, audit logs | ❌ Not started. Logistics UI and `getCourierPerformance` are hardcoded |
 | 8 | 18–20 | Testing, bug fixing, final report, presentation, live demo | ❌ Not started |
 
 ## What exists in code
 
 **`apps/web` — Next.js 16 App Router, port 3000**
 
-- 6 dashboard pages: sales-and-orders, inventory-management, ai-insights-and-copilot, ai-sales-agent, logistics-and-courier, account-settings
-- Every page renders **hardcoded mock data**. No page fetches from a database or API.
-- Sidebar, theme switching, layout preferences, and cookie-backed preference storage all work
-- Login and register pages exist but are **UI only** — `login-form.tsx` submits to a `toast()`, not to Supabase
-- `proxy.ts` (Next 16's renamed middleware) refreshes Supabase SSR cookies
-- **The web app never calls the API on port 4000.** Zero references to `API_URL`, `localhost:4000`, or `/api/v1`.
+- Sidebar routes: products, inventory, orders, customers, conversations, approvals, logistics, analytics, copilot, settings
+- Older paths redirect: `sales-and-orders` → orders, `inventory-management` → inventory, `ai-insights-and-copilot` → copilot, `ai-sales-agent` → conversations, `account-settings` → settings. `/` and `/dashboard` land on `/dashboard/orders`
+- Orders, inventory, logistics, conversations, approvals, and analytics render **hardcoded mock data**
+- Products and customers are empty placeholders. The product API is not wired to the products page
+- Login and register call Supabase Auth (`signInWithPassword` / sign-up). Sign-out is wired in the sidebar
+- `proxy.ts` (Next 16's renamed middleware) refreshes the Supabase SSR session
+- The copilot page posts to `POST /api/v1/copilot/chat` with the session access token
+- `apps/web/src/lib/api/api-client.ts` can call the API with that token. Nothing else imports it yet
+- `apps/web/src/architecture.test.ts` fails CI if web source queries Supabase tables, calls `.rpc()`, or touches the service-role key
 
 **`apps/api` — Express 5, port 4000**
 
-- Product CRUD at `/api/v1/products` - create, list/search, read, update, archive. Documented in `docs/api.md`
-- Seller scoping is not done in handler code: `requireAuth` verifies the token, and each request builds a Supabase client carrying it so the RLS policies filter inside Postgres
-- One router (`healthRouter`), mounted at both `/health` and `/api/v1`
-- `src/app.ts` exports `createApp()`; `src/index.ts` loads env and binds the port. Split so the app can be driven in-process by tests
+- Product CRUD at `/api/v1/products` — create, list/search, read, update, archive. Documented in [`api.md`](api.md)
+- Copilot chat at `POST /api/v1/copilot/chat` (also mounted at `/copilot/chat`). Streams with the Vercel AI SDK. Write tools require seller approval before they run
+- Seller scoping is not done in handler code: `requireAuth` verifies the token, and each request builds a Supabase client carrying it so RLS filters inside Postgres
+- `healthRouter` is mounted at `/health` and `/api/v1`. Protected routers sit below `requireAuth`
+- `src/app.ts` exports `createApp()`; `src/index.ts` loads env and binds the port. Split so tests can drive the app in-process
 - CORS restricted to `APP_URL`, JSON body parsing enabled
-- `src/lib/supabase.ts` exports client factories that **nothing imports yet**
-- No business endpoints, no auth middleware, no webhook handlers
+- `src/lib/supabase.ts` wraps the integrations client factories. Auth verification and the per-request seller client both use it
+- No webhook handlers, no store connectors, no background jobs
 
 **`apps/ml` — not scaffolded**
 
-- `pyproject.toml` (ruff + pytest config), `.python-version` (3.12), one placeholder test
+- `pyproject.toml` (ruff + pytest config), `.python-version` (3.12), two toolchain tests
 - `requirements.txt` has FastAPI and uvicorn **commented out**
 - No model, no training pipeline, no dataset
 
 **`packages/shared`**
 
-- Well-developed Zod contracts for products (variants, images, options, inventory state, search queries) and workspaces, versioned `2026-07-12`
-- Covered by 24 tests as of 2026-08-17. Those tests found — and the fix removed — a crash that made the package unimportable
-- 🔴 **Still orphaned** — neither `apps/web` nor `apps/api` declares it as a dependency, and nothing imports it. Under the API-centric answer to Open Decision #1 (2026-08-22), shared becomes load-bearing: Express validates request bodies against these schemas, and web types its fetch responses with them. Treat "shared is imported by ≥1 app" as an exit criterion for Phase 4.
+- Zod contracts for products (variants, images, options, inventory state, search queries), workspaces, inventory movements, and API envelopes
+- `apps/api` validates product requests against these schemas. `apps/web` parses API errors with `apiErrorSchema`
+- 58 unit tests, including the inventory contract added after the August status snapshot
 
 **`packages/integrations`**
 
@@ -237,14 +243,17 @@ Five enums: `seller_verification_status`, `workspace_status`, `product_status`,
 from source. Migrations are append-only: a mistake in a shipped migration is corrected by a
 new one, never by editing the old one.
 
-RLS is enabled on `products` and `product_variants` — the first tables in the project to
-enforce tenant isolation rather than assume it.
+RLS is enabled on every table. `products` and `product_variants` also carry a composite
+foreign key so `workspace_id` / `seller_id` cannot drift.
+
+Two functions back the copilot, both `SECURITY INVOKER` so RLS still applies:
+`run_readonly_query` (single SELECT, 10s, 200 rows) and `run_guarded_mutation`
+(single UPDATE, INSERT, or DELETE). `product_list_view` is the catalogue list shape.
 
 ## Known defects
 
 | Issue | Location | Impact |
 |---|---|---|
-| `@shadcn/react` dependency never imported | `apps/web/package.json` | Dead dependency |
 | CD uploads `apps/web/dist` | `.github/workflows/cd.yml` | Next.js builds to `.next` — artifact is always empty |
 | 8 npm advisories (1 moderate, 7 high) | root `package-lock.json` | Untriaged dependency vulnerabilities. Needs audit triage before enabling audit gate. |
 | No branch protection on `dev` / `main` | GitHub repository settings | CI is advisory; a red branch can still be merged |
@@ -259,31 +268,31 @@ enforce tenant isolation rather than assume it.
 | 🔴 `npm run build` fails prerendering `/dashboard/account-settings` | **Fixed.** Caused by `lucide-react` v1 calling `createContext` at module scope without `"use client"`, which breaks any RSC importing an icon. Pinned to `0.577.0`; full build passes. |
 | `.env` path breaks in the production build | **Was never true.** `apps/api/src` and `apps/api/dist` sit at the same depth, so `../../../.env` resolves to the repo root from both. |
 | `ci-cd.md` says Node 20 and `vite build` | **Corrected.** |
-| 🔴 `packages/shared` — *(undetected)* | **Found by the new test suite.** The package threw `.pick() cannot be used on object schemas containing refinements` at import time. Invisible to `tsc` and unnoticed because nothing imports the package. Fixed by deriving list-item schemas from an unrefined base. |
+| 🔴 `packages/shared` — *(undetected)* | **Found by the new test suite.** The package threw `.pick() cannot be used on object schemas containing refinements` at import time. Invisible to `tsc` and unnoticed because nothing imports the package. Fixed by deriving list-item schemas from an unrefined base. The package is now imported by `apps/api` and `apps/web`. |
+| `@shadcn/react` dead dependency | **Gone.** It is no longer in `apps/web/package.json`. The `shadcn` devDependency is the CLI. |
 
 ---
 
 # Architecture As Built
 
 ```text
-┌──────────────────────┐         ┌──────────────────────┐
-│  apps/web  :3000     │         │  apps/api  :4000     │
-│  Next.js 16          │   ✗     │  Express 5           │
-│  6 mock dashboards   │ ─ ─ ─ ─ │  /health only        │
-│  auth UI (inert)     │  no      │                     │
-└──────────┬───────────┘  calls  └──────────┬───────────┘
-           │                                │
-           └──────────────┬─────────────────┘
-                          ▼
-              packages/integrations
-              (Supabase client factories)
+┌──────────────────────────┐         ┌──────────────────────────────┐
+│  apps/web  :3000         │  chat   │  apps/api  :4000             │
+│  Next.js 16              │ ──────► │  Express 5                   │
+│  copilot (live)          │  Bearer │  /api/v1/products            │
+│  other screens (mock)    │         │  /api/v1/copilot/chat        │
+│  Supabase Auth           │         │  /health                     │
+└──────────┬───────────────┘         └──────────────┬───────────────┘
+           │ auth only                              │ user-scoped client
+           ▼                                        ▼
+              packages/integrations  +  packages/shared (Zod)
                           │
                           ▼
                  Supabase PostgreSQL
-        profiles · seller_profiles · workspaces
+     profiles · seller_profiles · workspaces · products · product_variants
 ```
 
-The dashed line is the important part: **the two apps are not connected**. Both reach Supabase independently, and the API is not on the dashboard's data path.
+Auth stays in the browser. Business data for the copilot goes through Express. Every other dashboard screen still skips the API and renders constants. Web source is not allowed to query tables directly — `architecture.test.ts` enforces that.
 
 Target architecture from the proposal — for reference, not yet real:
 
@@ -358,8 +367,10 @@ Tenant isolation must always be preserved.
 > dumped. They are now captured in the baseline migration, so a local database enforces the
 > same rules.
 >
-> 20 tests prove the boundary by attacking it: what seller A can actually do to seller B's
-> rows, not what the policies claim.
+> 22 tests in `packages/integrations` prove the boundary by attacking it: 14 on identity
+> tables and 8 on the catalogue. They check what seller A can actually do to seller B's
+> rows, not what the policies claim. The API integration tests exercise the same policies
+> through HTTP.
 >
 > Hard-deleting a workspace is deliberately denied to clients. It cascades to the entire
 > catalogue, and the contract already models retirement as `status = 'archived'` — reversible
