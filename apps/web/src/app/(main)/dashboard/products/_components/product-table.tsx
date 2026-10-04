@@ -1,6 +1,7 @@
 "use client";
 
-import { Archive, Edit, Package, Layers } from "lucide-react";
+import Link from "next/link";
+import { Archive, Edit, Eye, Layers, Package } from "lucide-react";
 import type { ProductListItem } from "@pakcommerce/shared";
 
 import { StatusBadge, type StatusTone } from "@/components/dashboard/status-badge";
@@ -82,9 +83,12 @@ export function ProductTable({ products, onEdit, onArchive }: ProductTableProps)
                       <Package className="size-5" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-foreground truncate max-w-[240px]">
+                      <Link
+                        href={`/dashboard/products/${product.id}`}
+                        className="font-medium text-foreground hover:underline truncate max-w-[240px]"
+                      >
                         {product.title}
-                      </span>
+                      </Link>
                       {product.tags && product.tags.length > 0 ? (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {product.tags.slice(0, 3).map((tag) => (
@@ -143,6 +147,18 @@ export function ProductTable({ products, onEdit, onArchive }: ProductTableProps)
                 {/* Actions Column */}
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-foreground"
+                      title="View Details"
+                    >
+                      <Link href={`/dashboard/products/${product.id}`}>
+                        <Eye className="size-4" />
+                      </Link>
+                    </Button>
+
                     <Button
                       variant="ghost"
                       size="icon"
