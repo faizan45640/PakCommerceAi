@@ -5,6 +5,7 @@ import { requireAuth } from "./middleware/auth.js";
 import { supabaseTokenVerifier } from "./middleware/verify-supabase-token.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { productRouter } from "./products/product-router.js";
+import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
 import { healthRouter } from "./routes/health.js";
 
@@ -37,6 +38,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/v1/copilot", requireAuth(supabaseTokenVerifier), copilotRouter);
   app.use("/copilot", requireAuth(supabaseTokenVerifier), copilotRouter);
   app.use("/api/v1/products", requireAuth(supabaseTokenVerifier), productRouter);
+  app.use("/api/v1/workspaces", requireAuth(supabaseTokenVerifier), workspaceRouter);
 
   app.use(
     "/api/v1",
