@@ -25,6 +25,7 @@ export function toInventory(row: InventoryRow): Inventory {
     row.workspace_id === null ||
     row.quantity_on_hand === null ||
     row.reserved_quantity === null ||
+    row.available_quantity === null ||
     row.state === null ||
     row.created_at === null ||
     row.updated_at === null
@@ -41,6 +42,7 @@ export function toInventory(row: InventoryRow): Inventory {
     trackInventory: row.track_inventory ?? true,
     quantityOnHand: row.quantity_on_hand,
     reservedQuantity: row.reserved_quantity,
+    availableQuantity: row.available_quantity,
     lowStockThreshold: row.low_stock_threshold,
     state: row.state,
     createdAt: row.created_at,

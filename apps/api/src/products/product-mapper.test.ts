@@ -91,9 +91,9 @@ describe("toProduct", () => {
     expect(product.variants.map((variant) => variant.title)).toEqual(["Medium", "Large"]);
   });
 
-  it("returns images as an empty array", () => {
-    // There is no product_images table yet. Empty satisfies the contract;
-    // inventing image records would not.
+  it("returns images as an empty array when none are supplied", () => {
+    // The mapper maps whatever image rows it is handed; with none, the contract
+    // is satisfied by an empty array. Inventing image records would not be.
     expect(toProduct(productRow(), [variantRow()]).images).toEqual([]);
   });
 

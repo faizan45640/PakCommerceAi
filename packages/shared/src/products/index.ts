@@ -74,11 +74,11 @@ export const productVariantSchema = z.object({
   inventory: z.object({
     trackInventory: z.boolean(),
     quantityOnHand: z.int().nonnegative().nullable(),
+    reservedQuantity: z.int().nonnegative(),
     lowStockThreshold: z.int().nonnegative().nullable(),
     state: inventoryStateSchema,
   }),
   position: z.int().nonnegative(),
-  imageId: idSchema.nullable().optional(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -170,7 +170,12 @@ export const createProductVariantInputSchema = productVariantSchema
     optionValues: true,
     inventory: true,
     position: true,
-    imageId: true,
+  })
+  .extend({
+    // reservedQuantity is reserved by the order lifecycle, never set by a client.
+    inventory: productVariantSchema.shape.inventory
+      .omit({ reservedQuantity: true })
+      .optional(),
   })
   .partial({
     sku: true,
@@ -178,9 +183,7 @@ export const createProductVariantInputSchema = productVariantSchema
     status: true,
     compareAtPrice: true,
     optionValues: true,
-    inventory: true,
     position: true,
-    imageId: true,
   });
 
 export const createProductInputSchema = z

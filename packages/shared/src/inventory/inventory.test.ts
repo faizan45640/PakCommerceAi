@@ -28,6 +28,7 @@ function inventory(overrides: Record<string, unknown> = {}) {
     trackInventory: true,
     quantityOnHand: 50,
     reservedQuantity: 10,
+    availableQuantity: 40,
     lowStockThreshold: 15,
     state: "in_stock",
     createdAt: NOW,

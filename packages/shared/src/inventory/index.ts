@@ -37,6 +37,7 @@ const inventoryBaseSchema = z.object({
   trackInventory: z.boolean(),
   quantityOnHand: z.int().nonnegative(),
   reservedQuantity: z.int().nonnegative(),
+  availableQuantity: z.int().nonnegative(),
   lowStockThreshold: z.int().nonnegative().nullable(),
   state: inventoryStateSchema,
   createdAt: isoDateTimeSchema,
@@ -166,11 +167,10 @@ export const inventoryListItemSchema = inventoryBaseSchema.pick({
   productId: true,
   quantityOnHand: true,
   reservedQuantity: true,
+  availableQuantity: true,
   lowStockThreshold: true,
   state: true,
   updatedAt: true,
-}).extend({
-  availableQuantity: z.int().nonnegative(),
 });
 
 export type InventorySort = z.infer<typeof inventorySortSchema>;
