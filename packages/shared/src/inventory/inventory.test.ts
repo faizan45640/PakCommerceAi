@@ -5,6 +5,7 @@ import {
   inventoryContractVersion,
   inventorySchema,
   inventorySearchQuerySchema,
+  stockAdjustmentResultSchema,
   stockMovementReasonValues,
   stockMovementSchema,
 } from "./index.js";
@@ -239,5 +240,26 @@ describe("inventorySearchQuerySchema", () => {
   it("search query requires workspace id", () => {
     // Tenant isolation starts here: a query with no workspace is not constructible.
     expect(inventorySearchQuerySchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("stockAdjustmentResultSchema", () => {
+  it("accepts the inventory after the change with the movement that made it", () => {
+    const result = stockAdjustmentResultSchema.safeParse({
+      inventory: inventory({ quantityOnHand: 50 }),
+      movement: movement(),
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a result with no movement", () => {
+    // A successful adjustment always produces a movement. A result without one
+    // would mean stock changed with no record of why.
+    const result = stockAdjustmentResultSchema.safeParse({
+      inventory: inventory(),
+    });
+
+    expect(result.success).toBe(false);
   });
 });
