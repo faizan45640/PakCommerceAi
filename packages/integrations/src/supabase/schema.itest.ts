@@ -117,6 +117,7 @@ describe("table shape", () => {
         "price_currency",
         "product_id",
         "quantity_on_hand",
+        "reserved_quantity",
         "sku",
         "status",
         "title",

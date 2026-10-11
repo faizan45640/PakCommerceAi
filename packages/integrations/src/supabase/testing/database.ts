@@ -122,6 +122,74 @@ export async function insertProduct(
   return product.id;
 }
 
+/** Inserts a variant as the table owner, bypassing RLS. For arranging fixtures. */
+export async function insertVariant(
+  client: Client,
+  seller: Seller,
+  productId: string,
+  overrides: Record<string, unknown> = {},
+): Promise<string> {
+  const {
+    rows: [variant],
+  } = await client.query<{ id: string }>(
+    `insert into public.product_variants
+       (product_id, workspace_id, title, sku, price_amount_minor,
+        track_inventory, quantity_on_hand, low_stock_threshold)
+     values ($1, $2, 'Default', $3, 250000, $4, $5, $6)
+     returning id`,
+    [
+      productId,
+      seller.workspaceId,
+      overrides.sku ?? null,
+      overrides.trackInventory ?? true,
+      overrides.quantity === undefined ? 10 : overrides.quantity,
+      overrides.threshold ?? null,
+    ],
+  );
+
+  return variant.id;
+}
+
+/**
+ * Inserts a stock movement as whoever the connection currently is - the table
+ * owner by default, or a seller when called inside `asUser`.
+ *
+ * Defaults describe a valid "received 5" movement, so a test overrides only the
+ * one field it is about.
+ */
+export async function insertStockMovement(
+  client: Client,
+  seller: Seller,
+  productId: string,
+  variantId: string,
+  overrides: Record<string, unknown> = {},
+): Promise<string> {
+  const {
+    rows: [movement],
+  } = await client.query<{ id: string }>(
+    `insert into public.stock_movements
+       (variant_id, product_id, workspace_id, seller_id, reason,
+        quantity_delta, before_quantity_on_hand, after_quantity_on_hand,
+        performed_by, note)
+     values ($1, $2, $3, $4, $5::public.stock_movement_reason, $6, $7, $8, $9, $10)
+     returning id`,
+    [
+      variantId,
+      overrides.productId ?? productId,
+      overrides.workspaceId ?? seller.workspaceId,
+      overrides.sellerId ?? seller.sellerId,
+      overrides.reason ?? "purchase",
+      overrides.delta ?? 5,
+      overrides.before ?? 10,
+      overrides.after ?? 15,
+      overrides.performedBy ?? seller.userId,
+      overrides.note ?? null,
+    ],
+  );
+
+  return movement.id;
+}
+
 /**
  * Runs `body` as an authenticated Supabase user, so RLS policies apply and
  * `auth.uid()` returns `userId`.
