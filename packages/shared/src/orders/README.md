@@ -14,7 +14,10 @@ triggers inventory reservation/deduction (reason `sale`); drafts never touch sto
 - Client create/transition requests include `workspaceId`; `sellerId` must be
   derived by the backend from authenticated seller context.
 - Money fields reuse the product contract's `moneySchema` (integer minor units, PKR).
-- Customer identity on an order is a **snapshot** (name, phone, city, optional email).
+- `shippingFee` defaults to 0 PKR. Total is computed: `total = subtotal + shippingFee`.
+- `paymentMethod` defaults to `cod` (Cash on Delivery), with support for `prepaid`.
+- Customer identity on an order is a **snapshot** (name, phone, city, optional email, addressLine).
+  `addressLine` is optional on drafts but strictly required on confirmed-path orders for courier fulfillment.
   A future `customerId` link belongs to the Customer 360 contract (T-043+), not here.
 
 ## Status Values

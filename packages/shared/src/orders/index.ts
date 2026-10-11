@@ -20,6 +20,8 @@ export const orderChannelValues = [
   "manual",
 ] as const;
 
+export const orderPaymentMethodValues = ["cod", "prepaid"] as const;
+
 export const orderSortValues = [
   "newest",
   "updated_desc",
@@ -52,10 +54,12 @@ const isoDateTimeSchema = z.iso.datetime({ offset: true });
 
 export const orderStatusSchema = z.enum(orderStatusValues);
 export const orderChannelSchema = z.enum(orderChannelValues);
+export const orderPaymentMethodSchema = z.enum(orderPaymentMethodValues);
 export const orderSortSchema = z.enum(orderSortValues);
 
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export type OrderChannel = z.infer<typeof orderChannelSchema>;
+export type OrderPaymentMethod = z.infer<typeof orderPaymentMethodSchema>;
 
 export function canTransition(
   from: OrderStatus,
@@ -183,9 +187,11 @@ const orderBaseSchema = z.object({
   workspaceId: idSchema,
   status: orderStatusSchema,
   channel: orderChannelSchema,
+  paymentMethod: orderPaymentMethodSchema.default("cod"),
   customer: orderCustomerSnapshotSchema,
   items: z.array(orderItemSchema).min(1).max(200),
   subtotal: moneySchema,
+  shippingFee: moneySchema.default({ amountMinor: 0, currency: "PKR" }),
   total: moneySchema,
   currency: z.literal("PKR").default("PKR"),
   note: trimmedText.max(1000).nullable().optional(),
@@ -201,9 +207,11 @@ function assertOrderTotals(
       lineTotal: { amountMinor: number; currency: string };
     }[];
     subtotal: { amountMinor: number; currency: string };
+    shippingFee?: { amountMinor: number; currency: string };
     total: { amountMinor: number; currency: string };
     currency: string;
     status: OrderStatus;
+    customer: { addressLine?: string | null };
     confirmedAt: string | null;
   },
   context: z.RefinementCtx,
@@ -221,23 +229,24 @@ function assertOrderTotals(
     });
   }
 
-  if (order.total.amountMinor !== order.subtotal.amountMinor) {
+  const shippingMinor = order.shippingFee?.amountMinor ?? 0;
+  if (order.total.amountMinor !== order.subtotal.amountMinor + shippingMinor) {
     context.addIssue({
       code: "custom",
       path: ["total", "amountMinor"],
-      message:
-        "Total must equal subtotal for MVP (no shipping/tax lines yet).",
+      message: "Total must equal subtotal plus shipping fee.",
     });
   }
 
   if (
     order.subtotal.currency !== order.currency ||
-    order.total.currency !== order.currency
+    order.total.currency !== order.currency ||
+    (order.shippingFee && order.shippingFee.currency !== order.currency)
   ) {
     context.addIssue({
       code: "custom",
       path: ["currency"],
-      message: "Order currency must match subtotal and total currency.",
+      message: "Order currency must match subtotal, shipping fee, and total currency.",
     });
   }
 
@@ -262,6 +271,14 @@ function assertOrderTotals(
       message: "Confirmed-path orders require a confirmedAt timestamp.",
     });
   }
+
+  if (requiresConfirmStamp && !order.customer.addressLine?.trim()) {
+    context.addIssue({
+      code: "custom",
+      path: ["customer", "addressLine"],
+      message: "Confirmed-path orders require a customer delivery address.",
+    });
+  }
 }
 
 export const orderSchema = orderBaseSchema.superRefine(assertOrderTotals);
@@ -283,6 +300,8 @@ export const createDraftOrderItemInputSchema = z.object({
 export const createDraftOrderInputSchema = z.object({
   workspaceId: idSchema,
   channel: orderChannelSchema.default("manual"),
+  paymentMethod: orderPaymentMethodSchema.default("cod"),
+  shippingFee: moneySchema.optional(),
   customer: orderCustomerSnapshotSchema,
   items: z.array(createDraftOrderItemInputSchema).min(1).max(200),
   note: trimmedText.max(1000).nullable().optional(),
@@ -328,6 +347,7 @@ export const orderListItemSchema = orderBaseSchema
     workspaceId: true,
     status: true,
     channel: true,
+    paymentMethod: true,
     total: true,
     currency: true,
     confirmedAt: true,

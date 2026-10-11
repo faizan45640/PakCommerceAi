@@ -8,6 +8,7 @@ import {
   orderChannelValues,
   orderContractVersion,
   orderItemSchema,
+  orderPaymentMethodValues,
   orderSchema,
   orderSearchQuerySchema,
   orderStatusHistorySchema,
@@ -54,15 +55,17 @@ function order(overrides: Record<string, unknown> = {}) {
     workspaceId: WORKSPACE_ID,
     status: "draft",
     channel: "whatsapp",
+    paymentMethod: "cod",
     customer: {
       name: "Ahmed Khan",
       phone: "+923001234567",
       city: "Lahore",
       email: null,
-      addressLine: null,
+      addressLine: "House 12, Street 3, Gulberg III",
     },
     items: [item()],
     subtotal: money(300_000),
+    shippingFee: money(0),
     total: money(300_000),
     currency: "PKR",
     note: null,
@@ -223,6 +226,74 @@ describe("orderSchema", () => {
       orderSchema.safeParse(order({ status: "confirmed", confirmedAt: null }))
         .success,
     ).toBe(false);
+  });
+
+  it("accepts an order with shipping fee where total equals subtotal plus shipping fee", () => {
+    const result = orderSchema.safeParse(
+      order({
+        subtotal: money(300_000),
+        shippingFee: money(25_000),
+        total: money(325_000),
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an order where total does not equal subtotal plus shipping fee", () => {
+    expect(
+      orderSchema.safeParse(
+        order({
+          subtotal: money(300_000),
+          shippingFee: money(25_000),
+          total: money(300_000),
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("supports cod and prepaid payment methods", () => {
+    expect([...orderPaymentMethodValues]).toEqual(["cod", "prepaid"]);
+    expect(orderSchema.safeParse(order({ paymentMethod: "prepaid" })).success).toBe(
+      true,
+    );
+    expect(orderSchema.safeParse(order({ paymentMethod: "cod" })).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects confirmed-path orders without delivery addressLine", () => {
+    expect(
+      orderSchema.safeParse(
+        order({
+          status: "confirmed",
+          confirmedAt: NOW,
+          customer: {
+            name: "Ahmed Khan",
+            phone: "+923001234567",
+            city: "Lahore",
+            email: null,
+            addressLine: null,
+          },
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("accepts draft orders even without customer addressLine", () => {
+    expect(
+      orderSchema.safeParse(
+        order({
+          status: "draft",
+          customer: {
+            name: "Ahmed Khan",
+            phone: "+923001234567",
+            city: "Lahore",
+            email: null,
+            addressLine: null,
+          },
+        }),
+      ).success,
+    ).toBe(true);
   });
 });
 
