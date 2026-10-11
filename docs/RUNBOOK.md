@@ -129,24 +129,19 @@ Get both from the Supabase dashboard → **Project Settings → API**.
 
 ### Both services, one command
 
-```powershell
-npx concurrently -n "web,api" -c "cyan,magenta" "npm run dev -w @pakcommerce/web" "npm run dev -w @pakcommerce/api"
+```bash
+npm run dev
 ```
 
 `Ctrl+C` stops both.
-
-> **PowerShell users:** keep the quotes around `"web,api"` and `"cyan,magenta"`. Unquoted, PowerShell splits on the comma and both processes end up sharing one confusing label.
 
 ### Or one service per terminal
 
 Often better — you get clean, separate logs.
 
 ```bash
-npm run dev -w @pakcommerce/web     # → http://localhost:3000
-```
-
-```bash
-npm run dev -w @pakcommerce/api     # → http://localhost:4000
+npm run dev:web     # → http://localhost:3000
+npm run dev:api     # → http://localhost:4000
 ```
 
 Both use watch mode: `next dev` for web, `tsx watch` for api. Saving a file reloads automatically.
@@ -158,18 +153,6 @@ Both use watch mode: `next dev` for web, `tsx watch` for api. Saving a file relo
 [web] - Local:  http://localhost:3000
 [web] ✓ Ready in 2.0s
 [api] API running at http://localhost:4000
-```
-
-### There is no root `npm run dev`
-
-`npm run dev` from the repo root **fails** with `Missing script: "dev"`. That is expected — the root `package.json` defines only `lint`, `typecheck`, `test`, `build`, `ci`, and `ci:ml`.
-
-To enable it, add these to the root `scripts` block (`concurrently` is already a root devDependency):
-
-```json
-"dev": "concurrently -n \"web,api\" -c \"cyan,magenta\" \"npm:dev:web\" \"npm:dev:api\"",
-"dev:web": "npm run dev -w @pakcommerce/web",
-"dev:api": "npm run dev -w @pakcommerce/api"
 ```
 
 ---
@@ -222,7 +205,7 @@ The first request to each route compiles it on demand and can take 5–20 second
 ```bash
 npm run lint         # all workspaces — ✅ passes (real ESLint everywhere)
 npm run typecheck    # all workspaces — ✅ passes
-npm run test         # all workspaces — 180 Node unit tests
+npm run test         # all workspaces — 259 Node unit tests
 npm run build        # all workspaces — ✅ passes
 npm run ci           # lint + typecheck + test + build
 ```
@@ -230,10 +213,10 @@ npm run ci           # lint + typecheck + test + build
 Run one workspace's tests while you work:
 
 ```bash
-npm run test -w @pakcommerce/shared          # 58 tests
+npm run test -w @pakcommerce/shared          # 109 tests
 npm run test -w @pakcommerce/integrations    # 16 tests
-npm run test -w @pakcommerce/api             # 94 tests
-npm run test -w @pakcommerce/web             # 12 tests
+npm run test -w @pakcommerce/api             # 119 tests
+npm run test -w @pakcommerce/web             # 15 tests
 ```
 
 Watch mode, for the workspace you are editing:
@@ -249,7 +232,7 @@ Schema and row-level-security tests need a real Postgres, so they are kept out o
 
 ```bash
 npx supabase start                                     # Docker must be running
-npm run test:integration                               # integrations (41) and api (37)
+npm run test:integration                               # integrations (94) and api (60)
 ```
 
 > **Historical note.** Earlier revisions of this runbook said `npm run build` failed while
@@ -309,7 +292,7 @@ npm run start -w @pakcommerce/web     # next start
 
 ### `npm error Missing script: "dev"`
 
-Expected. There is no root `dev` script — see [section 5](#5-running).
+Should not happen — the root `package.json` defines a `dev` script that runs both web and api concurrently. If you see this, pull the latest `dev` branch.
 
 ### `Turbopack is not supported on this platform (win32/x64) because native bindings are not available`
 

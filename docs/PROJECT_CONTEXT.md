@@ -21,7 +21,7 @@ Sections describing vision, domain, philosophy, and invariants describe **where 
 
 Before writing code that depends on a feature, check [Implementation Status](#implementation-status). When in doubt, assume it does not exist.
 
-**Last verified against the codebase: 2026-10-11.** `npm run test` passed: 210 Node unit tests (api 119, shared 60, integrations 16, web 15). `npm run test:integration` passed against a freshly reset local database: 154 database tests (integrations 94, api 60). The 2 Python tests live in `apps/ml` and run under `npm run ci:ml`.
+**Last verified against the codebase: 2026-10-11.** `npm run test` passed: 259 Node unit tests (api 119, shared 109, integrations 16, web 15). `npm run test:integration` passed against a freshly reset local database: 154 database tests (integrations 94, api 60). The 2 Python tests live in `apps/ml` and run under `npm run ci:ml`.
 
 ---
 
@@ -172,7 +172,7 @@ A decision model (Jev, or any classifier that returns a choice, a score, or a ye
 
 # Implementation Status
 
-**As of 2026-10-03.** Update this section whenever a slice lands.
+**As of 2026-10-11.** Update this section whenever a slice lands.
 
 ## Proposal phase tracking
 
@@ -196,7 +196,7 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 - Sidebar routes: products, inventory, orders, customers, conversations, approvals, logistics, analytics, copilot, settings
 - Older paths redirect: `sales-and-orders` → orders, `inventory-management` → inventory, `ai-insights-and-copilot` → copilot, `ai-sales-agent` → conversations, `account-settings` → settings. `/` and `/dashboard` land on `/dashboard/orders`
 - Orders, inventory, logistics, conversations, approvals, and analytics render **hardcoded mock data**
-- Products and customers are empty placeholders. The product API is not wired to the products page
+- The products page reads the real product API (list + current workspace). Customers is an empty placeholder
 - Login and register call Supabase Auth (`signInWithPassword` / sign-up). Sign-out is wired in the sidebar
 - `proxy.ts` (Next 16's renamed middleware) refreshes the Supabase SSR session
 - The Rafiq page (`/dashboard/copilot`) lists/creates chats, streams turns to `POST /api/v1/copilot/chat`, and archives or deletes history — all with the session access token
@@ -223,9 +223,9 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 
 **`packages/shared`**
 
-- Zod contracts for products (variants, images, options, inventory state, search queries), workspaces, inventory movements, and API envelopes
+- Zod contracts for products (variants, images, options, inventory state, search queries), workspaces, inventory movements, categories, orders, and API envelopes
 - `apps/api` validates product requests against these schemas. `apps/web` parses API errors with `apiErrorSchema`
-- 58 unit tests, including the inventory contract added after the August status snapshot
+- 109 unit tests, including the inventory, category, and order contracts added after the August status snapshot
 
 **`packages/integrations`**
 
