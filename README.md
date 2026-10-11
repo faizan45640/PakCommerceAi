@@ -29,10 +29,10 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot page calls the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Products and customers are empty placeholders. |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot page and the products page call the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
 | `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD at `/api/v1/products` and streaming copilot chat at `/api/v1/copilot/chat`, both behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
-| `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
+| `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, orders, categories, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
 | `packages/integrations` | `@pakcommerce/integrations` | 🟢 **Working** | Supabase client/admin factories + generated DB types. Used by both web and api. |
 | `packages/ai` | `@pakcommerce/ai` | ⚪ **Empty stub** | Placeholder scripts only. |
 
@@ -69,7 +69,7 @@ by remembering a `where` clause on each query.
 │   ├── api/                    # Express 5 backend (port 4000)
 │   └── ml/                     # Python FastAPI ML service (not scaffolded)
 ├── packages/
-│   ├── shared/                 # Zod domain contracts (products, workspaces)
+│   ├── shared/                 # Zod domain contracts (products, workspaces, inventory, orders, categories)
 │   ├── integrations/           # Supabase clients + generated DB types
 │   └── ai/                     # AI/agent code (empty)
 ├── supabase/
@@ -112,15 +112,13 @@ Full instructions, prerequisites, environment variables, and troubleshooting are
 
 ```bash
 npm install
-npx concurrently -n "web,api" -c "cyan,magenta" \
-  "npm run dev -w @pakcommerce/web" \
-  "npm run dev -w @pakcommerce/api"
+npm run dev
 ```
 
 - Web → <http://localhost:3000>
 - API → <http://localhost:4000/health>
 
-> There is **no root `npm run dev` script**. Use the command above or run each workspace separately. See the runbook.
+> The root `npm run dev` script runs both web and api concurrently. You can also run each workspace separately with `npm run dev:web` or `npm run dev:api`. See the runbook.
 
 ---
 
@@ -132,13 +130,13 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 
 | Workspace | Unit tests | Covers |
 |---|---|---|
-| `packages/shared` | 60 | Product, workspace, inventory, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
+| `packages/shared` | 109 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
 | `apps/api` | 119 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
 | `apps/web` | 15 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**210 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**259 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
 **154 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 

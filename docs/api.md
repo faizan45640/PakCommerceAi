@@ -179,7 +179,7 @@ Honest list of what this does not do yet.
 
 | Limitation | Detail |
 |---|---|
-| **Images** | There is no `product_images` table. Products always return `images: []` and `primaryImage: null`. Sending a non-empty `images` array returns `400` rather than silently dropping it — `apiErrorCodeSchema` has no "not implemented" code and inventing one would break the shared contract. |
+| **Images** | The `product_images` table exists and the shared contract includes `productImageSchema`, but the product API does not expose dedicated image CRUD endpoints yet. Images are not written or returned through the product endpoints. |
 | **Variant editing** | `PATCH` updates product fields only. Adding, editing or removing variants after creation needs its own endpoints. |
 | **Search quality** | `query` is a case-insensitive substring match on the generated document. No stemming, no ranking, no full-text index. |
 | **Pagination** | Offset behind an opaque cursor. Fine for a seller's catalogue; degrades on very large ones. |
