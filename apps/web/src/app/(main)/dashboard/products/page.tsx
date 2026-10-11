@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Package, Plus, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, ChevronUp, Package, Plus, RefreshCw } from "lucide-react";
 import type { ProductListItem, Workspace } from "@pakcommerce/shared";
 
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -15,8 +15,8 @@ import {
 
 import { ProductArchiveDialog } from "./_components/product-archive-dialog";
 import { ProductFilters } from "./_components/product-filters";
-import { ProductFormDialog } from "./_components/product-form-dialog";
 import { ProductKpiCards } from "./_components/product-kpi-cards";
+import { ProductStudio } from "./_components/product-studio";
 import { ProductTable } from "./_components/product-table";
 
 export default function ProductsPage() {
@@ -35,29 +35,43 @@ export default function ProductsPage() {
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Dialog States
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  // Product Studio (In-Page Collapsible Section)
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<ProductListItem | null>(null);
+  const studioRef = useRef<HTMLDivElement | null>(null);
+
+  // Archive Dialog State
   const [productToArchive, setProductToArchive] = useState<ProductListItem | null>(null);
 
-  // Initial Workspace Load
-  const loadWorkspace = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setErrorMessage(null);
-      const ws = await fetchCurrentWorkspace();
-      setWorkspace(ws);
-      return ws;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unable to load workspace. Please sign in again.";
-      setErrorMessage(msg);
-      return null;
-    } finally {
-      setIsLoading(false);
+  // 1. Initial Boot: Load Workspace ONCE on mount
+  useEffect(() => {
+    let ignore = false;
+    async function initWorkspace() {
+      try {
+        setIsLoading(true);
+        setErrorMessage(null);
+        const ws = await fetchCurrentWorkspace();
+        if (!ignore) {
+          setWorkspace(ws);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const msg = err instanceof Error ? err.message : "Unable to load workspace. Please sign in again.";
+          setErrorMessage(msg);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
     }
+    void initWorkspace();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
-  // Products Load
+  // 2. Load Products whenever workspace or filters change (seamless in-place update)
   const loadProducts = useCallback(
     async (wsId: string) => {
       try {
@@ -69,7 +83,7 @@ export default function ProductsPage() {
 
         const result = await fetchProducts({
           workspaceId: wsId,
-          query: searchQuery || undefined,
+          query: searchQuery.trim() || undefined,
           statuses,
           inventoryStates,
           sort: sortBy,
@@ -87,43 +101,47 @@ export default function ProductsPage() {
     [searchQuery, statusFilter, stockFilter, sortBy],
   );
 
-  // Initial Boot
+  // Trigger product fetch when filters change (instant for tabs, debounced for text search)
   useEffect(() => {
-    void (async () => {
-      const ws = await loadWorkspace();
-      if (ws) {
-        await loadProducts(ws.id);
-      }
-    })();
-  }, [loadWorkspace, loadProducts]); // Run on mount
+    if (!workspace) return;
 
-  // Reload products when filters change and workspace is known
-  useEffect(() => {
-    if (workspace) {
-      const debounceTimer = setTimeout(() => {
+    const timer = setTimeout(
+      () => {
         void loadProducts(workspace.id);
-      }, 250);
+      },
+      searchQuery ? 250 : 0,
+    );
 
-      return () => clearTimeout(debounceTimer);
-    }
-  }, [workspace, loadProducts]);
+    return () => clearTimeout(timer);
+  }, [workspace, loadProducts, searchQuery]);
 
   const handleRefresh = () => {
     if (workspace) {
       void loadProducts(workspace.id);
-    } else {
-      void loadWorkspace();
     }
   };
 
-  const handleOpenAddDialog = () => {
-    setProductToEdit(null);
-    setIsFormOpen(true);
+  const scrollToStudio = () => {
+    setTimeout(() => {
+      studioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
-  const handleOpenEditDialog = (product: ProductListItem) => {
+  const handleOpenAddStudio = () => {
+    setProductToEdit(null);
+    setIsStudioOpen(true);
+    scrollToStudio();
+  };
+
+  const handleOpenEditStudio = (product: ProductListItem) => {
     setProductToEdit(product);
-    setIsFormOpen(true);
+    setIsStudioOpen(true);
+    scrollToStudio();
+  };
+
+  const handleCloseStudio = () => {
+    setIsStudioOpen(false);
+    setProductToEdit(null);
   };
 
   // Full Initial Page Loading State
@@ -169,17 +187,47 @@ export default function ProductsPage() {
         title="Products"
         description="Centralized product catalog. Items are ready to sync with Shopify, WooCommerce, and WhatsApp."
         actions={
-          <Button onClick={handleOpenAddDialog} className="shadow-xs">
-            <Plus className="size-4 mr-1.5" />
-            Add Product
-          </Button>
+          <div className="flex items-center gap-2">
+            {isStudioOpen ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCloseStudio}
+                className="text-xs"
+              >
+                <ChevronUp className="size-3.5 mr-1" />
+                Close Studio
+              </Button>
+            ) : null}
+
+            <Button onClick={handleOpenAddStudio} className="shadow-xs">
+              <Plus className="size-4 mr-1.5" />
+              Add Product
+            </Button>
+          </div>
         }
       />
 
       {/* KPI Overview */}
       <ProductKpiCards items={products} total={totalCount} />
 
-      {/* Search and Filter Toolbar */}
+      {/* In-Page Collapsible Product Studio (Shopify / Polaris 2-Column Experience) */}
+      <div ref={studioRef}>
+        {workspace && isStudioOpen ? (
+          <ProductStudio
+            key={productToEdit ? `edit-${productToEdit.id}` : "create-studio"}
+            open={isStudioOpen}
+            onClose={handleCloseStudio}
+            workspaceId={workspace.id}
+            productToEdit={productToEdit}
+            onSuccess={() => {
+              handleRefresh();
+            }}
+          />
+        ) : null}
+      </div>
+
+      {/* Search and Polaris Segmented Filter Toolbar */}
       <ProductFilters
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -191,6 +239,7 @@ export default function ProductsPage() {
         onSortChange={setSortBy}
         onRefresh={handleRefresh}
         isLoading={isProductsLoading}
+        totalCount={totalCount}
       />
 
       {/* Content Area: Products Loading / Error / Empty / Table */}
@@ -229,7 +278,7 @@ export default function ProductsPage() {
                 Reset Filters
               </Button>
             ) : (
-              <Button size="sm" onClick={handleOpenAddDialog}>
+              <Button size="sm" onClick={handleOpenAddStudio}>
                 <Plus className="size-4 mr-1.5" />
                 Add Your First Product
               </Button>
@@ -239,24 +288,12 @@ export default function ProductsPage() {
       ) : (
         <ProductTable
           products={products}
-          onEdit={handleOpenEditDialog}
+          onEdit={handleOpenEditStudio}
           onArchive={(p) => setProductToArchive(p)}
         />
       )}
 
-      {/* Product Form Modal (Add / Edit) */}
-      {workspace && isFormOpen ? (
-        <ProductFormDialog
-          key={productToEdit ? `edit-${productToEdit.id}` : "create-new"}
-          open={isFormOpen}
-          onOpenChange={setIsFormOpen}
-          workspaceId={workspace.id}
-          productToEdit={productToEdit}
-          onSuccess={handleRefresh}
-        />
-      ) : null}
-
-      {/* Product Archive Confirmation Modal */}
+      {/* Product Archive Confirmation Modal (kept light & contextual) */}
       <ProductArchiveDialog
         product={productToArchive}
         open={Boolean(productToArchive)}

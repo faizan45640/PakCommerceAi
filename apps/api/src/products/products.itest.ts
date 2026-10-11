@@ -135,18 +135,16 @@ describe("POST /api/v1/products", () => {
     expect(Object.keys(response.body.error.details).length).toBeGreaterThan(0);
   });
 
-  it("refuses a product that carries images", async () => {
+  it("creates a product that carries images", async () => {
     const response = await asAlice("post", PRODUCTS).send(
       productPayload(alice.workspaceId, {
         images: [{ url: "https://cdn.example.com/a.jpg", altText: null }],
       }),
     );
 
-    // Refusing beats accepting and silently dropping them. Reported as a
-    // validation error because apiErrorCodeSchema has no "not implemented" code,
-    // and inventing one would break the shared contract.
-    expect(response.status).toBe(400);
-    expect(response.body.error.details.images).toBeDefined();
+    expect(response.status).toBe(201);
+    expect(response.body.data.images).toHaveLength(1);
+    expect(response.body.data.images[0].url).toBe("https://cdn.example.com/a.jpg");
   });
 
   it("creates nothing when one variant fails", async () => {

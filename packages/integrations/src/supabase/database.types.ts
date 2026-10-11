@@ -39,6 +39,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      categories: {
+        Row: {
+          channel_mappings: Json
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          seller_id: string
+          slug: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_mappings?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          seller_id: string
+          slug: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          channel_mappings?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          seller_id?: string
+          slug?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_chats: {
         Row: {
           archived_at: string | null
@@ -77,6 +131,63 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      product_images: {
+        Row: {
+          alt_text: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          position: number
+          product_id: string
+          seller_id: string
+          source: Json | null
+          updated_at: string
+          url: string
+          workspace_id: string
+        }
+        Insert: {
+          alt_text?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          position?: number
+          product_id: string
+          seller_id: string
+          source?: Json | null
+          updated_at?: string
+          url: string
+          workspace_id: string
+        }
+        Update: {
+          alt_text?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          position?: number
+          product_id?: string
+          seller_id?: string
+          source?: Json | null
+          updated_at?: string
+          url?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_images_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
           },
         ]
       }
