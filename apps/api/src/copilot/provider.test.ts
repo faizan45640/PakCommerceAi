@@ -6,6 +6,7 @@ describe("AI Provider Factory", () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.AI_MODEL;
   });
 
   afterEach(() => {
