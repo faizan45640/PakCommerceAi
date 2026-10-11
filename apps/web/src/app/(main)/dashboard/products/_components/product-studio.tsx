@@ -602,7 +602,8 @@ export function ProductStudio({
                           placeholder="2499"
                           value={singlePrice}
                           onChange={(e) => setSinglePrice(e.target.value)}
-                          className="pl-9 font-semibold text-foreground text-sm"
+                          disabled={isEditing}
+                          className="pl-9 font-semibold text-foreground text-sm disabled:opacity-75 disabled:cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -622,7 +623,8 @@ export function ProductStudio({
                           placeholder="2999"
                           value={singleCompareAt}
                           onChange={(e) => setSingleCompareAt(e.target.value)}
-                          className="pl-9 text-xs"
+                          disabled={isEditing}
+                          className="pl-9 text-xs disabled:opacity-75 disabled:cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -639,9 +641,16 @@ export function ProductStudio({
                           placeholder="e.g. 20"
                           value={singleStock}
                           onChange={(e) => setSingleStock(e.target.value)}
-                          className="mt-1.5 font-semibold text-xs"
+                          disabled={isEditing}
+                          className="mt-1.5 font-semibold text-xs disabled:opacity-75 disabled:cursor-not-allowed"
                         />
                       </div>
+                    )}
+
+                    {isEditing && (
+                      <p className="text-[11px] text-muted-foreground sm:col-span-3">
+                        Pricing and inventory adjustments for existing products are managed via Inventory / Stock movements to preserve audit history.
+                      </p>
                     )}
                   </div>
                 </CardContent>

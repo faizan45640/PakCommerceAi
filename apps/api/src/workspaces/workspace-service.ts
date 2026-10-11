@@ -8,7 +8,9 @@ export async function getCurrentWorkspace(auth: SellerContext): Promise<Workspac
     .from("workspaces")
     .select("*")
     .eq("seller_id", auth.sellerId)
+    .eq("status", "active")
     .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 

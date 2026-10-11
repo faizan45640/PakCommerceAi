@@ -98,28 +98,10 @@ export function ImageStudio({ images, onChange }: ImageStudioProps) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newItems: StudioImage[] = [];
-
-    Array.from(files).forEach((file, index) => {
-      if (!file.type.startsWith("image/")) {
-        toast.error(`"${file.name}" is not an image file.`);
-        return;
-      }
-
-      const objectUrl = URL.createObjectURL(file);
-      const shouldBePrimary = images.length === 0 && index === 0;
-
-      newItems.push({
-        url: objectUrl,
-        altText: file.name.replace(/\.[^/.]+$/, ""),
-        isPrimary: shouldBePrimary,
-      });
-    });
-
-    if (newItems.length > 0) {
-      onChange([...images, ...newItems]);
-      toast.success(`Uploaded ${newItems.length} photo${newItems.length > 1 ? "s" : ""}!`);
-    }
+    toast.info(
+      "Direct device upload requires cloud storage configuration. Please paste an image URL or choose from sample images.",
+      { duration: 5000 },
+    );
 
     // Reset input
     if (fileInputRef.current) {
