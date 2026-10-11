@@ -54,13 +54,29 @@ product_variants
   price_amount_minor integer (paisa, NOT NULL), price_currency text (default 'PKR'),
   compare_at_price_amount_minor integer, compare_at_price_currency text,
   option_values jsonb, track_inventory boolean (default true),
-  quantity_on_hand integer, low_stock_threshold integer,
-  inventory_state enum(in_stock|low_stock|out_of_stock|untracked) GENERATED - do not filter/write it, filter the inputs:
+  quantity_on_hand integer, reserved_quantity integer (default 0, units promised to unfulfilled orders),
+  low_stock_threshold integer,
+  inventory_state enum(in_stock|low_stock|out_of_stock|untracked) GENERATED - do not filter/write it, filter the inputs.
+    Available stock = quantity_on_hand - reserved_quantity:
     untracked when not track_inventory or quantity_on_hand is null,
-    out_of_stock when quantity_on_hand <= 0,
-    low_stock when low_stock_threshold is not null and quantity_on_hand <= low_stock_threshold,
+    out_of_stock when available <= 0,
+    low_stock when low_stock_threshold is not null and available <= low_stock_threshold,
     else in_stock.
   position integer, created_at timestamptz, updated_at timestamptz
+
+inventory (a view, read-only, one row per stock-tracked variant; untracked variants have no row)
+  id (= variant_id), variant_id, product_id, seller_id, workspace_id, track_inventory,
+  quantity_on_hand integer, reserved_quantity integer, available_quantity integer,
+  low_stock_threshold integer, state enum(in_stock|low_stock|out_of_stock),
+  created_at, updated_at
+  Use this view for stock questions: it already computes available_quantity.
+
+stock_movements (append-only history of stock changes; rows can never be edited or deleted)
+  id uuid (PK), variant_id uuid, product_id uuid, workspace_id uuid, seller_id uuid,
+  reason enum(purchase|sale|return|manual_adjustment|correction|damage_loss),
+  quantity_delta integer (signed: positive adds stock, negative removes it),
+  before_quantity_on_hand integer, after_quantity_on_hand integer,
+  performed_by uuid, note text, created_at timestamptz
 
 product_list_view (a view, read-only, one row per product with rolled-up variant facts)
   id, workspace_id, seller_id, title, slug, description, status, tags, category_ids,
@@ -86,4 +102,6 @@ export const QUERYABLE_TABLES = [
   "products",
   "product_variants",
   "product_list_view",
+  "inventory",
+  "stock_movements",
 ] as const;
