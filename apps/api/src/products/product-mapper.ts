@@ -2,6 +2,7 @@ import type { Database } from "@pakcommerce/integrations/supabase";
 import type {
   InventoryState,
   Product,
+  ProductImage,
   ProductListItem,
   ProductOption,
   ProductVariant,
@@ -22,6 +23,21 @@ import type {
 
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 type VariantRow = Database["public"]["Tables"]["product_variants"]["Row"];
+type ProductImageRow = Database["public"]["Tables"]["product_images"]["Row"];
+
+export function toProductImage(row: ProductImageRow): ProductImage {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    url: row.url,
+    altText: row.alt_text,
+    position: row.position,
+    isPrimary: row.is_primary,
+    source: (row.source as ProductImage["source"]) ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 export function toProductVariant(row: VariantRow): ProductVariant {
   return {
@@ -58,7 +74,11 @@ export function toProductVariant(row: VariantRow): ProductVariant {
   };
 }
 
-export function toProduct(row: ProductRow, variantRows: VariantRow[]): Product {
+export function toProduct(
+  row: ProductRow,
+  variantRows: VariantRow[],
+  imageRows: ProductImageRow[] = [],
+): Product {
   return {
     id: row.id,
     sellerId: row.seller_id,
@@ -74,10 +94,10 @@ export function toProduct(row: ProductRow, variantRows: VariantRow[]): Product {
       .slice()
       .sort((a, b) => a.position - b.position)
       .map(toProductVariant),
-    // Empty rather than absent: `images` is a required key in the contract and an
-    // empty array satisfies it. The product_images table is a later task, so
-    // there is nothing to map yet - and pretending otherwise would be worse.
-    images: [],
+    images: imageRows
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map(toProductImage),
     searchText: row.search_text,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

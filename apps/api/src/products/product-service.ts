@@ -72,16 +72,6 @@ export async function createProduct(
   auth: SellerContext,
   input: ParsedCreateProductInput,
 ): Promise<Product> {
-  if (input.images.length > 0) {
-    // Better to refuse than to accept images and silently drop them. The table
-    // arrives with the product-images task. Reported as a validation error
-    // because that is the vocabulary apiErrorCodeSchema gives us - there is no
-    // "not implemented" code, and inventing one would break the shared contract.
-    throw new ValidationError("Product images are not supported yet.", {
-      images: ["Product images are not supported yet. Send an empty array."],
-    });
-  }
-
   const slug = input.slug ?? slugifyTitle(input.title);
 
   const payload = {
@@ -127,13 +117,29 @@ export async function createProduct(
 
   if (error) throw translatePostgresError(error);
 
-  return getProduct(auth, data);
+  const newProductId = data as string;
+
+  if (input.images && input.images.length > 0) {
+    const imagesToInsert = input.images.map((img, i) => ({
+      product_id: newProductId,
+      workspace_id: input.workspaceId,
+      seller_id: auth.sellerId,
+      url: img.url,
+      alt_text: img.altText ?? null,
+      position: img.position ?? i,
+      is_primary: img.isPrimary ?? (i === 0),
+      source: (img.source ?? null) as import("@pakcommerce/integrations/supabase").Json,
+    }));
+    await auth.db.from("product_images").insert(imagesToInsert);
+  }
+
+  return getProduct(auth, newProductId);
 }
 
 export async function getProduct(auth: SellerContext, id: string): Promise<Product> {
   const { data, error } = await auth.db
     .from("products")
-    .select("*, product_variants(*)")
+    .select("*, product_variants(*), product_images(*)")
     .eq("id", id)
     .maybeSingle();
 
@@ -142,11 +148,12 @@ export async function getProduct(auth: SellerContext, id: string): Promise<Produ
   // the intended behaviour - RLS filtered it out before we saw it.
   if (!data) throw new NotFoundError("Product not found.");
 
-  const { product_variants: variants, ...row } = data as typeof data & {
+  const { product_variants: variants, product_images: images, ...row } = data as typeof data & {
     product_variants: Parameters<typeof toProduct>[1];
+    product_images: Parameters<typeof toProduct>[2];
   };
 
-  return toProduct(row, variants ?? []);
+  return toProduct(row, variants ?? [], images ?? []);
 }
 
 export async function listProducts(
@@ -236,6 +243,24 @@ export async function updateProduct(
 
   if (error) throw translatePostgresError(error);
   if (!data) throw new NotFoundError("Product not found.");
+
+  if (input.images !== undefined) {
+    await auth.db.from("product_images").delete().eq("product_id", id);
+    if (input.images.length > 0) {
+      const existing = await getProduct(auth, id);
+      const imagesToInsert = input.images.map((img, i) => ({
+        product_id: id,
+        workspace_id: existing.workspaceId,
+        seller_id: auth.sellerId,
+        url: img.url,
+        alt_text: img.altText ?? null,
+        position: img.position ?? i,
+        is_primary: img.isPrimary ?? (i === 0),
+        source: (img.source ?? null) as import("@pakcommerce/integrations/supabase").Json,
+      }));
+      await auth.db.from("product_images").insert(imagesToInsert);
+    }
+  }
 
   return getProduct(auth, id);
 }

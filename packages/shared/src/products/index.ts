@@ -128,9 +128,10 @@ const productBaseSchema = z.object({
 });
 
 function assertSinglePrimaryImage(
-  product: { images: { isPrimary?: boolean | undefined }[] },
+  product: { images?: { isPrimary?: boolean | undefined }[] | undefined },
   context: z.RefinementCtx,
 ) {
+  if (!product.images) return;
   const primaryImages = product.images.filter((image) => image.isPrimary);
 
   if (primaryImages.length > 1) {
@@ -197,15 +198,18 @@ export const createProductInputSchema = z
   })
   .superRefine(assertSinglePrimaryImage);
 
-export const updateProductInputSchema = z.object({
-  title: trimmedText.min(1).max(180).optional(),
-  slug: trimmedText.min(3).max(220).optional(),
-  description: nullableText.optional(),
-  status: productStatusSchema.optional(),
-  tags: z.array(trimmedText.min(1).max(60)).max(30).optional(),
-  categoryIds: z.array(idSchema).max(10).optional(),
-  options: z.array(productOptionSchema).max(3).optional(),
-});
+export const updateProductInputSchema = z
+  .object({
+    title: trimmedText.min(1).max(180).optional(),
+    slug: trimmedText.min(3).max(220).optional(),
+    description: nullableText.optional(),
+    status: productStatusSchema.optional(),
+    tags: z.array(trimmedText.min(1).max(60)).max(30).optional(),
+    categoryIds: z.array(idSchema).max(10).optional(),
+    options: z.array(productOptionSchema).max(3).optional(),
+    images: z.array(createProductImageInputSchema).max(20).optional(),
+  })
+  .superRefine(assertSinglePrimaryImage);
 
 export const upsertProductVariantInputSchema =
   createProductVariantInputSchema.extend({

@@ -10,4 +10,4 @@ export {
   type AppSupabaseClient,
 } from "./client.js";
 export { SupabaseService } from "./service.js";
-export type { Database, SupabaseConfig, SupabaseEnvOptions } from "./types.js";
+export type { Database, Json, SupabaseConfig, SupabaseEnvOptions } from "./types.js";

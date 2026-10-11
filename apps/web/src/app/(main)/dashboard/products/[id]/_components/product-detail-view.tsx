@@ -8,6 +8,7 @@ import {
   Archive,
   ArrowLeft,
   Calendar,
+  Camera,
   CheckCircle2,
   Clock,
   Edit,
@@ -19,7 +20,6 @@ import {
 import type { Product, ProductListItem } from "@pakcommerce/shared";
 
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { StatusBadge, type StatusTone } from "@/components/dashboard/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,36 +35,74 @@ import { fetchProductById } from "@/lib/api/products";
 import { formatPkr } from "@/lib/currency";
 
 import { ProductArchiveDialog } from "../../_components/product-archive-dialog";
-import { ProductFormDialog } from "../../_components/product-form-dialog";
+import { ProductStudio } from "../../_components/product-studio";
 
 interface ProductDetailViewProps {
   id: string;
 }
 
-function getInventoryBadgeProps(state: string): { label: string; tone: StatusTone } {
-  switch (state) {
-    case "in_stock":
-      return { label: "In Stock", tone: "success" };
-    case "low_stock":
-      return { label: "Low Stock", tone: "warning" };
-    case "out_of_stock":
-      return { label: "Out of Stock", tone: "danger" };
-    case "untracked":
+function renderSolidStatusBadge(status: string) {
+  switch (status) {
+    case "active":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-2xs">
+          <span className="size-2 rounded-full bg-white animate-pulse" />
+          Live (Active)
+        </span>
+      );
+    case "draft":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-800 dark:bg-zinc-700 px-3 py-1 text-xs font-bold text-zinc-100 shadow-2xs">
+          <span className="size-2 rounded-full bg-zinc-400" />
+          Draft
+        </span>
+      );
+    case "archived":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white shadow-2xs">
+          <span className="size-2 rounded-full bg-white" />
+          Archived
+        </span>
+      );
     default:
-      return { label: "Untracked", tone: "neutral" };
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-700 px-3 py-1 text-xs font-bold text-white shadow-2xs">
+          {status}
+        </span>
+      );
   }
 }
 
-function getStatusBadgeProps(status: string): { label: string; tone: StatusTone } {
-  switch (status) {
-    case "active":
-      return { label: "Live (Active)", tone: "success" };
-    case "draft":
-      return { label: "Draft", tone: "neutral" };
-    case "archived":
-      return { label: "Archived", tone: "danger" };
+function renderSolidInventoryBadge(state: string) {
+  switch (state) {
+    case "in_stock":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+          <span className="size-1.5 rounded-full bg-emerald-600" />
+          In Stock
+        </span>
+      );
+    case "low_stock":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+          <span className="size-1.5 rounded-full bg-amber-500" />
+          Low Stock
+        </span>
+      );
+    case "out_of_stock":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-2xs">
+          <span className="size-1.5 rounded-full bg-white" />
+          Out of Stock
+        </span>
+      );
+    case "untracked":
     default:
-      return { label: status, tone: "neutral" };
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+          Untracked
+        </span>
+      );
   }
 }
 
@@ -159,7 +197,6 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
 
   // Derive metrics
   const totalStock = product.variants.reduce((acc, v) => acc + (v.inventory.quantityOnHand ?? 0), 0);
-  const statusBadge = getStatusBadgeProps(product.status);
   const minPriceMinor = Math.min(...product.variants.map((v) => v.price.amountMinor));
   const maxPriceMinor = Math.max(...product.variants.map((v) => v.price.amountMinor));
   const priceDisplay =
@@ -209,7 +246,7 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               {product.title}
             </h1>
-            <StatusBadge label={statusBadge.label} tone={statusBadge.tone} />
+            {renderSolidStatusBadge(product.status)}
           </div>
           <p className="text-xs text-muted-foreground font-mono">SKU ID: {product.slug}</p>
         </div>
@@ -234,6 +271,20 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
           ) : null}
         </div>
       </div>
+
+      {/* Inline Product Studio when editing */}
+      {isFormOpen ? (
+        <ProductStudio
+          open={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          workspaceId={product.workspaceId}
+          productToEdit={productListItemShape}
+          onSuccess={() => {
+            setIsFormOpen(false);
+            void reloadProduct();
+          }}
+        />
+      ) : null}
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -291,7 +342,6 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
                 </TableHeader>
                 <TableBody>
                   {product.variants.map((variant) => {
-                    const inv = getInventoryBadgeProps(variant.inventory.state);
                     return (
                       <TableRow key={variant.id}>
                         <TableCell className="font-medium">
@@ -330,7 +380,7 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
                           )}
                         </TableCell>
                         <TableCell>
-                          <StatusBadge label={inv.label} tone={inv.tone} />
+                          {renderSolidInventoryBadge(variant.inventory.state)}
                         </TableCell>
                       </TableRow>
                     );
@@ -339,6 +389,49 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Product Photos Card */}
+          {product.images && product.images.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Camera className="size-4 text-primary" />
+                  Product Photos ({product.images.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {product.images.find((img) => img.isPrimary) ? (
+                  <div className="rounded-xl border overflow-hidden max-h-72 bg-zinc-950 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={product.images.find((img) => img.isPrimary)!.url}
+                      alt={product.title}
+                      className="w-full h-64 object-contain"
+                    />
+                  </div>
+                ) : null}
+                {product.images.filter((img) => !img.isPrimary).length > 0 && (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {product.images
+                      .filter((img) => !img.isPrimary)
+                      .map((img) => (
+                        <div
+                          key={img.id || img.url}
+                          className="rounded-lg border aspect-square overflow-hidden bg-zinc-900"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={img.url}
+                            alt={product.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Description & Categorization Card */}
           <Card>
@@ -500,17 +593,6 @@ export function ProductDetailView({ id }: ProductDetailViewProps) {
         </div>
       </div>
 
-      {/* Edit Product Modal */}
-      {isFormOpen ? (
-        <ProductFormDialog
-          key={`edit-${product.id}`}
-          open={isFormOpen}
-          onOpenChange={setIsFormOpen}
-          workspaceId={product.workspaceId}
-          productToEdit={productListItemShape}
-          onSuccess={reloadProduct}
-        />
-      ) : null}
 
       {/* Archive Product Modal */}
       <ProductArchiveDialog

@@ -4,6 +4,7 @@ import express from "express";
 import { requireAuth } from "./middleware/auth.js";
 import { supabaseTokenVerifier } from "./middleware/verify-supabase-token.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import { categoryRouter } from "./categories/category-router.js";
 import { productRouter } from "./products/product-router.js";
 import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
@@ -37,6 +38,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // data, so the endpoint must not be callable by anyone off the street.
   app.use("/api/v1/copilot", requireAuth(supabaseTokenVerifier), copilotRouter);
   app.use("/copilot", requireAuth(supabaseTokenVerifier), copilotRouter);
+  app.use("/api/v1/categories", requireAuth(supabaseTokenVerifier), categoryRouter);
+  app.use("/api/v1/workspaces/:workspaceId/categories", requireAuth(supabaseTokenVerifier), categoryRouter);
   app.use("/api/v1/products", requireAuth(supabaseTokenVerifier), productRouter);
   app.use("/api/v1/workspaces", requireAuth(supabaseTokenVerifier), workspaceRouter);
 
