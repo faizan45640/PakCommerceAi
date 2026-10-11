@@ -235,13 +235,42 @@ foreign keys. It says nothing about defaults, indexes, triggers, constraints, RL
 A baseline of an existing database must come from `db dump`, never from types — reconstructing
 one from types produced a file that was wrong in eleven ways.
 
-### Deploying to the hosted project
+### Deploying and Tracking Migrations on Hosted Supabase
+
+Always use Supabase CLI migration tracking so the database ledger (`supabase_migrations.schema_migrations`) stays 100% in sync with `supabase/migrations/`:
 
 ```bash
 npx supabase login
 npx supabase link --project-ref lnznyolcbmqxnweuvawf
+```
+
+#### Fast Status Check
+Do not run manual queries against `information_schema` or guess migration states. Run:
+```bash
+npm run db:status
+# or
+npx supabase migration list
+```
+This instantly compares local migration files with the remote database ledger and reports which migrations are synced, local-only, or remote-only.
+
+#### Applying Migrations
+Apply all pending migration files from `supabase/migrations/` in order and automatically record them in the remote tracking table:
+```bash
+npm run db:push
+# or
 npx supabase db push
 ```
 
-`db push` applies pending migrations to the hosted database. It is deliberately a human
-action, run from a machine with credentials — no CI job does it and no agent does it.
+#### Repairing Migration History (Out-of-Band DDL)
+If DDL was ever executed manually (e.g. in the Supabase Dashboard SQL Editor), do **not** re-run the migration or let it fail. Simply stamp the migration as applied in the ledger:
+```bash
+npx supabase migration repair --linked --status applied <version>
+```
+To mark a reverted migration:
+```bash
+npx supabase migration repair --linked --status reverted <version>
+```
+
+#### Guidance for AI Assistants
+- When checking if a migration is applied, run `npm run db:status` instead of querying raw system tables. It is fast, deterministic, and costs zero unnecessary tokens.
+- Never paste DDL manually into Supabase web interfaces without subsequently running `npx supabase migration repair --linked --status applied <version>` to avoid migration ledger desynchronization.
