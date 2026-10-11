@@ -24,26 +24,32 @@ describe("updateProductStockTool", () => {
     expect(negative.success).toBe(false);
   });
 
-  it("executes update against the seller database context", async () => {
-    const singleMock = vi.fn().mockResolvedValue({
-      data: {
-        id: "var-1",
-        product_id: "prod-1",
-        title: "Medium Blue",
-        quantity_on_hand: 50,
-        inventory_state: "in_stock",
-      },
-      error: null,
-    });
+  it("executes stock adjustment via adjust_stock RPC", async () => {
+    const variantMock = {
+      id: "var-1",
+      product_id: "prod-1",
+      workspace_id: "ws-1",
+      title: "Medium Blue",
+    };
 
-    const selectMock = vi.fn().mockReturnValue({ single: singleMock });
-    const eqMock = vi.fn().mockReturnValue({ select: selectMock });
-    const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
-    const fromMock = vi.fn().mockReturnValue({ update: updateMock });
+    const updatedVariantMock = {
+      quantity_on_hand: 50,
+      inventory_state: "in_stock",
+    };
+
+    const singleMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: variantMock, error: null })
+      .mockResolvedValueOnce({ data: updatedVariantMock, error: null });
+
+    const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+    const fromMock = vi.fn().mockReturnValue({ select: selectMock });
+    const rpcMock = vi.fn().mockResolvedValue({ data: "movement-123", error: null });
 
     const authMock = {
       sellerId: "seller-123",
-      db: { from: fromMock },
+      db: { from: fromMock, rpc: rpcMock },
     } as unknown as SellerContext;
 
     const tool = updateProductStockTool(authMock);
@@ -55,8 +61,13 @@ describe("updateProductStockTool", () => {
     });
 
     expect(fromMock).toHaveBeenCalledWith("product_variants");
-    expect(updateMock).toHaveBeenCalledWith({ quantity_on_hand: 50 });
-    expect(eqMock).toHaveBeenCalledWith("id", "var-1");
+    expect(rpcMock).toHaveBeenCalledWith("adjust_stock", {
+      p_workspace_id: "ws-1",
+      p_variant_id: "var-1",
+      p_target_quantity: 50,
+      p_reason: "manual_adjustment",
+      p_note: "Restock",
+    });
     expect(result).toEqual({
       status: "success",
       message: 'Stock for "Test Kurta" is now 50 pieces.',
@@ -64,24 +75,25 @@ describe("updateProductStockTool", () => {
       productId: "prod-1",
       quantityOnHand: 50,
       inventoryState: "in_stock",
+      movementId: "movement-123",
       reason: "Restock",
     });
   });
 
-  it("handles database errors gracefully", async () => {
+  it("handles missing variant gracefully", async () => {
     const singleMock = vi.fn().mockResolvedValue({
       data: null,
       error: { message: "variant not found or access denied" },
     });
 
-    const selectMock = vi.fn().mockReturnValue({ single: singleMock });
-    const eqMock = vi.fn().mockReturnValue({ select: selectMock });
-    const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
-    const fromMock = vi.fn().mockReturnValue({ update: updateMock });
+    const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+    const fromMock = vi.fn().mockReturnValue({ select: selectMock });
+    const rpcMock = vi.fn();
 
     const authMock = {
       sellerId: "seller-123",
-      db: { from: fromMock },
+      db: { from: fromMock, rpc: rpcMock },
     } as unknown as SellerContext;
 
     const tool = updateProductStockTool(authMock);
@@ -91,10 +103,49 @@ describe("updateProductStockTool", () => {
       newQuantity: 10,
     });
 
+    expect(rpcMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       status: "error",
-      message: "Failed to update stock: variant not found or access denied",
+      message: "Failed to find product variant: variant not found or access denied",
       variantId: "var-missing",
+      productTitle: "Test Kurta",
+    });
+  });
+
+  it("handles RPC errors gracefully", async () => {
+    const variantMock = {
+      id: "var-1",
+      product_id: "prod-1",
+      workspace_id: "ws-1",
+      title: "Medium Blue",
+    };
+
+    const singleMock = vi.fn().mockResolvedValue({ data: variantMock, error: null });
+    const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+    const fromMock = vi.fn().mockReturnValue({ select: selectMock });
+    const rpcMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "quantity on hand cannot be negative" },
+    });
+
+    const authMock = {
+      sellerId: "seller-123",
+      db: { from: fromMock, rpc: rpcMock },
+    } as unknown as SellerContext;
+
+    const tool = updateProductStockTool(authMock);
+    const result = await tool.execute({
+      variantId: "var-1",
+      productTitle: "Test Kurta",
+      newQuantity: 10,
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith("adjust_stock", expect.anything());
+    expect(result).toEqual({
+      status: "error",
+      message: "Failed to update stock: quantity on hand cannot be negative",
+      variantId: "var-1",
       productTitle: "Test Kurta",
     });
   });
