@@ -14,10 +14,9 @@ export type UpdateProductStockInput = z.infer<typeof updateProductStockInputSche
 /**
  * Write-Side AI Tool: Guarded Inventory Stock Level Update.
  *
- * Invariant: Sensitive mutation actions require explicit seller authorization/confirmation.
- * When toolApproval is enabled in streamText, the Vercel AI SDK halts execution,
- * requests approval from the merchant via the UI stream, and calls execute() only
- * after human approval.
+ * Uses the database function `adjust_stock` so that every stock modification
+ * is performed under an exclusive variant lock and records an append-only
+ * audit trail in `stock_movements`.
  */
 export function updateProductStockTool(auth: SellerContext) {
   return {
@@ -31,30 +30,59 @@ export function updateProductStockTool(auth: SellerContext) {
       newQuantity,
       reason,
     }: UpdateProductStockInput) => {
-      // Updates product_variants directly via auth.db. Postgres RLS ensures tenant isolation.
-      const { data, error } = await auth.db
+      // 1. Resolve variant to obtain workspace_id and verify seller ownership under RLS.
+      const { data: variant, error: fetchError } = await auth.db
         .from("product_variants")
-        .update({ quantity_on_hand: newQuantity })
+        .select("id, product_id, workspace_id, title")
         .eq("id", variantId)
-        .select("id, product_id, title, quantity_on_hand, inventory_state")
         .single();
 
-      if (error) {
+      if (fetchError || !variant) {
         return {
           status: "error",
-          message: `Failed to update stock: ${error.message}`,
+          message: `Failed to find product variant: ${fetchError?.message ?? "Variant not found"}`,
           variantId,
           productTitle,
         };
       }
 
+      // 2. Perform atomic stock adjustment via the adjust_stock RPC function.
+      const { data: movementId, error: rpcError } = await auth.db.rpc("adjust_stock", {
+        p_workspace_id: variant.workspace_id,
+        p_variant_id: variant.id,
+        p_target_quantity: newQuantity,
+        p_reason: "manual_adjustment",
+        p_note: reason ?? "Manual adjustment via Copilot",
+      });
+
+      if (rpcError) {
+        return {
+          status: "error",
+          message: `Failed to update stock: ${rpcError.message}`,
+          variantId,
+          productTitle,
+        };
+      }
+
+      // 3. Read back updated variant state.
+      const { data: updated } = await auth.db
+        .from("product_variants")
+        .select("quantity_on_hand, inventory_state")
+        .eq("id", variantId)
+        .single();
+
+      const finalQuantity = updated?.quantity_on_hand ?? newQuantity;
+      const finalState =
+        updated?.inventory_state ?? (finalQuantity === 0 ? "out_of_stock" : "in_stock");
+
       return {
         status: "success",
-        message: `Stock for "${productTitle || data.title}" is now ${data.quantity_on_hand} pieces.`,
-        variantId: data.id,
-        productId: data.product_id,
-        quantityOnHand: data.quantity_on_hand,
-        inventoryState: data.inventory_state,
+        message: `Stock for "${productTitle || variant.title}" is now ${finalQuantity} pieces.`,
+        variantId: variant.id,
+        productId: variant.product_id,
+        quantityOnHand: finalQuantity,
+        inventoryState: finalState,
+        movementId: movementId ?? undefined,
         reason: reason ?? "Manual adjustment via Copilot",
       };
     },
