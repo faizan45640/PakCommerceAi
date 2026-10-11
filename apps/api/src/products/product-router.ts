@@ -4,9 +4,8 @@ import {
   updateProductInputSchema,
 } from "@pakcommerce/shared";
 import { Router } from "express";
-import type { ZodType } from "zod";
 
-import { ValidationError } from "../lib/http-errors.js";
+import { parseOrThrow } from "../lib/parse-or-throw.js";
 import { sellerContext } from "./seller-context.js";
 import {
   archiveProduct,
@@ -28,27 +27,6 @@ import {
  * someone ever mounts this router without the middleware.
  */
 export const productRouter = Router();
-
-/** Parses against a contract schema, turning a Zod failure into a 400. */
-function parseOrThrow<T>(schema: ZodType<T>, value: unknown, what: string): T {
-  const result = schema.safeParse(value);
-
-  if (!result.success) {
-    // apiErrorDetailsSchema is Record<field, messages>, so several problems with
-    // the same field collapse into one entry rather than a flat list the
-    // dashboard would have to group itself.
-    const details: Record<string, string[]> = {};
-
-    for (const issue of result.error.issues) {
-      const field = issue.path.join(".") || "_";
-      (details[field] ??= []).push(issue.message);
-    }
-
-    throw new ValidationError(`Invalid ${what}.`, details);
-  }
-
-  return result.data;
-}
 
 /**
  * Query strings are all strings, and repeated/comma-separated values are

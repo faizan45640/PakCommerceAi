@@ -100,11 +100,13 @@ describe("stock_movements isolation", () => {
       const bob = await sellerWithStock("bob");
 
       // Alice claims the row as hers, so the policy passes - it is the composite
-      // key that refuses, because Bob's variant is not in Alice's workspace.
+      // key that refuses, because Bob's variant is not in Alice's workspace. The
+      // key is checked at commit, so the check is forced here.
       await expect(
-        asUser(client, alice.seller.userId, () =>
-          insertStockMovement(client, alice.seller, bob.productId, bob.variantId),
-        ),
+        asUser(client, alice.seller.userId, async () => {
+          await insertStockMovement(client, alice.seller, bob.productId, bob.variantId);
+          await client.query(`set constraints all immediate`);
+        }),
       ).rejects.toThrow(/stock_movements_variant_fkey/);
     });
   });

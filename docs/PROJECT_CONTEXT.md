@@ -21,7 +21,7 @@ Sections describing vision, domain, philosophy, and invariants describe **where 
 
 Before writing code that depends on a feature, check [Implementation Status](#implementation-status). When in doubt, assume it does not exist.
 
-**Last verified against the codebase: 2026-10-11.** `npm run test` passed: 196 Node unit tests (api 107, shared 58, integrations 16, web 15). `npm run test:integration` passed against a freshly reset local database: 116 database tests (integrations 79, api 37). The 2 Python tests live in `apps/ml` and run under `npm run ci:ml`.
+**Last verified against the codebase: 2026-10-11.** `npm run test` passed: 210 Node unit tests (api 119, shared 60, integrations 16, web 15). `npm run test:integration` passed against a freshly reset local database: 154 database tests (integrations 94, api 60). The 2 Python tests live in `apps/ml` and run under `npm run ci:ml`.
 
 ---
 
@@ -107,7 +107,7 @@ The **Built?** column reflects the actual database schema and code today.
 | **Workspace** | The isolated environment where a seller manages their business. Everything belongs to a workspace. | ✅ `workspaces` table + Zod contract |
 | **Store** | A connected ecommerce platform belonging to a seller. A seller may connect multiple stores. | ❌ Not modelled |
 | **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table, Zod contract, and CRUD API (T-020, T-021) |
-| **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants` (on hand, reserved, threshold); `inventory_state` is generated from available stock. `inventory` is a read-only view in the contract's shape, and `stock_movements` records every change (T-029). No adjustment API and no sync engine yet |
+| **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants` (on hand, reserved, threshold); `inventory_state` is generated from available stock. `inventory` is a read-only view in the contract's shape, and `stock_movements` records every change (T-029). `POST /api/v1/inventory/adjustments` changes stock and writes the movement atomically (T-030). No inventory list endpoint and no sync engine yet |
 | **Order** | A purchase created by customers or synchronized from connected stores. | ❌ Not modelled |
 | **Customer** | A buyer with order history and conversation history. | ❌ Not modelled |
 | **Conversation** | Communication between customers and sellers. May contain AI interactions. | ❌ Not modelled |
@@ -206,6 +206,7 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 **`apps/api` — Express 5, port 4000**
 
 - Product CRUD at `/api/v1/products` — create, list/search, read, update, archive. Documented in [`api.md`](api.md)
+- Stock at `/api/v1/inventory` — `POST /adjustments` sets a variant's stock and records the movement, `GET /movements` lists the history
 - Rafiq (copilot) at `POST /api/v1/copilot/chat` plus `/api/v1/copilot/chats` CRUD/archive. Streams with the Vercel AI SDK. Write tools require seller approval before they run. Transcripts live in `copilot_chats`
 - Seller scoping is not done in handler code: `requireAuth` verifies the token, and each request builds a Supabase client carrying it so RLS filters inside Postgres
 - `healthRouter` is mounted at `/health` and `/api/v1`. Protected routers sit below `requireAuth`
@@ -257,9 +258,14 @@ Two functions back the copilot, both `SECURITY INVOKER` so RLS still applies:
 Stock has one home: `product_variants`. `inventory` is a `security_invoker` view over it,
 not a table, so there is no second copy of a quantity to keep in step. `stock_movements`
 is append-only - clients have no UPDATE or DELETE privilege, and a trigger refuses UPDATE
-for every role. It stores history only: nothing yet writes a movement when stock changes,
-so the product API and the copilot's stock tools still change quantities without one.
-Closing that gap is the stock adjustment API's job.
+for every role.
+
+`adjust_stock` is the one write path that keeps the two in step: it locks the variant, sets
+the new quantity and inserts the movement in a single statement, and refuses a negative
+target, a target below reserved stock, a no-op, and untracked variants. It is
+`SECURITY INVOKER`, so RLS applies. The inventory API calls it. The product API (initial
+stock on create) and the copilot's `updateProductStock` and `mutateDatabase` tools still
+write `quantity_on_hand` directly and leave no movement - they should be moved onto it.
 
 ## Known defects
 

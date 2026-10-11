@@ -338,9 +338,12 @@ describe("stock_movements constraints", () => {
       const shalwar = await insertProduct(client, seller, "shalwar");
       const kurtaVariant = await insertVariant(client, seller, kurta);
 
-      await expect(
-        insertStockMovement(client, seller, kurta, kurtaVariant, { productId: shalwar }),
-      ).rejects.toThrow(/stock_movements_variant_fkey/);
+      await insertStockMovement(client, seller, kurta, kurtaVariant, { productId: shalwar });
+
+      // Checked at commit rather than on the insert; this is that check.
+      await expect(client.query(`set constraints all immediate`)).rejects.toThrow(
+        /stock_movements_variant_fkey/,
+      );
     });
   });
 
@@ -383,9 +386,33 @@ describe("stock_movements are append-only", () => {
       const variantId = await insertVariant(client, seller, productId);
       await insertStockMovement(client, seller, productId, variantId);
 
-      await expect(
-        client.query(`delete from public.product_variants where id = $1`, [variantId]),
-      ).rejects.toThrow(/stock_movements_variant_fkey/);
+      await client.query(`delete from public.product_variants where id = $1`, [variantId]);
+
+      // The key is checked at commit, so that a whole workspace can be removed
+      // (see the next test). Checking it now is what a commit would do.
+      await expect(client.query(`set constraints all immediate`)).rejects.toThrow(
+        /stock_movements_variant_fkey/,
+      );
+    });
+  });
+
+  it("removing a workspace removes its movements with it", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "workspace-gone");
+      const productId = await insertProduct(client, seller, "kurta");
+      const variantId = await insertVariant(client, seller, productId);
+      await insertStockMovement(client, seller, productId, variantId);
+
+      // History protects a variant from being deleted on its own. It must not
+      // also make the workspace that owns everything impossible to remove.
+      await client.query(`delete from public.workspaces where id = $1`, [seller.workspaceId]);
+      await client.query(`set constraints all immediate`);
+
+      const { rows } = await client.query(
+        `select id from public.stock_movements where variant_id = $1`,
+        [variantId],
+      );
+      expect(rows).toHaveLength(0);
     });
   });
 

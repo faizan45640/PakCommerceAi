@@ -45,8 +45,10 @@ Six enums: `seller_verification_status`, `workspace_status`, `product_status`,
 Two views: `product_list_view`, `inventory`.
 
 Stock lives on `product_variants` (on hand, reserved, threshold). `inventory` is a read-only
-view over it, and `stock_movements` is the append-only history of every change. There is no
-stock adjustment endpoint yet, so nothing writes a movement.
+view over it, and `stock_movements` is the append-only history of every change.
+`POST /api/v1/inventory/adjustments` changes stock and records the movement in one
+transaction through the `adjust_stock` function. The product API and the copilot's stock
+tools do not go through it yet, so they still change quantities without a movement.
 
 Orders, customers, conversations, and couriers **do not exist yet**.
 
@@ -130,28 +132,30 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 
 | Workspace | Unit tests | Covers |
 |---|---|---|
-| `packages/shared` | 58 | Product, workspace, inventory, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
+| `packages/shared` | 60 | Product, workspace, inventory, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 107 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
+| `apps/api` | 119 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
 | `apps/web` | 15 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**196 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**210 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**116 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+**154 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `packages/integrations` schema conformance | 19 | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
 | `packages/integrations` catalogue isolation | 8 | A seller cannot read, insert, reassign, or delete another seller's products or variants |
-| `packages/integrations` inventory conformance | 21 | Movement and inventory columns match the contract, reasons match Zod, movements must add up and cannot be edited, state follows available stock |
+| `packages/integrations` inventory conformance | 22 | Movement and inventory columns match the contract, reasons match Zod, movements must add up and cannot be edited, state follows available stock, a workspace can still be removed |
+| `packages/integrations` stock adjustment | 14 | `adjust_stock` writes quantity and movement together, refuses negative, below-reserved, unchanged and untracked, and cannot touch another seller's variant |
 | `packages/integrations` inventory isolation | 10 | A seller cannot read another's movements or inventory, record one in someone else's name, or edit or delete their own |
 | `packages/integrations` copilot chat isolation | 7 | A seller cannot read or change another seller's chats |
 | `packages/integrations` identity isolation | 14 | A seller cannot read another's profile, business details, or workspaces; workspaces cannot be reassigned or hard-deleted |
 | `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
+| `apps/api` inventory API | 23 | Stock adjustments and movement history against a real database: every refusal, nothing written on refusal, filters, paging, isolation |
 | `apps/api` copilot tools | 13 | Read and guarded-write tools against a real database |
 
-**314 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
+**366 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. All deploy steps are **placeholders** and stay skipped until the repo variable `ENABLE_CD=true` is set.
 

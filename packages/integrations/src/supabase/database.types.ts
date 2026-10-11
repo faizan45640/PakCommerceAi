@@ -605,6 +605,16 @@ export type Database = {
       }
     }
     Functions: {
+      adjust_stock: {
+        Args: {
+          p_note?: string
+          p_reason: Database["public"]["Enums"]["stock_movement_reason"]
+          p_target_quantity: number
+          p_variant_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       create_product: { Args: { payload: Json }; Returns: string }
       run_guarded_mutation: { Args: { p_sql: string }; Returns: Json }
       run_readonly_query: { Args: { p_sql: string }; Returns: Json }
