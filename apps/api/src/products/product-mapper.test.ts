@@ -49,6 +49,7 @@ function variantRow(overrides: Partial<VariantRow> = {}): VariantRow {
     option_values: [],
     track_inventory: true,
     quantity_on_hand: 10,
+    reserved_quantity: 0,
     low_stock_threshold: null,
     inventory_state: "in_stock",
     position: 0,

@@ -206,6 +206,7 @@ export type Database = {
           price_currency: string
           product_id: string
           quantity_on_hand: number | null
+          reserved_quantity: number
           sku: string | null
           status: Database["public"]["Enums"]["product_variant_status"]
           title: string
@@ -229,6 +230,7 @@ export type Database = {
           price_currency?: string
           product_id: string
           quantity_on_hand?: number | null
+          reserved_quantity?: number
           sku?: string | null
           status?: Database["public"]["Enums"]["product_variant_status"]
           title: string
@@ -252,6 +254,7 @@ export type Database = {
           price_currency?: string
           product_id?: string
           quantity_on_hand?: number | null
+          reserved_quantity?: number
           sku?: string | null
           status?: Database["public"]["Enums"]["product_variant_status"]
           title?: string
@@ -415,6 +418,80 @@ export type Database = {
           },
         ]
       }
+      stock_movements: {
+        Row: {
+          after_quantity_on_hand: number
+          before_quantity_on_hand: number
+          created_at: string
+          id: string
+          note: string | null
+          performed_by: string
+          product_id: string
+          quantity_delta: number
+          reason: Database["public"]["Enums"]["stock_movement_reason"]
+          seller_id: string
+          variant_id: string
+          workspace_id: string
+        }
+        Insert: {
+          after_quantity_on_hand: number
+          before_quantity_on_hand: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          performed_by: string
+          product_id: string
+          quantity_delta: number
+          reason: Database["public"]["Enums"]["stock_movement_reason"]
+          seller_id: string
+          variant_id: string
+          workspace_id: string
+        }
+        Update: {
+          after_quantity_on_hand?: number
+          before_quantity_on_hand?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          performed_by?: string
+          product_id?: string
+          quantity_delta?: number
+          reason?: Database["public"]["Enums"]["stock_movement_reason"]
+          seller_id?: string
+          variant_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_variant_fkey"
+            columns: ["variant_id", "product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id", "product_id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_variant_fkey"
+            columns: ["variant_id", "product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["variant_id", "product_id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_variant_fkey"
+            columns: ["variant_id", "product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id", "product_id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           archived_at: string | null
@@ -461,6 +538,39 @@ export type Database = {
       }
     }
     Views: {
+      inventory: {
+        Row: {
+          available_quantity: number | null
+          created_at: string | null
+          id: string | null
+          low_stock_threshold: number | null
+          product_id: string | null
+          quantity_on_hand: number | null
+          reserved_quantity: number | null
+          seller_id: string | null
+          state: Database["public"]["Enums"]["inventory_state"] | null
+          track_inventory: boolean | null
+          updated_at: string | null
+          variant_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_workspace_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "product_list_view"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_workspace_fkey"
+            columns: ["product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id", "workspace_id"]
+          },
+        ]
+      }
       product_list_view: {
         Row: {
           archived_at: string | null
@@ -508,6 +618,13 @@ export type Database = {
         | "verified"
         | "rejected"
         | "suspended"
+      stock_movement_reason:
+        | "purchase"
+        | "sale"
+        | "return"
+        | "manual_adjustment"
+        | "correction"
+        | "damage_loss"
       workspace_status: "active" | "archived"
     }
     CompositeTypes: {
@@ -647,6 +764,14 @@ export const Constants = {
         "verified",
         "rejected",
         "suspended",
+      ],
+      stock_movement_reason: [
+        "purchase",
+        "sale",
+        "return",
+        "manual_adjustment",
+        "correction",
+        "damage_loss",
       ],
       workspace_status: ["active", "archived"],
     },
