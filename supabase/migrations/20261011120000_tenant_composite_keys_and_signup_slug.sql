@@ -6,12 +6,20 @@
 --    so child tables could guarantee that workspace_id and seller_id never disagree.
 --    categories and product_images omitted this composite key, allowing tenant drift.
 --    product_images also omitted foreign key (product_id, workspace_id) to products (id, workspace_id).
+--    Drop redundant single-column foreign keys to prevent PostgREST embedding ambiguity (PGRST201).
+
+alter table public.categories
+  drop constraint if exists categories_workspace_id_fkey;
 
 alter table public.categories
   add constraint categories_workspace_seller_fkey
   foreign key (workspace_id, seller_id)
   references public.workspaces (id, seller_id)
   on delete cascade;
+
+alter table public.product_images
+  drop constraint if exists product_images_product_id_fkey,
+  drop constraint if exists product_images_workspace_id_fkey;
 
 alter table public.product_images
   add constraint product_images_workspace_seller_fkey
@@ -92,3 +100,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function public.handle_new_user() from public;
+revoke execute on function public.handle_new_user() from anon;
+revoke execute on function public.handle_new_user() from authenticated;
+grant execute on function public.handle_new_user() to supabase_auth_admin;

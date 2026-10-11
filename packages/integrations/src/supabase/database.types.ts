@@ -85,13 +85,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "categories_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "categories_workspace_seller_fkey"
             columns: ["workspace_id", "seller_id"]
             isOneToOne: false
@@ -183,18 +176,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "product_images_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "product_images_product_workspace_fkey"
+            columns: ["product_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_images_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "workspace_id"]
           },
           {
             foreignKeyName: "product_images_workspace_seller_fkey"
@@ -202,13 +188,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id", "seller_id"]
-          },
-          {
-            foreignKeyName: "product_images_product_workspace_fkey"
-            columns: ["product_id", "workspace_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id", "workspace_id"]
           },
         ]
       }
