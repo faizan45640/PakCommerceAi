@@ -38,11 +38,17 @@ When a document describes a feature, check the status table below before assumin
 
 ### Database
 
-Five tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`.
-Five enums: `seller_verification_status`, `workspace_status`, `product_status`,
-`product_variant_status`, `inventory_state`.
+Nine tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
+`product_images`, `categories`, `copilot_chats`, `stock_movements`.
+Six enums: `seller_verification_status`, `workspace_status`, `product_status`,
+`product_variant_status`, `inventory_state`, `stock_movement_reason`.
+Two views: `product_list_view`, `inventory`.
 
-Orders, customers, conversations, couriers, and audit tables **do not exist yet**.
+Stock lives on `product_variants` (on hand, reserved, threshold). `inventory` is a read-only
+view over it, and `stock_movements` is the append-only history of every change. There is no
+stock adjustment endpoint yet, so nothing writes a movement.
+
+Orders, customers, conversations, and couriers **do not exist yet**.
 
 ✅ The schema is reproducible from source. `supabase/migrations/` holds every change and
 `npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are
@@ -126,23 +132,26 @@ npx concurrently -n "web,api" -c "cyan,magenta" \
 |---|---|---|
 | `packages/shared` | 58 | Product, workspace, inventory, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 94 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
-| `apps/web` | 12 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
+| `apps/api` | 107 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
+| `apps/web` | 15 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**180 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**196 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**78 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+**116 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `packages/integrations` schema conformance | 19 | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
 | `packages/integrations` catalogue isolation | 8 | A seller cannot read, insert, reassign, or delete another seller's products or variants |
+| `packages/integrations` inventory conformance | 21 | Movement and inventory columns match the contract, reasons match Zod, movements must add up and cannot be edited, state follows available stock |
+| `packages/integrations` inventory isolation | 10 | A seller cannot read another's movements or inventory, record one in someone else's name, or edit or delete their own |
+| `packages/integrations` copilot chat isolation | 7 | A seller cannot read or change another seller's chats |
 | `packages/integrations` identity isolation | 14 | A seller cannot read another's profile, business details, or workspaces; workspaces cannot be reassigned or hard-deleted |
 | `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
 | `apps/api` copilot tools | 13 | Read and guarded-write tools against a real database |
 
-**260 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
+**314 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. All deploy steps are **placeholders** and stay skipped until the repo variable `ENABLE_CD=true` is set.
 
