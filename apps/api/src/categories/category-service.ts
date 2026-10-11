@@ -126,6 +126,19 @@ export async function updateCategory(
     if (input.parentId === id) {
       throw new ValidationError("A category cannot be its own parent.");
     }
+    if (input.parentId !== null) {
+      const { data: parent, error: parentError } = await auth.db
+        .from("categories")
+        .select("id")
+        .eq("id", input.parentId)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+
+      if (parentError) throw parentError;
+      if (!parent) {
+        throw new NotFoundError(`Parent category ${input.parentId} not found in this workspace.`);
+      }
+    }
     updatePayload.parent_id = input.parentId;
   }
 
