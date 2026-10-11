@@ -20,6 +20,37 @@ function migrationSql(): string {
     .join("\n");
 }
 
+/**
+ * A column definition line: a name followed by a real SQL type. Matching on the
+ * type (rather than the name alone) skips constraint/continuation lines such as
+ * `generated always as (`, `check (...)`, and `foreign key (...)`, which is what
+ * a naive `^\w+` match would wrongly treat as columns.
+ */
+const COLUMN_DEFINITION =
+  /^(\w+)\s+(uuid|text|integer|bigint|smallint|boolean|timestamptz|timestamp|date|jsonb|json|numeric|decimal|serial|real|double precision|public\.\w+)\b/i;
+
+/** Words that open a clause, never a column, even when followed by a type. */
+const RESERVED_LEADING = new Set([
+  "references",
+  "foreign",
+  "on",
+  "primary",
+  "unique",
+  "constraint",
+  "check",
+  "exclude",
+  "using",
+  "generated",
+  "case",
+  "when",
+  "then",
+  "else",
+  "end",
+  "and",
+  "or",
+  "not",
+]);
+
 function tableColumns(table: string): Set<string> {
   const sql = migrationSql();
   const match = sql.match(
@@ -30,13 +61,31 @@ function tableColumns(table: string): Set<string> {
 
   const columns = new Set<string>();
   for (const line of match[1].split("\n")) {
-    const name = line.trim().match(/^(\w+)\s/);
-    if (name && !line.trim().startsWith("constraint") && !line.trim().startsWith("--")) {
+    const name = line.trim().match(COLUMN_DEFINITION);
+    if (name && !RESERVED_LEADING.has(name[1].toLowerCase())) {
       columns.add(name[1]);
     }
   }
   return columns;
 }
+
+/** Every table created in the migrations, in any migration file. */
+function migrationTables(): Set<string> {
+  const tables = new Set<string>();
+  for (const match of migrationSql().matchAll(
+    /create table(?: if not exists)? public\.(\w+)/gi,
+  )) {
+    tables.add(match[1]);
+  }
+  return tables;
+}
+
+/**
+ * Tables the copilot deliberately does not expose to its SQL tools.
+ * `copilot_chats` is the chat transcript itself — conversation data, not
+ * seller business data, so the model never needs to write SQL against it.
+ */
+const NOT_EXPOSED_TABLES = new Set(["copilot_chats"]);
 
 describe("SCHEMA_DOCUMENT", () => {
   it("mentions every queryable table", () => {
@@ -45,17 +94,30 @@ describe("SCHEMA_DOCUMENT", () => {
     }
   });
 
-  it("claims only real columns for products", () => {
-    const real = tableColumns("products");
-    expect(real.size).toBeGreaterThan(5);
+  it("exposes every migration table, or says why not", () => {
+    const tables = migrationTables();
+    expect(tables.size).toBeGreaterThanOrEqual(9);
 
-    for (const column of real) {
+    const queryable = new Set<string>(QUERYABLE_TABLES);
+    for (const table of tables) {
       expect(
-        SCHEMA_DOCUMENT.includes(`products.id`) ||
-          SCHEMA_DOCUMENT.includes(`products.${column}`) ||
-          SCHEMA_DOCUMENT.includes(`${column} `) ||
-          SCHEMA_DOCUMENT.includes(`${column},`),
+        queryable.has(table) || NOT_EXPOSED_TABLES.has(table),
+        `table "${table}" is neither queryable nor in NOT_EXPOSED_TABLES — the copilot cannot see it`,
       ).toBe(true);
+    }
+  });
+
+  it("claims only real columns for every queryable table", () => {
+    for (const table of QUERYABLE_TABLES) {
+      const real = tableColumns(table);
+      if (real.size === 0) continue; // views have no `create table` block
+
+      for (const column of real) {
+        expect(
+          new RegExp(`\\b${column}\\b`).test(SCHEMA_DOCUMENT),
+          `schema document is missing column ${table}.${column}`,
+        ).toBe(true);
+      }
     }
   });
 

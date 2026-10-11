@@ -64,6 +64,19 @@ product_variants
     else in_stock.
   position integer, created_at timestamptz, updated_at timestamptz
 
+categories (hierarchical catalogue organisation; parent_id points at another category or is null)
+  id uuid (PK), workspace_id uuid, seller_id uuid, parent_id uuid (nullable, self-reference),
+  name text, slug text, description text (nullable),
+  channel_mappings jsonb (default '{}', per-marketplace category ids),
+  created_at timestamptz, updated_at timestamptz
+  Note: unique on (workspace_id, slug).
+
+product_images (cover/gallery photos for a product)
+  id uuid (PK), product_id uuid, workspace_id uuid, seller_id uuid,
+  url text, alt_text text (nullable), position integer (default 0),
+  is_primary boolean (default false), source jsonb (nullable, provider metadata),
+  created_at timestamptz, updated_at timestamptz
+
 inventory (a view, read-only, one row per stock-tracked variant; untracked variants have no row)
   id (= variant_id), variant_id, product_id, seller_id, workspace_id, track_inventory,
   quantity_on_hand integer, reserved_quantity integer, available_quantity integer,
@@ -101,6 +114,8 @@ export const QUERYABLE_TABLES = [
   "workspaces",
   "products",
   "product_variants",
+  "product_images",
+  "categories",
   "product_list_view",
   "inventory",
   "stock_movements",
