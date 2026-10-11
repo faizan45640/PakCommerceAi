@@ -1,5 +1,6 @@
 export * from "./api/index.js";
 export * from "./categories/index.js";
 export * from "./inventory/index.js";
+export * from "./orders/index.js";
 export * from "./products/index.js";
 export * from "./workspaces/index.js";
