@@ -138,3 +138,62 @@ export function productPayload(workspaceId: string, overrides: Record<string, un
     ...overrides,
   };
 }
+
+export interface TestVariant {
+  productId: string;
+  variantId: string;
+}
+
+/**
+ * Arranges a product with one variant directly, as the service role.
+ *
+ * Stock tests need exact starting quantities, and some states - reserved units,
+ * a variant whose quantity was never set - cannot be produced through the
+ * product API at all.
+ */
+export async function createTestVariant(
+  seller: TestSeller,
+  options: {
+    quantity?: number | null;
+    reserved?: number;
+    threshold?: number | null;
+    trackInventory?: boolean;
+  } = {},
+): Promise<TestVariant> {
+  const service = admin();
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+  const { data: product, error: productError } = await service
+    .from("products")
+    .insert({
+      workspace_id: seller.workspaceId,
+      seller_id: seller.sellerId,
+      title: "Lawn Kurta",
+      slug: `lawn-kurta-${suffix}`,
+    })
+    .select("id")
+    .single();
+  if (productError || !product) {
+    throw new Error(`product fixture failed: ${productError?.message}`);
+  }
+
+  const { data: variant, error: variantError } = await service
+    .from("product_variants")
+    .insert({
+      product_id: product.id,
+      workspace_id: seller.workspaceId,
+      title: "Medium",
+      price_amount_minor: 250000,
+      track_inventory: options.trackInventory ?? true,
+      quantity_on_hand: options.quantity === undefined ? 10 : options.quantity,
+      reserved_quantity: options.reserved ?? 0,
+      low_stock_threshold: options.threshold ?? null,
+    })
+    .select("id")
+    .single();
+  if (variantError || !variant) {
+    throw new Error(`variant fixture failed: ${variantError?.message}`);
+  }
+
+  return { productId: product.id, variantId: variant.id };
+}

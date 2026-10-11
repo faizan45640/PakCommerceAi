@@ -9,6 +9,7 @@ import type {
 } from "@pakcommerce/shared";
 
 import { ConflictError, NotFoundError, ValidationError } from "../lib/http-errors.js";
+import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import type { SellerContext } from "./seller-context.js";
 import { buildSearchText } from "./product-search-text.js";
 import type { ProductListRow } from "./product-mapper.js";
@@ -36,37 +37,6 @@ const SORT_COLUMNS = {
   stock_asc: { column: "total_quantity_on_hand", ascending: true },
   stock_desc: { column: "total_quantity_on_hand", ascending: false },
 } as const;
-
-/**
- * Two shared contracts disagree about pagination, so this satisfies both.
- *
- * `productSearchQuerySchema` (domain) is cursor-based: `cursor` and `limit`.
- * `apiListResponseSchema` (transport) requires `meta: { page, pageSize, total }`.
- *
- * The cursor therefore carries a page number: callers can keep passing the
- * opaque `nextCursor` they were given, and the response still reports the
- * page/pageSize/total the envelope demands. It stays opaque so it can become
- * keyset pagination later without a contract change.
- *
- * Raised with the team rather than silently picked - see docs/api.md.
- */
-function decodeCursor(cursor: string | undefined): number {
-  if (!cursor) return 1;
-
-  try {
-    const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
-    const page = Number(decoded?.page);
-
-    if (!Number.isInteger(page) || page < 1) throw new Error("bad page");
-    return page;
-  } catch {
-    throw new ValidationError("Invalid cursor.", { cursor: ["Cursor is not valid."] });
-  }
-}
-
-function encodeCursor(page: number): string {
-  return Buffer.from(JSON.stringify({ page }), "utf8").toString("base64url");
-}
 
 export async function createProduct(
   auth: SellerContext,
@@ -160,7 +130,7 @@ export async function listProducts(
   auth: SellerContext,
   query: ParsedProductSearchQuery,
 ): Promise<{ items: ProductListItem[]; meta: ApiMeta; nextCursor: string | null }> {
-  const page = decodeCursor(query.cursor);
+  const page = decodePageCursor(query.cursor);
   const offset = (page - 1) * query.limit;
   const sort = SORT_COLUMNS[query.sort];
 
@@ -196,7 +166,7 @@ export async function listProducts(
   return {
     items: rows.map(toProductListItem),
     meta: { page, pageSize: query.limit, total },
-    nextCursor: offset + rows.length < total ? encodeCursor(page + 1) : null,
+    nextCursor: offset + rows.length < total ? encodePageCursor(page + 1) : null,
   };
 }
 

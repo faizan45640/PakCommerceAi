@@ -100,6 +100,18 @@ export const stockMovementSchema = stockMovementBaseSchema.superRefine(
 
 export type StockMovement = z.infer<typeof stockMovementSchema>;
 
+/**
+ * What a successful stock adjustment returns: the inventory as it now stands,
+ * and the movement that recorded the change. The two are written together, so
+ * a result always carries both.
+ */
+export const stockAdjustmentResultSchema = z.object({
+  inventory: inventorySchema,
+  movement: stockMovementSchema,
+});
+
+export type StockAdjustmentResult = z.infer<typeof stockAdjustmentResultSchema>;
+
 export const inventorySortValues = [
   "updated_desc",
   "updated_asc",
