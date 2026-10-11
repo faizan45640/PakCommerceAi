@@ -187,6 +187,92 @@ Honest list of what this does not do yet.
 
 ---
 
+## Inventory
+
+Stock adjustments and their history. Auth required on both endpoints.
+
+### `POST /api/v1/inventory/adjustments`
+
+Sets a variant's stock to a new total and records why. Validated against
+`adjustStockInputSchema` from `@pakcommerce/shared`.
+
+```json
+{
+  "workspaceId": "…",
+  "variantId": "…",
+  "targetQuantityOnHand": 25,
+  "reason": "purchase",
+  "note": "Eid restock"
+}
+```
+
+- **You send the new total, not a change.** "Set it to 25" is what a seller counting a shelf
+  knows. The backend derives the delta from the current quantity.
+- `reason` is required: `purchase`, `sale`, `return`, `manual_adjustment`, `correction` or
+  `damage_loss`.
+- `note` is optional, up to 500 characters.
+- The acting user comes from the token. Sending `performedBy` or `sellerId` is ignored.
+
+`201` with both the inventory as it now stands and the movement that recorded the change
+(`stockAdjustmentResultSchema`):
+
+```json
+{
+  "data": {
+    "inventory": { "variantId": "…", "quantityOnHand": 25, "reservedQuantity": 0, "state": "in_stock" },
+    "movement": {
+      "reason": "purchase",
+      "quantityDelta": 15,
+      "beforeQuantityOnHand": 10,
+      "afterQuantityOnHand": 25,
+      "performedBy": "…"
+    }
+  }
+}
+```
+
+The quantity and the movement are written in **one database transaction** (the
+`adjust_stock` function), against a locked row. Stock cannot change without a movement, a
+movement cannot describe a change that did not happen, and two adjustments arriving together
+chain instead of both starting from the same number.
+
+| Status | When | `details` field |
+|---|---|---|
+| 400 | Target is negative or not a whole number | `targetQuantityOnHand` |
+| 400 | Target is below the units already reserved for orders | `targetQuantityOnHand` |
+| 400 | Target equals the current quantity - nothing to record | `targetQuantityOnHand` |
+| 400 | The variant does not track stock | `variantId` |
+| 400 | Missing or unknown `reason` | `reason` |
+| 404 | No such variant in that workspace **for you** | |
+
+A refused adjustment writes nothing: no quantity change and no movement.
+
+### `GET /api/v1/inventory/movements`
+
+The stock history, newest first. Validated against `stockMovementSearchQuerySchema`.
+
+| Query param | Notes |
+|---|---|
+| `workspaceId` | **Required** |
+| `variantId` | Only this variant's movements |
+| `reasons` | Comma-separated, matches any: `sale,damage_loss` |
+| `limit` | 1–100, default 25 |
+| `cursor` | From the previous response's `nextCursor` |
+
+Returns `StockMovement`s in the list envelope, with `meta` and `nextCursor` exactly as the
+product list does. Movements are immutable: there is no endpoint to edit or delete one, and
+the database refuses both.
+
+### Not here yet
+
+| Gap | Detail |
+|---|---|
+| **Inventory list** | No `GET /api/v1/inventory`. Read stock through the product endpoints for now. |
+| **Other writers** | Initial stock on product create, and the copilot's `updateProductStock` and `mutateDatabase` tools, still set `quantity_on_hand` directly and record no movement. |
+| **Reservations** | Nothing sets `reserved_quantity` yet; it arrives with orders. |
+
+---
+
 ## Rafiq (seller copilot) chats
 
 Seller-facing name is **Rafiq**. Routes and tables stay `copilot`. Auth required on every endpoint below.
