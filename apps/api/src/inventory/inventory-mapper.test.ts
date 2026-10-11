@@ -59,6 +59,7 @@ describe("toInventory", () => {
       trackInventory: true,
       quantityOnHand: 12,
       reservedQuantity: 4,
+      availableQuantity: 8,
       lowStockThreshold: 3,
       state: "in_stock",
       createdAt: NOW,

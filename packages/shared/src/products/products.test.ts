@@ -25,6 +25,7 @@ function variant(overrides: Record<string, unknown> = {}) {
     inventory: {
       trackInventory: true,
       quantityOnHand: 10,
+      reservedQuantity: 0,
       lowStockThreshold: 2,
       state: "in_stock",
     },
