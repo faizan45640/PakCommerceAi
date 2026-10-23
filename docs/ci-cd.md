@@ -100,22 +100,91 @@ On push to `main` (or manual run):
 
 1. `npm ci` + `npm run build`
 2. Upload build artifacts to GitHub Actions
-3. Print message that deploy is skipped
+3. Skip deploys while `ENABLE_CD` is unset
 
-### Enable real deploys later
+Once `ENABLE_CD=true` is set, the same workflow deploys:
 
-1. Choose hosting (e.g. Vercel for web, Railway for API/ML)
-2. Add secrets in GitHub: **Settings → Secrets and variables → Actions**
-3. Set repository variable: `ENABLE_CD=true`
-4. Replace placeholder steps in `.github/workflows/cd.yml`
+| Job | Target | Artifact |
+|---|---|---|
+| `deploy-web` | Vercel (remote build) | `apps/web` |
+| `deploy-api` | Railway (Docker) | `apps/api/Dockerfile` |
+| `deploy-ml` | Disabled until the service exists | `apps/ml` |
 
-Suggested secrets (add when ready):
+The database is **not** deployed by this workflow — Supabase migrations are pushed
+separately (step 1 below).
+
+### First-time setup
+
+#### 1. Supabase (database + auth)
+
+The database already lives in Supabase, but production needs its own project:
+
+```bash
+supabase login
+supabase link --project-ref <production-project-ref>
+supabase db push
+```
+
+Run migrations before the first API deploy; the API assumes the schema exists.
+
+#### 2. Vercel (web)
+
+1. Import the GitHub repo at [vercel.com/new](https://vercel.com/new).
+2. Set **Root Directory** to `apps/web`. Leave the framework as Next.js.
+3. Add environment variables (Production):
+   - `NEXT_PUBLIC_API_URL` — the Railway API URL, e.g. `https://pakcommerce-api.up.railway.app`
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+4. Create token + IDs for CI:
+   - `VERCEL_TOKEN` — Vercel account token
+   - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` — from **Project Settings → General**
+
+`apps/web/vercel.json` pins the deployment to the `bom1` (Mumbai) region.
+
+#### 3. Railway (API)
+
+1. Create a service from the same GitHub repo.
+2. Set **Root Directory** to the repository root (not `apps/api`). The Docker build
+   needs `packages/` and the root lockfile; `railway.json` points it at
+   `apps/api/Dockerfile` and health-checks `/health`.
+3. Add environment variables:
+   - `APP_URL` — the Vercel production URL. Comma-separate preview URLs if needed.
+   - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `JWT_SECRET`
+   - `GOOGLE_GENERATIVE_AI_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY`)
+   - Do **not** set `API_PORT`; Railway injects `PORT`, which the API now honours.
+4. Create a project token and note the service + environment names for CI:
+   - `RAILWAY_TOKEN`
+   - `RAILWAY_SERVICE` (service name or ID)
+   - `RAILWAY_ENVIRONMENT` (optional, defaults to `production`)
+
+#### 4. GitHub
+
+1. **Settings → Environments → production**, then add the secrets above to that
+   environment (or to repository secrets).
+2. **Settings → Secrets and variables → Actions → Variables**: set `ENABLE_CD=true`.
 
 | Secret | Used for |
 |---|---|
 | `VERCEL_TOKEN` | Web frontend |
-| `RAILWAY_TOKEN` | API / ML services |
-| `DOCKER_REGISTRY_*` | Container deploys |
+| `VERCEL_ORG_ID` | Vercel project linking |
+| `VERCEL_PROJECT_ID` | Vercel project linking |
+| `RAILWAY_TOKEN` | API service |
+| `RAILWAY_SERVICE` | Railway service name/ID |
+| `RAILWAY_ENVIRONMENT` | Railway environment (optional) |
+
+### Verify a deploy
+
+```bash
+curl https://<railway-domain>/health
+# {"status":"ok","service":"api"}
+
+curl -H "Origin: https://<vercel-domain>" -I https://<railway-domain>/health
+# access-control-allow-origin: https://<vercel-domain>
+```
+
+If the browser gets CORS errors, `APP_URL` on Railway does not match the deployed
+web origin exactly (scheme included, no trailing slash).
 
 ---
 
