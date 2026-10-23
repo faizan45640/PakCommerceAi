@@ -105,8 +105,8 @@ On push to `main` (or manual run), the workflow:
 
 | Component | Platform | Trigger |
 |---|---|---|
-| Web | Netlify Git integration | Push to `main` |
-| API | Render Blueprint (`render.yaml`) | Push to `main` **after CI checks pass** |
+| Web | Netlify Git integration | Push to `dev` |
+| API | Render Blueprint (`render.yaml`) | Push to `dev` **after CI checks pass** |
 | ML | Nothing yet | `apps/ml` has no service |
 
 The database is **not** deployed by this workflow — Supabase migrations are pushed
@@ -128,16 +128,18 @@ Run migrations before the first API deploy; the API assumes the schema exists.
 
 #### 2. Render (API)
 
-1. In the Render Dashboard choose **New → Blueprint** and connect this repo.
-   Render reads `render.yaml` and creates a Docker web service named
-   `pakcommerce-api` in Singapore on the free plan.
+1. In the Render Dashboard choose **New → Blueprint**, connect this repo, and
+   select the **`dev`** branch. Render reads `render.yaml` and creates a Docker
+   web service named `pakcommerce-api` in Singapore on the free plan.
+   If the service already exists, change its branch to `dev` under
+   **Settings → Build & Deploy**.
 2. When prompted, fill the `sync: false` environment variables:
    - `APP_URL` — the Netlify production URL. You can set a placeholder now and
      correct it after step 3; comma-separate preview URLs if needed.
    - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
    - `JWT_SECRET`
    - `GOOGLE_GENERATIVE_AI_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY`)
-3. Deploy. `autoDeployTrigger: checksPass` means later pushes to `main` ship only
+3. Deploy. `autoDeployTrigger: checksPass` means later pushes to `dev` ship only
    after the GitHub CI checks are green.
 4. Copy the service URL, e.g. `https://pakcommerce-api.onrender.com`.
 
@@ -158,10 +160,12 @@ Run migrations before the first API deploy; the API assumes the schema exists.
    - `NEXT_PUBLIC_API_URL` — the Render API URL from step 2
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-4. Deploy. Netlify redeploys automatically on every push to `main`, and can build
+4. Set the **production branch** to `dev` under **Site configuration →
+   Build & deploy → Branches** (Netlify defaults to the repo's default branch).
+5. Deploy. Netlify redeploys automatically on every push to `dev`, and can build
    Deploy Previews for pull requests once the same variables are enabled for the
    *Deploy previews* scope.
-5. Back on Render, update `APP_URL` to the Netlify production URL and redeploy so
+6. Back on Render, update `APP_URL` to the Netlify production URL and redeploy so
    the API's CORS policy allows the browser.
 
 No GitHub secrets are needed for either deploy.
@@ -243,7 +247,7 @@ For Python-only code, add checks under `apps/ml` or create a new workflow job.
 | Ruff format check fails | Run `ruff format apps/ml` locally |
 | Tests fail | Run `pytest apps/ml/tests` or workspace test script locally |
 | `.env` committed | Remove file from git, rotate secrets, use `.env.example` only |
-| Render deploy skipped | The `main` CI checks have not passed yet (`autoDeployTrigger: checksPass`) |
+| Render deploy skipped | The `dev` CI checks have not passed yet (`autoDeployTrigger: checksPass`) |
 
 ---
 
