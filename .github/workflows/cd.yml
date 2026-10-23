@@ -75,55 +75,33 @@ jobs:
           path: apps/ml
           if-no-files-found: warn
 
-  # The web app is deployed by Netlify's Git integration on every push to main
-  # (configured by netlify.toml), so it does not need a job here. This avoids
-  # duplicating NEXT_PUBLIC_* build variables as GitHub secrets.
-
-  deploy-api:
-    name: Deploy API (Railway)
-    runs-on: ubuntu-latest
-    needs: build
-    if: vars.ENABLE_CD == 'true'
-    environment: ${{ inputs.environment || 'production' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-
-      # The Railway service must use the repo root as its root directory so the
-      # Docker build can see apps/ and packages/. See railway.json.
-      - name: Deploy to Railway
-        run: railway up --ci --service "$RAILWAY_SERVICE" --environment "${RAILWAY_ENVIRONMENT:-production}"
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
-          RAILWAY_ENVIRONMENT: ${{ secrets.RAILWAY_ENVIRONMENT }}
+  # Hosted deploys are owned by the platforms' Git integrations:
+  # - Netlify builds apps/web from apps/web/netlify.toml on push to main.
+  # - Render deploys the API from render.yaml once the checks on main pass.
+  # No deploy tokens are stored in GitHub.
 
   deploy-ml:
     name: Deploy ML service (not scaffolded)
     runs-on: ubuntu-latest
     needs: build
-    if: vars.ENABLE_CD == 'true' && vars.ENABLE_ML_CD == 'true'
+    if: vars.ENABLE_ML_CD == 'true'
     environment: ${{ inputs.environment || 'production' }}
 
     steps:
       - name: Explain skipped ML deploy
         run: |
           echo "apps/ml has no runtime service yet (no FastAPI app, no model)."
-          echo "Nothing to deploy. Set ENABLE_ML_CD=true once the service exists."
+          echo "Nothing to deploy. Remove this job once the service exists."
 
-  cd-skipped:
-    name: CD skipped (expected until hosting is configured)
+  deploy-info:
+    name: Hosted deploys
     runs-on: ubuntu-latest
     needs: build
-    if: vars.ENABLE_CD != 'true'
 
     steps:
-      - name: Explain skipped deploy
+      - name: Explain deploy ownership
         run: |
-          echo "Build artifacts uploaded successfully."
-          echo "Deploy jobs are disabled until you set repository variable ENABLE_CD=true."
-          echo "See docs/ci-cd.md for setup steps."
+          echo "Web: Netlify Git integration (apps/web/netlify.toml)."
+          echo "API: Render Blueprint (render.yaml, autoDeployTrigger: checksPass)."
+          echo "ML: disabled until apps/ml has a service (set ENABLE_ML_CD=true)."
+          echo "See docs/ci-cd.md."

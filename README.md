@@ -155,7 +155,7 @@ npm run dev
 
 **366 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
 
-- **CD** builds artifacts on `main`. All deploy steps are **placeholders** and stay skipped until the repo variable `ENABLE_CD=true` is set.
+- **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 
 > ✅ **CI is green.** `lint`, `typecheck`, `test` and `build` all pass. The production
 > build failure previously recorded here (`InvariantError: Expected workStore to be

@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # Build context is the repository root, because the API imports the
-# @pakcommerce/* workspace packages. On Railway/Render set the service root to
-# the repo root and point the Dockerfile at apps/api/Dockerfile.
+# @pakcommerce/* workspace packages. On Render, render.yaml sets dockerContext
+# to the repo root and dockerfilePath to apps/api/Dockerfile.
 
 FROM node:22-alpine AS deps
 WORKDIR /app
