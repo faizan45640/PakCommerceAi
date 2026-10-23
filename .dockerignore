@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.git
+.github
+.next
+**/dist
+**/coverage
+**/*.log
+.env
+.env.*
+!.env.example
+apps/ml/.venv
+**/__pycache__

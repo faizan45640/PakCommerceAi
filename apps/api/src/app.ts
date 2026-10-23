@@ -25,9 +25,16 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const appUrl = options.appUrl ?? process.env.APP_URL ?? "http://localhost:3000";
 
+  // Accept a comma-separated list so production and Vercel preview domains can
+  // share one deployment without widening CORS to every origin.
+  const allowedOrigins = appUrl
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   const app = express();
 
-  app.use(cors({ origin: appUrl }));
+  app.use(cors({ origin: allowedOrigins }));
   app.use(express.json());
 
   app.use("/health", healthRouter);
