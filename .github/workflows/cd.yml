@@ -75,31 +75,9 @@ jobs:
           path: apps/ml
           if-no-files-found: warn
 
-  deploy-web:
-    name: Deploy web (Vercel)
-    runs-on: ubuntu-latest
-    needs: build
-    if: vars.ENABLE_CD == 'true'
-    environment: ${{ inputs.environment || 'production' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      # Remote build: Vercel reads the project's Root Directory (apps/web) and
-      # its environment variables from the dashboard. Running the CLI at the repo
-      # root lets Vercel install the npm workspaces itself.
-      - name: Deploy to Vercel
-        run: npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  # The web app is deployed by Netlify's Git integration on every push to main
+  # (configured by netlify.toml), so it does not need a job here. This avoids
+  # duplicating NEXT_PUBLIC_* build variables as GitHub secrets.
 
   deploy-api:
     name: Deploy API (Railway)

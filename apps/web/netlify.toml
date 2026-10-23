@@ -1,0 +1,13 @@
+# Netlify monorepo setup: set this as the site's Package directory in the UI and
+# leave the Base directory unset. Dependency installation and the build command
+# then run at the repo root, which is what npm workspaces require.
+# Publish paths are relative to the base directory (the repo root).
+[build]
+  command = "npm run build -w @pakcommerce/web"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
