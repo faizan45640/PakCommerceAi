@@ -102,13 +102,17 @@ On push to `main` (or manual run):
 2. Upload build artifacts to GitHub Actions
 3. Skip deploys while `ENABLE_CD` is unset
 
-Once `ENABLE_CD=true` is set, the same workflow deploys:
+Once `ENABLE_CD=true` is set, the same workflow deploys the API:
 
 | Job | Target | Artifact |
 |---|---|---|
-| `deploy-web` | Vercel (remote build) | `apps/web` |
 | `deploy-api` | Railway (Docker) | `apps/api/Dockerfile` |
 | `deploy-ml` | Disabled until the service exists | `apps/ml` |
+
+The **web app is deployed by Netlify's Git integration**, not by this workflow.
+Netlify builds `apps/web` on every push to `main` using the root `netlify.toml`.
+That keeps `NEXT_PUBLIC_*` build variables in one place instead of duplicating
+them as GitHub secrets.
 
 The database is **not** deployed by this workflow — Supabase migrations are pushed
 separately (step 1 below).
@@ -127,19 +131,24 @@ supabase db push
 
 Run migrations before the first API deploy; the API assumes the schema exists.
 
-#### 2. Vercel (web)
+#### 2. Netlify (web)
 
-1. Import the GitHub repo at [vercel.com/new](https://vercel.com/new).
-2. Set **Root Directory** to `apps/web`. Leave the framework as Next.js.
-3. Add environment variables (Production):
+1. In Netlify choose **Add new site → Import an existing project** and pick this repo.
+2. Set **Package directory** to `apps/web` and leave **Base directory** unset.
+   Netlify then installs the npm workspaces and runs the build at the repo root,
+   using `apps/web/netlify.toml`:
+   - build command `npm run build -w @pakcommerce/web`
+   - publish directory `apps/web/.next`
+   - Node 22 and `@netlify/plugin-nextjs`
+3. Add environment variables (Netlify UI → **Site configuration → Environment variables**):
    - `NEXT_PUBLIC_API_URL` — the Railway API URL, e.g. `https://pakcommerce-api.up.railway.app`
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-4. Create token + IDs for CI:
-   - `VERCEL_TOKEN` — Vercel account token
-   - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` — from **Project Settings → General**
+4. Deploy. Netlify redeploys automatically on every push to `main`, and can build
+   Deploy Previews for pull requests once the same variables are enabled for the
+   *Deploy previews* scope.
 
-`apps/web/vercel.json` pins the deployment to the `bom1` (Mumbai) region.
+No GitHub secrets are needed for the web deploy.
 
 #### 3. Railway (API)
 
@@ -148,7 +157,8 @@ Run migrations before the first API deploy; the API assumes the schema exists.
    needs `packages/` and the root lockfile; `railway.json` points it at
    `apps/api/Dockerfile` and health-checks `/health`.
 3. Add environment variables:
-   - `APP_URL` — the Vercel production URL. Comma-separate preview URLs if needed.
+   - `APP_URL` — the Netlify production URL, e.g. `https://pakcommerce.netlify.app`.
+     Comma-separate preview URLs if needed.
    - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
    - `JWT_SECRET`
    - `GOOGLE_GENERATIVE_AI_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY`)
@@ -166,9 +176,6 @@ Run migrations before the first API deploy; the API assumes the schema exists.
 
 | Secret | Used for |
 |---|---|
-| `VERCEL_TOKEN` | Web frontend |
-| `VERCEL_ORG_ID` | Vercel project linking |
-| `VERCEL_PROJECT_ID` | Vercel project linking |
 | `RAILWAY_TOKEN` | API service |
 | `RAILWAY_SERVICE` | Railway service name/ID |
 | `RAILWAY_ENVIRONMENT` | Railway environment (optional) |
@@ -179,8 +186,8 @@ Run migrations before the first API deploy; the API assumes the schema exists.
 curl https://<railway-domain>/health
 # {"status":"ok","service":"api"}
 
-curl -H "Origin: https://<vercel-domain>" -I https://<railway-domain>/health
-# access-control-allow-origin: https://<vercel-domain>
+curl -H "Origin: https://<netlify-domain>" -I https://<railway-domain>/health
+# access-control-allow-origin: https://<netlify-domain>
 ```
 
 If the browser gets CORS errors, `APP_URL` on Railway does not match the deployed
