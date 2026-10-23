@@ -4,8 +4,8 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    branch: main
-    # Deploy only after the CI checks on main are green.
+    branch: dev
+    # Deploy only after the CI checks on dev are green.
     autoDeployTrigger: checksPass
     # The API imports the @pakcommerce/* workspace packages, so the Docker build
     # needs the repo root as its context.
