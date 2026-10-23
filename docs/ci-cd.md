@@ -92,27 +92,22 @@ All jobs must pass before the workflow is green.
 
 ## CD pipeline
 
-CD is **safe by default**: deploy steps are disabled until you opt in.
+Deploys are owned by the hosting platforms' Git integrations, so no deploy
+tokens or CD variables are needed in GitHub.
 
 ### What runs now
 
-On push to `main` (or manual run):
+On push to `main` (or manual run), the workflow:
 
-1. `npm ci` + `npm run build`
-2. Upload build artifacts to GitHub Actions
-3. Skip deploys while `ENABLE_CD` is unset
+1. runs `npm ci` + `npm run build`
+2. uploads build artifacts to GitHub Actions
+3. prints which platform owns each deploy
 
-Once `ENABLE_CD=true` is set, the same workflow deploys the API:
-
-| Job | Target | Artifact |
+| Component | Platform | Trigger |
 |---|---|---|
-| `deploy-api` | Railway (Docker) | `apps/api/Dockerfile` |
-| `deploy-ml` | Disabled until the service exists | `apps/ml` |
-
-The **web app is deployed by Netlify's Git integration**, not by this workflow.
-Netlify builds `apps/web` on every push to `main` using the root `netlify.toml`.
-That keeps `NEXT_PUBLIC_*` build variables in one place instead of duplicating
-them as GitHub secrets.
+| Web | Netlify Git integration | Push to `main` |
+| API | Render Blueprint (`render.yaml`) | Push to `main` **after CI checks pass** |
+| ML | Nothing yet | `apps/ml` has no service |
 
 The database is **not** deployed by this workflow — Supabase migrations are pushed
 separately (step 1 below).
@@ -131,7 +126,26 @@ supabase db push
 
 Run migrations before the first API deploy; the API assumes the schema exists.
 
-#### 2. Netlify (web)
+#### 2. Render (API)
+
+1. In the Render Dashboard choose **New → Blueprint** and connect this repo.
+   Render reads `render.yaml` and creates a Docker web service named
+   `pakcommerce-api` in Singapore on the free plan.
+2. When prompted, fill the `sync: false` environment variables:
+   - `APP_URL` — the Netlify production URL. You can set a placeholder now and
+     correct it after step 3; comma-separate preview URLs if needed.
+   - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `JWT_SECRET`
+   - `GOOGLE_GENERATIVE_AI_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY`)
+3. Deploy. `autoDeployTrigger: checksPass` means later pushes to `main` ship only
+   after the GitHub CI checks are green.
+4. Copy the service URL, e.g. `https://pakcommerce-api.onrender.com`.
+
+> The free plan spins the service down after ~15 minutes idle. The first request
+> afterwards takes 30–60 seconds while it cold-starts. Fine for demos; upgrade to
+> the Starter plan if that is unacceptable.
+
+#### 3. Netlify (web)
 
 1. In Netlify choose **Add new site → Import an existing project** and pick this repo.
 2. Set **Package directory** to `apps/web` and leave **Base directory** unset.
@@ -141,56 +155,28 @@ Run migrations before the first API deploy; the API assumes the schema exists.
    - publish directory `apps/web/.next`
    - Node 22 and `@netlify/plugin-nextjs`
 3. Add environment variables (Netlify UI → **Site configuration → Environment variables**):
-   - `NEXT_PUBLIC_API_URL` — the Railway API URL, e.g. `https://pakcommerce-api.up.railway.app`
+   - `NEXT_PUBLIC_API_URL` — the Render API URL from step 2
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 4. Deploy. Netlify redeploys automatically on every push to `main`, and can build
    Deploy Previews for pull requests once the same variables are enabled for the
    *Deploy previews* scope.
+5. Back on Render, update `APP_URL` to the Netlify production URL and redeploy so
+   the API's CORS policy allows the browser.
 
-No GitHub secrets are needed for the web deploy.
-
-#### 3. Railway (API)
-
-1. Create a service from the same GitHub repo.
-2. Set **Root Directory** to the repository root (not `apps/api`). The Docker build
-   needs `packages/` and the root lockfile; `railway.json` points it at
-   `apps/api/Dockerfile` and health-checks `/health`.
-3. Add environment variables:
-   - `APP_URL` — the Netlify production URL, e.g. `https://pakcommerce.netlify.app`.
-     Comma-separate preview URLs if needed.
-   - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-   - `JWT_SECRET`
-   - `GOOGLE_GENERATIVE_AI_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY`)
-   - Do **not** set `API_PORT`; Railway injects `PORT`, which the API now honours.
-4. Create a project token and note the service + environment names for CI:
-   - `RAILWAY_TOKEN`
-   - `RAILWAY_SERVICE` (service name or ID)
-   - `RAILWAY_ENVIRONMENT` (optional, defaults to `production`)
-
-#### 4. GitHub
-
-1. **Settings → Environments → production**, then add the secrets above to that
-   environment (or to repository secrets).
-2. **Settings → Secrets and variables → Actions → Variables**: set `ENABLE_CD=true`.
-
-| Secret | Used for |
-|---|---|
-| `RAILWAY_TOKEN` | API service |
-| `RAILWAY_SERVICE` | Railway service name/ID |
-| `RAILWAY_ENVIRONMENT` | Railway environment (optional) |
+No GitHub secrets are needed for either deploy.
 
 ### Verify a deploy
 
 ```bash
-curl https://<railway-domain>/health
+curl https://<render-domain>/health
 # {"status":"ok","service":"api"}
 
-curl -H "Origin: https://<netlify-domain>" -I https://<railway-domain>/health
+curl -H "Origin: https://<netlify-domain>" -I https://<render-domain>/health
 # access-control-allow-origin: https://<netlify-domain>
 ```
 
-If the browser gets CORS errors, `APP_URL` on Railway does not match the deployed
+If the browser gets CORS errors, `APP_URL` on Render does not match the deployed
 web origin exactly (scheme included, no trailing slash).
 
 ---
@@ -257,7 +243,7 @@ For Python-only code, add checks under `apps/ml` or create a new workflow job.
 | Ruff format check fails | Run `ruff format apps/ml` locally |
 | Tests fail | Run `pytest apps/ml/tests` or workspace test script locally |
 | `.env` committed | Remove file from git, rotate secrets, use `.env.example` only |
-| CD deploy skipped | Expected until `ENABLE_CD=true` is set |
+| Render deploy skipped | The `main` CI checks have not passed yet (`autoDeployTrigger: checksPass`) |
 
 ---
 

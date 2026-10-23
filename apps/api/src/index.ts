@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // apps/web/.env.local. See docs/RUNBOOK.md §4.
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
-// Railway/Render inject PORT; local development uses API_PORT from the root .env.
+// Render injects PORT; local development uses API_PORT from the root .env.
 const port = Number(process.env.API_PORT ?? process.env.PORT) || 4000;
 
 createApp().listen(port, () => {
