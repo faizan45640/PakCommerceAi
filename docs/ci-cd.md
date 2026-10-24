@@ -150,9 +150,8 @@ Run migrations before the first API deploy; the API assumes the schema exists.
 #### 3. Netlify (web)
 
 1. In Netlify choose **Add new site → Import an existing project** and pick this repo.
-2. Set **Package directory** to `apps/web` and leave **Base directory** unset.
-   Netlify then installs the npm workspaces and runs the build at the repo root,
-   using `apps/web/netlify.toml`:
+2. Leave **Base directory** and **Package directory** unset. Netlify then runs
+   at the repo root, using the root `netlify.toml`:
    - build command `npm run build -w @pakcommerce/web`
    - publish directory `apps/web/.next`
    - Node 22 and `@netlify/plugin-nextjs`
@@ -160,6 +159,13 @@ Run migrations before the first API deploy; the API assumes the schema exists.
    - `NEXT_PUBLIC_API_URL` — the Render API URL from step 2
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+   Do not set `NODE_ENV`. Netlify provides `production` for builds; overriding
+   it makes `next build` behave inconsistently and can fail prerendering.
+
+   Netlify's secrets scan also flags public values that are inlined into the
+   client bundle (`NEXT_PUBLIC_*`, the Supabase publishable key). Those keys are
+   listed in the site's `SECRETS_SCAN_OMIT_KEYS` variable.
 4. Set the **production branch** to `dev` under **Site configuration →
    Build & deploy → Branches** (Netlify defaults to the repo's default branch).
 5. Deploy. Netlify redeploys automatically on every push to `dev`, and can build
