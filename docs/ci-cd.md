@@ -162,6 +162,10 @@ Run migrations before the first API deploy; the API assumes the schema exists.
 
    Do not set `NODE_ENV`. Netlify provides `production` for builds; overriding
    it makes `next build` behave inconsistently and can fail prerendering.
+
+   Netlify's secrets scan also flags public values that are inlined into the
+   client bundle (`NEXT_PUBLIC_*`, the Supabase publishable key). Those keys are
+   listed in the site's `SECRETS_SCAN_OMIT_KEYS` variable.
 4. Set the **production branch** to `dev` under **Site configuration →
    Build & deploy → Branches** (Netlify defaults to the repo's default branch).
 5. Deploy. Netlify redeploys automatically on every push to `dev`, and can build
