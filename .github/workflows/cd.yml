@@ -76,7 +76,7 @@ jobs:
           if-no-files-found: warn
 
   # Hosted deploys are owned by the platforms' Git integrations:
-  # - Netlify builds apps/web from apps/web/netlify.toml on push to main.
+  # - Netlify builds apps/web from the root netlify.toml on push to dev.
   # - Render deploys the API from render.yaml once the checks on main pass.
   # No deploy tokens are stored in GitHub.
 
@@ -101,7 +101,7 @@ jobs:
     steps:
       - name: Explain deploy ownership
         run: |
-          echo "Web: Netlify Git integration (apps/web/netlify.toml)."
+          echo "Web: Netlify Git integration (netlify.toml)."
           echo "API: Render Blueprint (render.yaml, autoDeployTrigger: checksPass)."
           echo "ML: disabled until apps/ml has a service (set ENABLE_ML_CD=true)."
           echo "See docs/ci-cd.md."
