@@ -159,6 +159,9 @@ Run migrations before the first API deploy; the API assumes the schema exists.
    - `NEXT_PUBLIC_API_URL` — the Render API URL from step 2
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+   Do not set `NODE_ENV`. Netlify provides `production` for builds; overriding
+   it makes `next build` behave inconsistently and can fail prerendering.
 4. Set the **production branch** to `dev` under **Site configuration →
    Build & deploy → Branches** (Netlify defaults to the repo's default branch).
 5. Deploy. Netlify redeploys automatically on every push to `dev`, and can build
