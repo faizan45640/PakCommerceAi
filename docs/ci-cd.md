@@ -150,9 +150,8 @@ Run migrations before the first API deploy; the API assumes the schema exists.
 #### 3. Netlify (web)
 
 1. In Netlify choose **Add new site → Import an existing project** and pick this repo.
-2. Set **Package directory** to `apps/web` and leave **Base directory** unset.
-   Netlify then installs the npm workspaces and runs the build at the repo root,
-   using `apps/web/netlify.toml`:
+2. Leave **Base directory** and **Package directory** unset. Netlify then runs
+   at the repo root, using the root `netlify.toml`:
    - build command `npm run build -w @pakcommerce/web`
    - publish directory `apps/web/.next`
    - Node 22 and `@netlify/plugin-nextjs`
