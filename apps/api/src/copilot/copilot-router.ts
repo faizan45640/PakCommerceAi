@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   convertToModelMessages,
   createIdGenerator,
+  createUIMessageStream,
   isStepCount,
   pipeUIMessageStreamToResponse,
   streamText,
@@ -161,9 +162,6 @@ copilotRouter.post("/chat", async (req: Request, res: Response, next: NextFuncti
   // Fallback mock stream if the selected provider is not configured.
   // Requires auth like the real path - the route is mounted behind requireAuth.
   if (!aiConfig.isConfigured) {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("X-Vercel-AI-Data-Stream", "v1");
-
     const sampleText =
       `**Rafiq is not connected yet.**\n\n` +
       `The shop assistant needs an AI key before it can look at your products. Ask whoever set up this workspace to add one.\n\n` +
@@ -173,20 +171,27 @@ copilotRouter.post("/chat", async (req: Request, res: Response, next: NextFuncti
       `• OpenRouter: \`AI_PROVIDER=openrouter\` and \`OPENROUTER_API_KEY\`\n` +
       `• Ollama: \`AI_PROVIDER=ollama\` and \`ollama run qwen2.5:7b\``;
 
-    const chunks = sampleText.split(" ");
-    let i = 0;
+    // Use the same UI message stream format as the real path so the web client
+    // can render this setup message instead of silently dropping it.
+    const stream = createUIMessageStream({
+      originalMessages: [message as UIMessage],
+      generateId: assistantMessageId,
+      execute: async ({ writer }) => {
+        const textId = "rafiq-setup";
+        writer.write({ type: "text-start", id: textId });
+        for (const [index, word] of sampleText.split(" ").entries()) {
+          writer.write({
+            type: "text-delta",
+            id: textId,
+            delta: index === 0 ? word : ` ${word}`,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        writer.write({ type: "text-end", id: textId });
+      },
+    });
 
-    const interval = setInterval(() => {
-      if (i < chunks.length) {
-        const chunk = (i === 0 ? "" : " ") + chunks[i];
-        res.write(`0:${JSON.stringify(chunk)}\n`);
-        i++;
-      } else {
-        clearInterval(interval);
-        res.end();
-      }
-    }, 25);
-
+    await pipeUIMessageStreamToResponse({ response: res, stream });
     return;
   }
 

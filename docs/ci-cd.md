@@ -139,6 +139,10 @@ Run migrations before the first API deploy; the API assumes the schema exists.
    - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
    - `JWT_SECRET`
    - `GOOGLE_GENERATIVE_AI_API_KEY` (or `DEEPSEEK_API_KEY` / `OPENROUTER_API_KEY`)
+   - `AI_PROVIDER` and `AI_MODEL` — the copilot reads these at request time.
+     `render.yaml` defaults them to `deepseek` / `deepseek-v4-flash`; set
+     `AI_PROVIDER=google` with `AI_MODEL=gemini-1.5-flash` to use Gemini.
+     Without a provider key the chat shows a setup message instead of an answer.
 3. Deploy. `autoDeployTrigger: checksPass` means later pushes to `dev` ship only
    after the GitHub CI checks are green.
 4. Copy the service URL, e.g. `https://pakcommerce-api.onrender.com`.
