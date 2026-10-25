@@ -25,6 +25,10 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: AI_PROVIDER
+        value: deepseek
+      - key: AI_MODEL
+        value: deepseek-v4-flash
       - key: GOOGLE_GENERATIVE_AI_API_KEY
         sync: false
       - key: DEEPSEEK_API_KEY
