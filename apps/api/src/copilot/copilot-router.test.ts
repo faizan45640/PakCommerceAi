@@ -1,7 +1,13 @@
+import express from "express";
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../app.js";
+import { copilotRouter } from "./copilot-router.js";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("copilot routes", () => {
   it("POST /api/v1/copilot/chat rejects a request with no token", async () => {
@@ -57,5 +63,28 @@ describe("copilot routes", () => {
     expect(archived.status).toBe(401);
     expect(restored.status).toBe(401);
     expect(deleted.status).toBe(401);
+  });
+
+  it("streams the setup message in the UI message format when no provider is configured", async () => {
+    vi.stubEnv("AI_PROVIDER", "google");
+    vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "");
+
+    const app = express();
+    app.use(express.json());
+    app.use("/api/v1/copilot", copilotRouter);
+
+    const response = await request(app)
+      .post("/api/v1/copilot/chat")
+      .send({
+        id: "11111111-1111-4111-8111-111111111111",
+        message: { id: "m1", role: "user", parts: [{ type: "text", text: "Hello" }] },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+    expect(response.headers["x-vercel-ai-ui-message-stream"]).toBe("v1");
+    expect(response.text).toContain('"type":"text-start"');
+    expect(response.text).toContain('"type":"text-delta"');
+    expect(response.text).toContain('"delta":"**Rafiq"');
   });
 });
