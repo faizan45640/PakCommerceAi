@@ -6,9 +6,10 @@ import * as React from "react";
 
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { orderChannelValues, orderStatusValues } from "@pakcommerce/shared/orders";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { fetchCustomerById } from "@/lib/api/customers";
 import { fetchOrders, type OrderListResult } from "@/lib/api/orders";
 import { fetchCurrentWorkspace } from "@/lib/api/products";
 
@@ -34,7 +36,7 @@ const sortOptions = [
   { value: "updated_desc", label: "Recently updated" },
 ] as const;
 
-export function OrdersTable() {
+export function OrdersTable({ customerId }: { customerId?: string }) {
   const router = useRouter();
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<OrderListResult | null>(null);
@@ -51,6 +53,22 @@ export function OrdersTable() {
   const page = cursors.length;
   const cursor = cursors[cursors.length - 1];
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [customerName, setCustomerName] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!customerId || !workspaceId) return;
+    let ignore = false;
+    fetchCustomerById(workspaceId, customerId)
+      .then((customer) => {
+        if (!ignore) setCustomerName(customer.name);
+      })
+      .catch(() => {
+        if (!ignore) setCustomerName(null);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [customerId, workspaceId]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -74,6 +92,7 @@ export function OrdersTable() {
         const data = await fetchOrders({
           workspaceId: id,
           query: debouncedSearch,
+          customerId,
           statuses: status === "all" ? undefined : [status],
           channels: channel === "all" ? undefined : [channel],
           sort,
@@ -92,7 +111,7 @@ export function OrdersTable() {
     return () => {
       ignore = true;
     };
-  }, [workspaceId, debouncedSearch, status, channel, sort, cursor, reloadKey]);
+  }, [workspaceId, customerId, debouncedSearch, status, channel, sort, cursor, reloadKey]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -107,10 +126,25 @@ export function OrdersTable() {
 
   const total = result?.meta.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilters = Boolean(debouncedSearch) || status !== "all" || channel !== "all";
+  const hasFilters = Boolean(debouncedSearch) || Boolean(customerId) || status !== "all" || channel !== "all";
 
   return (
     <div className="space-y-4">
+      {customerId ? (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="gap-1.5 rounded-md px-2.5 py-1 text-xs">
+            Filtered to {customerName ?? "customer"}
+            <button
+              type="button"
+              className="rounded-sm hover:text-foreground"
+              onClick={() => router.push("/dashboard/orders")}
+            >
+              <span className="sr-only">Clear customer filter</span>
+              <X className="size-3" />
+            </button>
+          </Badge>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full lg:w-80">

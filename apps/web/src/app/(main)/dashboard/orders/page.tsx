@@ -12,7 +12,14 @@ import { PendingOrdersQueue } from "./_components/pending-orders-queue";
 import { RecentOrdersList } from "./_components/recent-orders-list";
 import { SalesKpiStrip } from "./_components/sales-kpi-strip";
 
-export default function OrdersPage() {
+interface OrdersPageProps {
+  searchParams: Promise<{ customerId?: string | string[] }>;
+}
+
+export default async function OrdersPage({ searchParams }: OrdersPageProps) {
+  const { customerId: customerIdParam } = await searchParams;
+  const customerId = (Array.isArray(customerIdParam) ? customerIdParam[0] : customerIdParam)?.trim() || undefined;
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -30,7 +37,7 @@ export default function OrdersPage() {
 
       <SalesKpiStrip />
 
-      <Tabs defaultValue="overview" className="flex flex-col gap-4">
+      <Tabs defaultValue={customerId ? "orders" : "overview"} className="flex flex-col gap-4">
         <TabsList className="gap-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="orders">All Orders</TabsTrigger>
@@ -50,7 +57,7 @@ export default function OrdersPage() {
         </TabsContent>
 
         <TabsContent value="orders" className="flex flex-col gap-4">
-          <OrdersTable />
+          <OrdersTable key={customerId ?? "all"} customerId={customerId} />
         </TabsContent>
       </Tabs>
     </div>

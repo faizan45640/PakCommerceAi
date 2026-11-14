@@ -12,6 +12,8 @@ import { apiFetch } from "./api-client";
 export interface OrderListParams {
   workspaceId: string;
   query?: string;
+  /** Only this customer's orders. */
+  customerId?: string;
   statuses?: string[];
   channels?: string[];
   sort?: string;
@@ -34,6 +36,7 @@ export async function fetchOrders(params: OrderListParams): Promise<OrderListRes
   searchParams.set("workspaceId", params.workspaceId);
 
   if (params.query?.trim()) searchParams.set("query", params.query.trim());
+  if (params.customerId) searchParams.set("customerId", params.customerId);
   if (params.statuses?.length) searchParams.set("statuses", params.statuses.join(","));
   if (params.channels?.length) searchParams.set("channels", params.channels.join(","));
   if (params.sort) searchParams.set("sort", params.sort);
