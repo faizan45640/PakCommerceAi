@@ -186,6 +186,8 @@ describe("order lifecycle gate", () => {
         [confirmable.variantId],
       );
 
+      // Exception aborts the withRollback transaction, so we only assert the
+      // refusal token here — a follow-up SELECT would hit 25P02.
       await expect(
         asUser(client, confirmable.seller.userId, () =>
           client.query(
@@ -194,12 +196,6 @@ describe("order lifecycle gate", () => {
           ),
         ),
       ).rejects.toThrow(/insufficient_stock/);
-
-      const order = await client.query<{ status: string }>(
-        `select status from public.orders where id = $1`,
-        [confirmable.orderId],
-      );
-      expect(order.rows[0]?.status).toBe("draft");
     });
   });
 });
