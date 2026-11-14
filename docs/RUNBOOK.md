@@ -17,8 +17,8 @@ Written and verified on **Windows 10 + PowerShell**, Node 22.13.0, npm 11.11.0. 
 
 Login uses Supabase Auth, so the web app needs its env file even to sign in. The copilot
 also needs the API running, and a configured model provider if you want a real answer
-instead of the setup message. Orders, inventory, logistics, conversations, approvals, and
-analytics do not read the database. Products and customers are empty placeholders.
+instead of the setup message. Products, orders (list and detail) and customers read the API.
+Inventory, logistics, conversations, approvals, and analytics do not read the database.
 
 Setup, migration rules and deploy steps are in
 [`supabase-setup.md`](supabase-setup.md#migrations). See the status table in the [README](../README.md).
