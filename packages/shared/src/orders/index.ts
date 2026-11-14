@@ -192,8 +192,11 @@ const orderBaseSchema = z.object({
   id: idSchema,
   sellerId: idSchema,
   workspaceId: idSchema,
-  /** The Customer 360 record this order belongs to (linked by phone). */
-  customerId: idSchema,
+  /**
+   * The Customer 360 record this order belongs to (linked by phone). Optional in
+   * the contract until the schema PR makes it a required stored column.
+   */
+  customerId: idSchema.optional(),
   status: orderStatusSchema,
   channel: orderChannelSchema,
   paymentMethod: orderPaymentMethodSchema.default("cod"),
