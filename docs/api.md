@@ -349,6 +349,39 @@ Validated against `customerSearchQuerySchema`.
 Returns `CustomerListItem`s (`customer` fields + `summary` + `tags`) in the list envelope
 (`data`, `meta`, `nextCursor`).
 
+### `GET /api/v1/customers/context?workspaceId=&phone=` (or `customerId=`)
+
+**The WhatsApp Sales Agent's entry point**: one call returns the compact customer context
+(`customerContextSchema`) instead of list + detail. The copilot's `getCustomerProfile` tool
+uses the same `getCustomerContext` service function. Bearer auth and RLS as everywhere else.
+
+Provide exactly one of `phone` (any format, normalised first, exact match) or `customerId`.
+**URL-encode the phone**: `+` must be sent as `%2B` (`phone=%2B14155552671`), otherwise the `+` arrives as a
+space and a foreign number will not match.
+`400` if the phone has no digits, if neither or both are given, or if `workspaceId` is missing.
+An unknown customer, or another seller's, is **`200` with `{ "data": { "found": false } }`**: the
+agent treats the phone as a new customer.
+
+```json
+{
+  "data": {
+    "found": true,
+    "customer": { "id": "...", "name": "Ayesha Khan", "phone": "+923001234567", "city": "Lahore" },
+    "tags": ["repeat", "flagged"],
+    "summary": {
+      "lifetimeSpend": { "amountMinor": 500000, "currency": "PKR" },
+      "completedOrderCount": 2, "totalOrderCount": 3, "returnedOrderCount": 0,
+      "lastOrderAt": "2026-11-14T10:00:00+00:00"
+    },
+    "recentOrders": [{ "id": "...", "status": "delivered", "total": { "amountMinor": 250000, "currency": "PKR" }, "createdAt": "..." }],
+    "riskNotes": [{ "body": "Refused delivery once", "createdAt": "..." }]
+  }
+}
+```
+
+`recentOrders` is the newest 5 orders, `riskNotes` the newest 5 notes of kind `risk`. No email,
+address or timeline: it goes into LLM context, so it stays small.
+
 ### `GET /api/v1/customers/:customerId?workspaceId=`
 
 Returns a `CustomerDetail`: the list item plus
@@ -499,6 +532,7 @@ The chat turn at `POST /api/v1/copilot/chat` (auth required, streams via the Ver
 | Tool | What it does | Safety |
 |---|---|---|
 | `searchProducts` | Structured search over the seller's catalogue (text, status, inventory state, tags, sort). Returns `ProductListItem[]` validated against the shared contract. | Reuses the product service + RLS; the model never supplies a `workspaceId` — it is resolved from the seller context. |
+| `getCustomerProfile` | Compact profile of one customer by `phone` (any format) or `customerId` (exactly one): tags, lifetime spend, order and returned counts, last 5 orders, risk notes. Returns the `customerContext` shape; `{ found: false, message }` for an unknown customer. | Read-only, no approval. Same `getCustomerContext` as `GET /customers/context`; the workspace is the seller's current one, never model-supplied. |
 | `getSchema` | Lists the seller's queryable tables and their real columns/types, so the model can confirm what exists before writing SQL. | Runs a fixed introspection query (never model-authored) through `run_readonly_query`; input capped to the owned tables by an enum. |
 | `queryDatabase` | Executes a single read-only SELECT the model wrote, for questions no structured tool covers. | Runs via the `run_readonly_query` Postgres function (SECURITY INVOKER) in a **read-only transaction**: RLS applies, nothing can be written (not even through a function call), semicolons, mutating keywords, `set_config` and functions that run SQL from a string (`query_to_xml`, `ts_stat`, …) are rejected, bounded to 10s / 200 rows. |
 | `getCourierPerformance` | City delivery metrics. **Demo stub** — returns fixed sample values until courier data exists. | Read-only. |
