@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { moneySchema } from "@pakcommerce/shared/products";
 
+import { normalizePhone } from "@pakcommerce/shared/customers/phone";
+
 export const orderStatusValues = [
   "draft",
   "confirmed",
@@ -81,7 +83,12 @@ export function assertTransition(from: OrderStatus, to: OrderStatus): void {
 
 export const orderCustomerSnapshotSchema = z.object({
   name: trimmedText.min(1).max(160),
-  phone: trimmedText.min(5).max(32),
+  phone: trimmedText
+    .min(5)
+    .max(32)
+    .refine((phone) => normalizePhone(phone) !== "", {
+      message: "Phone number must contain digits.",
+    }),
   city: trimmedText.min(1).max(80),
   email: z.email().nullable().optional(),
   addressLine: trimmedText.max(300).nullable().optional(),
@@ -185,6 +192,11 @@ const orderBaseSchema = z.object({
   id: idSchema,
   sellerId: idSchema,
   workspaceId: idSchema,
+  /**
+   * The Customer 360 record this order belongs to (linked by phone). Optional in
+   * the contract until the schema PR makes it a required stored column.
+   */
+  customerId: idSchema.optional(),
   status: orderStatusSchema,
   channel: orderChannelSchema,
   paymentMethod: orderPaymentMethodSchema.default("cod"),
@@ -360,6 +372,8 @@ export const transitionOrderStatusInputSchema = z
 export const orderSearchQuerySchema = z.object({
   workspaceId: idSchema,
   query: trimmedText.min(1).max(120).optional(),
+  /** Only this customer's orders (the profile's full order history). */
+  customerId: idSchema.optional(),
   statuses: z
     .array(orderStatusSchema)
     .max(orderStatusValues.length)
@@ -378,6 +392,7 @@ export const orderListItemSchema = orderBaseSchema
     id: true,
     sellerId: true,
     workspaceId: true,
+    customerId: true,
     status: true,
     channel: true,
     paymentMethod: true,

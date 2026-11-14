@@ -18,7 +18,8 @@ triggers inventory reservation/deduction (reason `sale`); drafts never touch sto
 - `paymentMethod` defaults to `cod` (Cash on Delivery), with support for `prepaid`.
 - Customer identity on an order is a **snapshot** (name, phone, city, optional email, addressLine).
   `addressLine` is optional on drafts but strictly required on confirmed-path orders for courier fulfillment.
-  A future `customerId` link belongs to the Customer 360 contract (T-043+), not here.
+  Each order also carries an optional `customerId` linking it to its Customer 360 record
+  (see `../customers/README.md`); the snapshot stays as it was when the order was placed.
 
 ## Status Values
 
