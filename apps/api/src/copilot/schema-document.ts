@@ -91,6 +91,35 @@ stock_movements (append-only history of stock changes; rows can never be edited 
   before_quantity_on_hand integer, after_quantity_on_hand integer,
   performed_by uuid, note text, created_at timestamptz
 
+orders (a purchase; drafts do not touch stock — confirmation is the stock event)
+  id uuid (PK), workspace_id uuid, seller_id uuid,
+  status enum(draft|confirmed|shipped|delivered|cancelled|returned),
+  channel enum(whatsapp|shopify|woocommerce|instagram|facebook|manual),
+  payment_method enum(cod|prepaid) default 'cod',
+  customer_name text, customer_phone text, customer_city text,
+  customer_email text, customer_address_line text (required once confirmed),
+  subtotal_amount_minor integer, shipping_fee_amount_minor integer,
+  total_amount_minor integer (= subtotal + shipping), currency text (default 'PKR'),
+  note text, confirmed_at timestamptz, cancelled_at timestamptz,
+  created_at timestamptz, updated_at timestamptz
+  Note: line items live in order_items. Drafts must have confirmed_at null.
+
+order_items (line snapshots on an order; title/price frozen at create time)
+  id uuid (PK), order_id uuid, product_id uuid, variant_id uuid,
+  workspace_id uuid, seller_id uuid,
+  title text, variant_title text, sku text,
+  quantity integer (>0), unit_price_amount_minor integer,
+  line_total_amount_minor integer (= quantity * unit_price), currency text,
+  created_at timestamptz, updated_at timestamptz
+
+order_status_history (append-only status changes; rows can never be edited)
+  id uuid (PK), order_id uuid, workspace_id uuid, seller_id uuid,
+  from_status enum(order_status) nullable (null only on the initial draft row),
+  to_status enum(order_status),
+  performed_by uuid, note text, created_at timestamptz
+  Legal transitions: draft→confirmed|cancelled, confirmed→shipped|cancelled,
+  shipped→delivered|returned, delivered→returned. Terminal: cancelled, returned.
+
 product_list_view (a view, read-only, one row per product with rolled-up variant facts)
   id, workspace_id, seller_id, title, slug, description, status, tags, category_ids,
   search_text, created_at, updated_at, archived_at,
@@ -102,7 +131,9 @@ product_list_view (a view, read-only, one row per product with rolled-up variant
 Common queries:
 - Product catalogue with prices: SELECT p.title, v.price_amount_minor FROM products p JOIN product_variants v ON v.product_id = p.id
 - Aggregated catalogue (price range, stock, variant count): SELECT * FROM product_list_view
-- Out-of-stock: SELECT p.title FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.inventory_state = 'out_of_stock'`;
+- Out-of-stock: SELECT p.title FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.inventory_state = 'out_of_stock'
+- Recent drafts: SELECT id, customer_name, total_amount_minor, channel, created_at FROM orders WHERE status = 'draft' ORDER BY created_at DESC
+- Order with lines: SELECT o.id, oi.title, oi.quantity, oi.line_total_amount_minor FROM orders o JOIN order_items oi ON oi.order_id = o.id`;
 
 /**
  * Tables a seller can query. Kept in sync with the migrations; used by the
@@ -119,4 +150,7 @@ export const QUERYABLE_TABLES = [
   "product_list_view",
   "inventory",
   "stock_movements",
+  "orders",
+  "order_items",
+  "order_status_history",
 ] as const;

@@ -108,7 +108,7 @@ The **Built?** column reflects the actual database schema and code today.
 | **Store** | A connected ecommerce platform belonging to a seller. A seller may connect multiple stores. | ❌ Not modelled |
 | **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table, Zod contract, and CRUD API (T-020, T-021) |
 | **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants` (on hand, reserved, threshold); `inventory_state` is generated from available stock. `inventory` is a read-only view in the contract's shape, and `stock_movements` records every change (T-029). `POST /api/v1/inventory/adjustments` changes stock and writes the movement atomically (T-030). No inventory list endpoint and no sync engine yet |
-| **Order** | A purchase created by customers or synchronized from connected stores. | ❌ Not modelled |
+| **Order** | A purchase created by customers or synchronized from connected stores. | 🟡 Schema landed (T-035): `orders`, `order_items`, `order_status_history` + enums/RLS. Draft/manual API (T-036) and confirm/stock deduction (T-037) not built yet. Dashboard still uses mocks. |
 | **Customer** | A buyer with order history and conversation history. | ❌ Not modelled |
 | **Conversation** | Communication between customers and sellers. May contain AI interactions. | ❌ Not modelled |
 | **Courier** | A delivery provider connected by the seller. | ❌ Not modelled |
@@ -238,10 +238,12 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 
 ## Database schema
 
-Nine tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
-`product_images`, `categories`, `copilot_chats`, `stock_movements`.
-Six enums: `seller_verification_status`, `workspace_status`, `product_status`,
-`product_variant_status`, `inventory_state`, `stock_movement_reason`.
+Twelve tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
+`product_images`, `categories`, `copilot_chats`, `stock_movements`, `orders`,
+`order_items`, `order_status_history`.
+Nine enums: `seller_verification_status`, `workspace_status`, `product_status`,
+`product_variant_status`, `inventory_state`, `stock_movement_reason`, `order_status`,
+`order_channel`, `order_payment_method`.
 Two views: `product_list_view`, `inventory`.
 
 ✅ **`supabase/migrations/` now exists** and `supabase db reset` rebuilds the whole schema

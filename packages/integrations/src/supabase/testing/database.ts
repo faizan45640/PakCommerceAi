@@ -191,6 +191,132 @@ export async function insertStockMovement(
 }
 
 /**
+ * Inserts a draft order as whoever the connection currently is.
+ *
+ * Defaults: one-item money shape (subtotal 250000, shipping 0, total 250000),
+ * channel manual, payment COD, customer snapshot filled.
+ */
+export async function insertOrder(
+  client: Client,
+  seller: Seller,
+  overrides: Record<string, unknown> = {},
+): Promise<string> {
+  const {
+    rows: [order],
+  } = await client.query<{ id: string }>(
+    `insert into public.orders
+       (workspace_id, seller_id, status, channel, payment_method,
+        customer_name, customer_phone, customer_city, customer_email,
+        customer_address_line,
+        subtotal_amount_minor, shipping_fee_amount_minor, total_amount_minor,
+        currency, note, confirmed_at, cancelled_at)
+     values ($1, $2, coalesce($3, 'draft')::public.order_status,
+             coalesce($4, 'manual')::public.order_channel,
+             coalesce($5, 'cod')::public.order_payment_method,
+             $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+     returning id`,
+    [
+      overrides.workspaceId ?? seller.workspaceId,
+      overrides.sellerId ?? seller.sellerId,
+      overrides.status ?? null,
+      overrides.channel ?? null,
+      overrides.paymentMethod ?? null,
+      overrides.customerName ?? "Test Customer",
+      overrides.customerPhone ?? "+923001234567",
+      overrides.customerCity ?? "Lahore",
+      overrides.customerEmail ?? null,
+      overrides.customerAddressLine ?? null,
+      overrides.subtotal ?? 250000,
+      overrides.shippingFee ?? 0,
+      overrides.total ?? 250000,
+      overrides.currency ?? "PKR",
+      overrides.note ?? null,
+      overrides.confirmedAt ?? null,
+      overrides.cancelledAt ?? null,
+    ],
+  );
+
+  return order.id;
+}
+
+/** Inserts an order line item. Defaults match a single 250000 PKR unit. */
+export async function insertOrderItem(
+  client: Client,
+  seller: Seller,
+  orderId: string,
+  productId: string,
+  variantId: string,
+  overrides: Record<string, unknown> = {},
+): Promise<string> {
+  const quantity = (overrides.quantity as number | undefined) ?? 1;
+  const unitPrice = (overrides.unitPrice as number | undefined) ?? 250000;
+  const lineTotal =
+    (overrides.lineTotal as number | undefined) ?? quantity * unitPrice;
+
+  const {
+    rows: [item],
+  } = await client.query<{ id: string }>(
+    `insert into public.order_items
+       (order_id, product_id, variant_id, workspace_id, seller_id,
+        title, variant_title, sku, quantity,
+        unit_price_amount_minor, line_total_amount_minor, currency)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     returning id`,
+    [
+      orderId,
+      productId,
+      variantId,
+      overrides.workspaceId ?? seller.workspaceId,
+      overrides.sellerId ?? seller.sellerId,
+      overrides.title ?? "Product",
+      overrides.variantTitle ?? "Default",
+      overrides.sku ?? null,
+      quantity,
+      unitPrice,
+      lineTotal,
+      overrides.currency ?? "PKR",
+    ],
+  );
+
+  return item.id;
+}
+
+/**
+ * Inserts a status-history row. Defaults to the initial draft-creation entry
+ * (`from_status` null → `to_status` draft).
+ */
+export async function insertOrderStatusHistory(
+  client: Client,
+  seller: Seller,
+  orderId: string,
+  overrides: Record<string, unknown> = {},
+): Promise<string> {
+  const {
+    rows: [history],
+  } = await client.query<{ id: string }>(
+    `insert into public.order_status_history
+       (order_id, workspace_id, seller_id, from_status, to_status,
+        performed_by, note)
+     values ($1, $2, $3,
+             $4::public.order_status,
+             coalesce($5, 'draft')::public.order_status,
+             $6, $7)
+     returning id`,
+    [
+      orderId,
+      overrides.workspaceId ?? seller.workspaceId,
+      overrides.sellerId ?? seller.sellerId,
+      overrides.fromStatus === undefined ? null : overrides.fromStatus,
+      overrides.toStatus ?? null,
+      overrides.performedBy ?? seller.userId,
+      overrides.note ?? null,
+    ],
+  );
+
+  return history.id;
+}
+
+/**
  * Runs `body` as an authenticated Supabase user, so RLS policies apply and
  * `auth.uid()` returns `userId`.
  *
