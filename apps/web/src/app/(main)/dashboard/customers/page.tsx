@@ -1,17 +1,22 @@
-import { SectionPlaceholder } from "@/components/dashboard/section-placeholder";
+import { PageHeader } from "@/components/dashboard/page-header";
 
-export default function CustomersPage() {
+import { CustomersView } from "./_components/customers-view";
+
+interface CustomersPageProps {
+  searchParams: Promise<{ phone?: string | string[] }>;
+}
+
+export default async function CustomersPage({ searchParams }: CustomersPageProps) {
+  const { phone } = await searchParams;
+  const phoneParam = Array.isArray(phone) ? phone[0] : phone;
+
   return (
-    <SectionPlaceholder
-      title="Customers"
-      description="Buyer profiles with order history and conversation context."
-      metrics={[
-        { label: "Customers", value: "—", helperText: "Unified customer records" },
-        { label: "Repeat buyers", value: "—", helperText: "Loyalty signals later" },
-        { label: "Open threads", value: "—", helperText: "Linked conversations" },
-      ]}
-      emptyTitle="No customers yet"
-      emptyDescription="Customer profiles will build as orders and chats sync into the workspace."
-    />
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Customers"
+        description="Everyone who has ordered from you, with spend, order history, and risk tags."
+      />
+      <CustomersView key={phoneParam ?? ""} phone={phoneParam?.trim() || undefined} />
+    </div>
   );
 }

@@ -109,7 +109,7 @@ The **Built?** column reflects the actual database schema and code today.
 | **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table, Zod contract, and CRUD API (T-020, T-021) |
 | **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants` (on hand, reserved, threshold); `inventory_state` is generated from available stock. `inventory` is a read-only view in the contract's shape, and `stock_movements` records every change (T-029). `POST /api/v1/inventory/adjustments` changes stock and writes the movement atomically (T-030). No inventory list endpoint and no sync engine yet |
 | **Order** | A purchase created by customers or synchronized from connected stores. | 🟡 Schema + draft API + confirm/stock (T-035–T-037): `create_draft_order`, `transition_order_status` (confirm writes `sale` movements). Ship/return and dashboard wiring still open. |
-| **Customer** | A buyer with order history and conversation history. | ❌ Not modelled |
+| **Customer** | A buyer with order history and conversation history. | 🟡 `customers` and `customer_notes` tables (created from orders by phone), Zod contract, list/profile/notes API, and dashboard list and profile pages (T-043–T-048). No conversation history yet |
 | **Conversation** | Communication between customers and sellers. May contain AI interactions. | ❌ Not modelled |
 | **Courier** | A delivery provider connected by the seller. | ❌ Not modelled |
 | **AI Session** | An interaction between a customer or seller and one of the AI systems. | ❌ Not modelled |
@@ -196,7 +196,7 @@ The proposal defines a 20-week, 8-phase plan. Current position: **Phase 3 is com
 - Sidebar routes: products, inventory, orders, customers, conversations, approvals, logistics, analytics, copilot, settings
 - Older paths redirect: `sales-and-orders` → orders, `inventory-management` → inventory, `ai-insights-and-copilot` → copilot, `ai-sales-agent` → conversations, `account-settings` → settings. `/` and `/dashboard` land on `/dashboard/orders`
 - Orders, inventory, logistics, conversations, approvals, and analytics render **hardcoded mock data**
-- The products page reads the real product API (list + current workspace). Customers is an empty placeholder
+- The products page reads the real product API (list + current workspace). Customers has a real list and Customer 360 profile
 - Login and register call Supabase Auth (`signInWithPassword` / sign-up). Sign-out is wired in the sidebar
 - `proxy.ts` (Next 16's renamed middleware) refreshes the Supabase SSR session
 - The Rafiq page (`/dashboard/copilot`) lists/creates chats, streams turns to `POST /api/v1/copilot/chat`, and archives or deletes history — all with the session access token
