@@ -2,6 +2,7 @@ import type { SellerContext } from "../../middleware/seller-context.js";
 import { getCourierPerformanceTool } from "./read/courier-performance.js";
 import { getSchemaTool } from "./read/get-schema.js";
 import { queryDatabaseTool } from "./read/query-database.js";
+import { getCustomerProfileTool } from "./read/get-customer-profile.js";
 import { searchProductsTool } from "./read/search-products.js";
 import { createDraftOrderTool } from "./write/create-draft-order.js";
 import { mutateDatabaseTool } from "./write/mutate-database.js";
@@ -31,6 +32,7 @@ export function createCopilotTools(auth: SellerContext) {
   return {
     // Read side (Analytics & Queries)
     searchProducts: searchProductsTool(auth),
+    getCustomerProfile: getCustomerProfileTool(auth),
     getSchema: getSchemaTool(auth),
     queryDatabase: queryDatabaseTool(auth),
     getCourierPerformance: getCourierPerformanceTool,

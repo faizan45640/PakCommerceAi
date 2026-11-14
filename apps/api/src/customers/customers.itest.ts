@@ -9,6 +9,7 @@
  */
 
 import {
+  customerContextSchema,
   customerDetailSchema,
   customerListItemSchema,
   customerNoteSchema,
@@ -579,5 +580,105 @@ describe("GET /api/v1/orders?customerId=", () => {
       customerId: "nope",
     });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe("GET /api/v1/customers/context", () => {
+  const context = (seller: TestSeller, query: Record<string, unknown>) =>
+    as(seller, "get", `${CUSTOMERS}/context`).query({ workspaceId: seller.workspaceId, ...query });
+
+  async function addRiskNote(seller: TestSeller, customerId: string, body: string) {
+    const created = await as(seller, "post", `${CUSTOMERS}/${customerId}/notes`).send({
+      workspaceId: seller.workspaceId,
+      kind: "risk",
+      body,
+    });
+    expect(created.status).toBe(201);
+  }
+
+  it("rejects a request with no token", async () => {
+    const response = await request(app())
+      .get(`${CUSTOMERS}/context`)
+      .query({ workspaceId: alice.workspaceId, phone: "03001234567" });
+    expect(response.status).toBe(401);
+  });
+
+  it("finds a customer by a phone typed differently from the stored one", async () => {
+    const first = await placeOrder(alice, { phone: "03001234567", name: "Ayesha Khan" });
+    await placeOrder(alice, { phone: "0300-1234567" }, { status: "confirmed" });
+    await addRiskNote(alice, first.customerId, "Refused delivery once");
+
+    const response = await context(alice, { phone: "+92 300 1234567" });
+
+    expect(response.status).toBe(200);
+    const data = response.body.data;
+    expect(customerContextSchema.safeParse(data).success).toBe(true);
+    expect(data).toMatchObject({
+      found: true,
+      customer: { id: first.customerId, name: "Ayesha Khan", phone: "+923001234567" },
+      summary: { totalOrderCount: 2, completedOrderCount: 1, returnedOrderCount: 0 },
+    });
+    expect(data.recentOrders).toHaveLength(2);
+    expect(data.riskNotes).toEqual([
+      expect.objectContaining({ body: "Refused delivery once" }),
+    ]);
+    expect(data.tags).toContain("flagged");
+  });
+
+  it("finds a foreign customer when the + is URL-encoded as %2B", async () => {
+    const placed = await placeOrder(alice, { phone: "+14155552671" });
+
+    const response = await as(
+      alice,
+      "get",
+      `${CUSTOMERS}/context?workspaceId=${alice.workspaceId}&phone=%2B14155552671`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.found).toBe(true);
+    expect(response.body.data.customer).toMatchObject({
+      id: placed.customerId,
+      phone: "+14155552671",
+    });
+  });
+
+  it("finds a customer by id", async () => {
+    const placed = await placeOrder(alice, { phone: "03001234567" });
+
+    const response = await context(alice, { customerId: placed.customerId });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.found).toBe(true);
+    expect(response.body.data.customer.id).toBe(placed.customerId);
+  });
+
+  it("answers found: false with 200 for an unknown phone or id", async () => {
+    await placeOrder(alice, { phone: "03001234567" });
+
+    const byPhone = await context(alice, { phone: "03459999999" });
+    expect(byPhone.status).toBe(200);
+    expect(byPhone.body.data).toEqual({ found: false });
+
+    const byId = await context(alice, { customerId: randomUUID() });
+    expect(byId.status).toBe(200);
+    expect(byId.body.data).toEqual({ found: false });
+  });
+
+  it("does not find another seller's customer", async () => {
+    const bobs = await placeOrder(bob, { phone: "03001234567" });
+
+    const byPhone = await context(alice, { phone: "03001234567" });
+    expect(byPhone.body.data).toEqual({ found: false });
+
+    const byId = await context(alice, { customerId: bobs.customerId });
+    expect(byId.body.data).toEqual({ found: false });
+  });
+
+  it("answers 400 for a phone with no digits, and for neither or both lookups", async () => {
+    expect((await context(alice, { phone: "n/a" })).status).toBe(400);
+    expect((await context(alice, {})).status).toBe(400);
+    expect(
+      (await context(alice, { phone: "03001234567", customerId: randomUUID() })).status,
+    ).toBe(400);
   });
 });
