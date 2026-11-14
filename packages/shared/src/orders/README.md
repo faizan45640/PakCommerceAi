@@ -101,17 +101,16 @@ Landed in `supabase/migrations/202611140558*_*.sql` and
 - RLS: seller-scoped on all three; history is insert/select only
 - Helper: `is_allowed_order_status_transition` mirrors `ORDER_STATUS_TRANSITIONS`
 - RPC: `create_draft_order(jsonb)` — atomic draft + items + history; no stock mutation
-- RPC: `transition_order_status` — only path that may change status/history together
+- RPC: `transition_order_status` — only path that may change status/history together;
+  `draft→confirmed` deducts stock (`sale` movement) with no-negative / available guards
 - Invariants: PKR-only currency; subtotal = Σ line totals; ≥1 item; line items
   frozen after leaving draft; raw status UPDATE/INSERT blocked
-- Until T-037, `transition_order_status` allows **draft → cancelled only**
-  (confirmation cannot bypass stock)
-- Express: `POST/GET /api/v1/orders`, `GET /api/v1/orders/:orderId`
+- Express: `POST/GET /api/v1/orders`, `GET /api/v1/orders/:orderId`,
+  `POST /api/v1/orders/:orderId/transition`
 
 ## Out of Scope
 
-- Confirm / ship / return and stock deduction (T-037+) — extend `transition_order_status`
-- Cancel HTTP endpoint (RPC exists; wire when dashboard needs it)
+- Ship / return / cancel-from-confirmed (stock restore) — later transitions
 - Dashboard UI wiring (T-038–T-040 already use mocks; connect later)
 - Customer entity and `customerId` foreign key (T-043+)
 - Courier assignment, COD risk, payments

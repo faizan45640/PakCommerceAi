@@ -1,19 +1,24 @@
 import {
   createDraftOrderInputSchema,
   orderSearchQuerySchema,
+  transitionOrderStatusInputSchema,
 } from "@pakcommerce/shared";
 import { Router } from "express";
 
 import { parseOrThrow } from "../lib/parse-or-throw.js";
 import { sellerContext } from "../middleware/seller-context.js";
-import { createDraftOrder, getOrder, listOrders } from "./order-service.js";
+import {
+  createDraftOrder,
+  getOrder,
+  listOrders,
+  transitionOrderStatus,
+} from "./order-service.js";
 
 /**
- * HTTP for draft/manual orders.
+ * HTTP for draft/manual orders and draft→confirmed|cancelled transitions.
  *
- * Same three jobs as the other domain routers: parse against the shared
- * contract, call the service, shape the response. Confirmation / stock
- * deduction is T-037 and is deliberately not exposed here.
+ * Confirmation runs `transition_order_status`, which deducts stock with a
+ * `sale` movement in the same database transaction as the status change.
  */
 export const orderRouter = Router();
 
@@ -87,6 +92,32 @@ orderRouter.get("/:orderId", async (request, response, next) => {
 
     response.json({
       data: await getOrder(auth, workspaceId, request.params.orderId),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+orderRouter.post("/:orderId/transition", async (request, response, next) => {
+  try {
+    const auth = sellerContext(request);
+    const input = parseOrThrow(
+      transitionOrderStatusInputSchema,
+      {
+        ...request.body,
+        orderId: request.params.orderId,
+      },
+      "order transition",
+    );
+
+    response.json({
+      data: await transitionOrderStatus(
+        auth,
+        input.workspaceId,
+        input.orderId,
+        input.toStatus,
+        input.note,
+      ),
     });
   } catch (error) {
     next(error);

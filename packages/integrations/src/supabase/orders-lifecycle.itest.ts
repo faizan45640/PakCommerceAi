@@ -101,7 +101,7 @@ describe("order lifecycle gate", () => {
     });
   });
 
-  it("cancels a draft atomically and refuses confirm", async () => {
+  it("cancels a draft atomically", async () => {
     await withRollback(client, async () => {
       const cancellable = await draftWithItem("gate-cancel");
 
@@ -117,8 +117,75 @@ describe("order lifecycle gate", () => {
         [cancellable.orderId],
       );
       expect(cancelled.rows[0]?.status).toBe("cancelled");
+    });
+  });
 
+  it("confirms a draft, deducts stock, and writes a sale movement", async () => {
+    await withRollback(client, async () => {
       const confirmable = await draftWithItem("gate-confirm");
+
+      await client.query(
+        `update public.orders
+         set customer_address_line = 'House 1, Street 2'
+         where id = $1`,
+        [confirmable.orderId],
+      );
+      await client.query(
+        `update public.product_variants
+         set quantity_on_hand = 10, reserved_quantity = 0, track_inventory = true
+         where id = $1`,
+        [confirmable.variantId],
+      );
+
+      await asUser(client, confirmable.seller.userId, async () => {
+        await client.query(
+          `select public.transition_order_status($1, $2, 'confirmed', null)`,
+          [confirmable.orderId, confirmable.seller.workspaceId],
+        );
+      });
+
+      const order = await client.query<{ status: string }>(
+        `select status from public.orders where id = $1`,
+        [confirmable.orderId],
+      );
+      expect(order.rows[0]?.status).toBe("confirmed");
+
+      const variant = await client.query<{ quantity_on_hand: number }>(
+        `select quantity_on_hand from public.product_variants where id = $1`,
+        [confirmable.variantId],
+      );
+      // draftWithItem inserts quantity 1 by default
+      expect(variant.rows[0]?.quantity_on_hand).toBe(9);
+
+      const movements = await client.query<{ reason: string; quantity_delta: number }>(
+        `select reason, quantity_delta from public.stock_movements
+         where variant_id = $1 order by created_at desc`,
+        [confirmable.variantId],
+      );
+      expect(movements.rows[0]).toMatchObject({
+        reason: "sale",
+        quantity_delta: -1,
+      });
+    });
+  });
+
+  it("refuses confirm when available stock is insufficient", async () => {
+    await withRollback(client, async () => {
+      const confirmable = await draftWithItem("gate-oos");
+
+      await client.query(
+        `update public.orders
+         set customer_address_line = 'House 1'
+         where id = $1`,
+        [confirmable.orderId],
+      );
+      await client.query(
+        `update public.product_variants
+         set quantity_on_hand = 0, reserved_quantity = 0, track_inventory = true
+         where id = $1`,
+        [confirmable.variantId],
+      );
+
       await expect(
         asUser(client, confirmable.seller.userId, () =>
           client.query(
@@ -126,7 +193,13 @@ describe("order lifecycle gate", () => {
             [confirmable.orderId, confirmable.seller.workspaceId],
           ),
         ),
-      ).rejects.toThrow(/T-037|confirmation\/stock/i);
+      ).rejects.toThrow(/insufficient_stock/);
+
+      const order = await client.query<{ status: string }>(
+        `select status from public.orders where id = $1`,
+        [confirmable.orderId],
+      );
+      expect(order.rows[0]?.status).toBe("draft");
     });
   });
 });

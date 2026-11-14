@@ -16,8 +16,8 @@ This repository is **early-stage**. The target system describes the **complete o
 |---|---|
 | **Proposal** | The 20-week target. Aspirational. |
 | **This codebase** | Phase 3 is done. The catalogue API and seller copilot are in. Store sync, WhatsApp, RAG, and the COD model are not. |
-| **Built so far** | Supabase Auth, workspace/product/inventory/order schema, product CRUD, inventory adjustments, draft/manual orders, a streaming Business Copilot with guarded writes, and the dashboard shell. |
-| **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, order confirmation/stock deduction, audit logs. |
+| **Built so far** | Supabase Auth, workspace/product/inventory/order schema, product CRUD, inventory adjustments, draft/manual orders, confirm-with-stock deduction, a streaming Business Copilot with guarded writes, and the dashboard shell. |
+| **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, ship/return flows, audit logs. |
 
 When a document describes a feature, check the status table below before assuming it exists.
 
@@ -30,7 +30,7 @@ When a document describes a feature, check the status table below before assumin
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
 | `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot and products pages call the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
-| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD, inventory adjustments, draft/manual orders (`/api/v1/orders`), and streaming copilot chat — all behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
+| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD, inventory adjustments, orders (draft + confirm/cancel), and streaming copilot chat — all behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
 | `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, orders, categories, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
 | `packages/integrations` | `@pakcommerce/integrations` | 🟢 **Working** | Supabase client/admin factories + generated DB types. Used by both web and api. |
@@ -52,9 +52,9 @@ view over it, and `stock_movements` is the append-only history of every change.
 transaction through the `adjust_stock` function. The product API and the copilot's stock
 tools do not go through it yet, so they still change quantities without a movement.
 
-Draft/manual orders land through `POST /api/v1/orders` (`create_draft_order`); confirmation
-and stock reservation are still open (T-037). Customers, conversations, and couriers **do
-not exist yet**.
+Draft/manual orders land through `POST /api/v1/orders`; confirmation deducts stock via
+`POST /api/v1/orders/:id/transition` (`transition_order_status` + `sale` movements).
+Ship/return, customers, conversations, and couriers **do not exist yet**.
 
 ✅ The schema is reproducible from source. `supabase/migrations/` holds every change and
 `npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are

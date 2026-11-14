@@ -265,3 +265,129 @@ describe("GET /api/v1/orders/:orderId", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("POST /api/v1/orders/:orderId/transition", () => {
+  it("confirms a draft and deducts stock with a sale movement", async () => {
+    const { productId, variantId } = await createTestVariant(alice, {
+      quantity: 10,
+    });
+    const created = await as(alice, "post", ORDERS).send(
+      draftBody(alice, productId, variantId, {
+        customer: {
+          name: "Ayesha Khan",
+          phone: "+923001112233",
+          city: "Lahore",
+          addressLine: "House 12, DHA Phase 5",
+        },
+        items: [{ productId, variantId, quantity: 2 }],
+      }),
+    );
+
+    const response = await as(
+      alice,
+      "post",
+      `${ORDERS}/${created.body.data.id}/transition`,
+    ).send({
+      workspaceId: alice.workspaceId,
+      toStatus: "confirmed",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.status).toBe("confirmed");
+    expect(response.body.data.confirmedAt).toBeTruthy();
+    expect(orderSchema.safeParse(response.body.data).success).toBe(true);
+
+    const admin = createSupabaseAdminClient({
+      url: LOCAL_SUPABASE_URL,
+      anonKey: LOCAL_ANON_KEY,
+      serviceRoleKey: LOCAL_SERVICE_ROLE_KEY,
+    });
+    const { data: variant } = await admin
+      .from("product_variants")
+      .select("quantity_on_hand, reserved_quantity")
+      .eq("id", variantId)
+      .single();
+    expect(variant).toMatchObject({
+      quantity_on_hand: 8,
+      reserved_quantity: 0,
+    });
+
+    const { data: movements } = await admin
+      .from("stock_movements")
+      .select("reason, quantity_delta")
+      .eq("variant_id", variantId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    expect(movements?.[0]).toMatchObject({
+      reason: "sale",
+      quantity_delta: -2,
+    });
+  });
+
+  it("leaves the order in draft when stock is insufficient", async () => {
+    const { productId, variantId } = await createTestVariant(alice, {
+      quantity: 1,
+    });
+    const created = await as(alice, "post", ORDERS).send(
+      draftBody(alice, productId, variantId, {
+        customer: {
+          name: "Ayesha Khan",
+          phone: "+923001112233",
+          city: "Lahore",
+          addressLine: "House 12",
+        },
+        items: [{ productId, variantId, quantity: 5 }],
+      }),
+    );
+
+    const response = await as(
+      alice,
+      "post",
+      `${ORDERS}/${created.body.data.id}/transition`,
+    ).send({
+      workspaceId: alice.workspaceId,
+      toStatus: "confirmed",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("validation_error");
+
+    const get = await as(alice, "get", `${ORDERS}/${created.body.data.id}`).query({
+      workspaceId: alice.workspaceId,
+    });
+    expect(get.body.data.status).toBe("draft");
+  });
+
+  it("cancels a draft without touching stock", async () => {
+    const { productId, variantId } = await createTestVariant(alice, {
+      quantity: 10,
+    });
+    const created = await as(alice, "post", ORDERS).send(
+      draftBody(alice, productId, variantId),
+    );
+
+    const response = await as(
+      alice,
+      "post",
+      `${ORDERS}/${created.body.data.id}/transition`,
+    ).send({
+      workspaceId: alice.workspaceId,
+      toStatus: "cancelled",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.status).toBe("cancelled");
+
+    const admin = createSupabaseAdminClient({
+      url: LOCAL_SUPABASE_URL,
+      anonKey: LOCAL_ANON_KEY,
+      serviceRoleKey: LOCAL_SERVICE_ROLE_KEY,
+    });
+    const { data: variant } = await admin
+      .from("product_variants")
+      .select("quantity_on_hand")
+      .eq("id", variantId)
+      .single();
+    expect(variant?.quantity_on_hand).toBe(10);
+  });
+});
