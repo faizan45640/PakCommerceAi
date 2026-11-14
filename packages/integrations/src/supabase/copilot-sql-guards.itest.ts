@@ -211,3 +211,77 @@ describe("run_guarded_mutation", () => {
     });
   });
 });
+
+describe("run_guarded_mutation cannot edit orders or stock", () => {
+  it("refuses an order edit", async () => {
+    await withRollback(client, async () => {
+      const { seller, orderId } = await draftOrder("mu-order");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(`update public.orders set note = 'x' where id = '${orderId}'`),
+        ),
+      ).rejects.toThrow(/copilot_mutation_refused: orders/i);
+    });
+  });
+
+  it("refuses repricing a draft line", async () => {
+    await withRollback(client, async () => {
+      const { seller, orderId } = await draftOrder("mu-line");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(
+            `update public.order_items
+             set unit_price_amount_minor = 1, line_total_amount_minor = quantity
+             where order_id = '${orderId}'`,
+          ),
+        ),
+      ).rejects.toThrow(/copilot_mutation_refused: order_items/i);
+    });
+  });
+
+  it("refuses touching stock history", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await draftOrder("mu-movements");
+
+      // A seller may record their own movement directly (inventory-rls), so
+      // only the copilot flag refuses this one.
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(
+            `insert into public.stock_movements
+               (variant_id, product_id, workspace_id, seller_id, reason,
+                quantity_delta, before_quantity_on_hand, after_quantity_on_hand, performed_by)
+             values ('${variantId}', '${productId}', '${seller.workspaceId}', '${seller.sellerId}',
+                     'purchase', 5, 10, 15, '${seller.userId}')`,
+          ),
+        ),
+      ).rejects.toThrow(/copilot_mutation_refused: stock_movements/i);
+    });
+  });
+
+  it("refuses setting stock without a movement", async () => {
+    await withRollback(client, async () => {
+      const { seller, variantId } = await draftOrder("mu-stock");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(`update public.product_variants set quantity_on_hand = 99 where id = '${variantId}'`),
+        ),
+      ).rejects.toThrow(/stock cannot be changed through mutateDatabase/i);
+    });
+  });
+
+  it("still changes a variant's price", async () => {
+    await withRollback(client, async () => {
+      const { seller, variantId } = await draftOrder("mu-price");
+
+      const { rows } = await asUser(client, seller.userId, () =>
+        mutation(`update public.product_variants set price_amount_minor = 300000 where id = '${variantId}'`),
+      );
+
+      expect(rows[0].result.rows_affected).toBe(1);
+    });
+  });
+});
