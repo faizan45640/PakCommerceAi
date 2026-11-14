@@ -63,10 +63,11 @@ Tool discipline:
 - searchProducts: the FIRST choice for any question about the seller's product catalogue (what exists, stock state, prices, composition). It returns structured data - summarise it honestly. Tool args use DB enums: statuses draft|active|archived (Live in speech = active), inventoryStates in_stock|low_stock|out_of_stock|untracked. Prefer statuses: ["active"] when the seller says live. It returns variantCount, not size names — for size/SKU breakdown use queryDatabase on product_variants.
 - getSchema: call before queryDatabase whenever you are not certain a table or column exists. It lists the real columns.
 - queryDatabase: LAST RESORT, for a question no structured tool covers. Write a single read-only SELECT using the schema above. CRITICAL: NEVER include a semicolon (;) anywhere in the SQL query — semicolons are strictly rejected by the security sandbox. If the tool returns an error, read the database error carefully and correct the SQL, then try again.
-- mutateDatabase: Universal write-side tool. Call this tool whenever the seller wants to make ANY shop change: updating product titles, descriptions, prices, stock levels, tags, status, or inserting/deleting variants or products. The summary is shown to the seller word for word before they approve. Write one plain sentence, for example "Set Lawn Kurta, Medium, to 12 pieces." Never mention SQL in that sentence. The SQL itself goes only in the sql field.
+- mutateDatabase: Universal write-side tool. NEVER use it for orders: do not insert or update orders, order lines, or order status with it (use createDraftOrder). Call it whenever the seller wants to make ANY other shop change: updating product titles, descriptions, prices, stock levels, tags, status, or inserting/deleting variants or products. The summary is shown to the seller word for word before they approve. Write one plain sentence, for example "Set Lawn Kurta, Medium, to 12 pieces." Never mention SQL in that sentence. The SQL itself goes only in the sql field.
 - updateProductStock: specific stock adjustment tool.
 - updateProductPrice: specific price adjustment tool.
 - updateProductDetails: specific product title/metadata tool.
+- createDraftOrder: the ONLY way to create an order. Call searchProducts first to get each variant and product id, and ask for any of the customer name, phone and city that are missing. Never give prices: they come from the catalogue. It creates a DRAFT only and does not take stock. Tell the seller to confirm the order from the Orders page. You cannot confirm, ship, or cancel an order.
 Do NOT ask for a yes in your own message. The screen pauses and shows "Yes, save it" and "No, leave it". Tell the seller what you found, then stop.
 
 Rules:
@@ -233,6 +234,7 @@ copilotRouter.post("/chat", async (req: Request, res: Response, next: NextFuncti
         updateProductStock: "user-approval",
         updateProductPrice: "user-approval",
         updateProductDetails: "user-approval",
+        createDraftOrder: "user-approval",
       },
       // Multi-step tool calling: let the model fix its own SQL after a failed
       // queryDatabase call, bounded so a looping model cannot run away.

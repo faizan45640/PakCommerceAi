@@ -3,6 +3,7 @@ import { getCourierPerformanceTool } from "./read/courier-performance.js";
 import { getSchemaTool } from "./read/get-schema.js";
 import { queryDatabaseTool } from "./read/query-database.js";
 import { searchProductsTool } from "./read/search-products.js";
+import { createDraftOrderTool } from "./write/create-draft-order.js";
 import { mutateDatabaseTool } from "./write/mutate-database.js";
 import { updateProductDetailsTool } from "./write/update-product.js";
 import { updateProductPriceTool } from "./write/update-price.js";
@@ -39,6 +40,7 @@ export function createCopilotTools(auth: SellerContext) {
     updateProductStock: updateProductStockTool(auth),
     updateProductPrice: updateProductPriceTool(auth),
     updateProductDetails: updateProductDetailsTool(auth),
+    createDraftOrder: createDraftOrderTool(auth),
   };
 }
 

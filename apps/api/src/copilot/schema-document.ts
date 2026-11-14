@@ -102,10 +102,11 @@ orders (a purchase; drafts do not touch stock — confirmation is the stock even
   total_amount_minor integer (= subtotal + shipping), currency text (= 'PKR' only),
   note text, confirmed_at timestamptz, cancelled_at timestamptz,
   created_at timestamptz, updated_at timestamptz
-  Note: insert as draft only (create_draft_order). Never UPDATE status /
-  confirmed_at / cancelled_at directly — call transition_order_status.
-  That RPC allows draft→cancelled and draft→confirmed (confirm deducts stock
-  with a sale movement). Do not invent confirmation via raw SQL.
+  Note: orders are created only by the createDraftOrder tool (drafts only);
+  never INSERT or UPDATE orders, order lines or status through mutateDatabase.
+  Status / confirmed_at / cancelled_at change only through
+  transition_order_status (the seller does this on the Orders page; confirm
+  deducts stock with a sale movement). Do not invent confirmation via raw SQL.
 
 order_items (line snapshots on an order; mutable only while parent is draft)
   id uuid (PK), order_id uuid, product_id uuid, variant_id uuid,
