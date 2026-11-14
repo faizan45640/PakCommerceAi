@@ -129,7 +129,9 @@ export async function listOrders(
   if (query.statuses?.length) builder = builder.in("status", query.statuses);
   if (query.channels?.length) builder = builder.in("channel", query.channels);
   if (query.query) {
-    const term = `%${query.query}%`;
+    // PostgREST filter values: quote and escape so commas/periods in the
+    // search term cannot break or rewrite the .or() predicate.
+    const term = `"%${escapePostgrestFilterValue(query.query)}%"`;
     builder = builder.or(
       `customer_name.ilike.${term},customer_phone.ilike.${term},customer_city.ilike.${term}`,
     );
@@ -246,6 +248,10 @@ function applyOrderSort(
         .order("updated_at", { ascending: false })
         .order("id", { ascending: true });
   }
+}
+
+function escapePostgrestFilterValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function translateCreateError(error: { message: string }) {

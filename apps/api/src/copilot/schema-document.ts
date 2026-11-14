@@ -98,19 +98,23 @@ orders (a purchase; drafts do not touch stock — confirmation is the stock even
   payment_method enum(cod|prepaid) default 'cod',
   customer_name text, customer_phone text, customer_city text,
   customer_email text, customer_address_line text (required once confirmed),
-  subtotal_amount_minor integer, shipping_fee_amount_minor integer,
-  total_amount_minor integer (= subtotal + shipping), currency text (default 'PKR'),
+  subtotal_amount_minor integer (= sum of line totals), shipping_fee_amount_minor integer,
+  total_amount_minor integer (= subtotal + shipping), currency text (= 'PKR' only),
   note text, confirmed_at timestamptz, cancelled_at timestamptz,
   created_at timestamptz, updated_at timestamptz
-  Note: line items live in order_items. Drafts must have confirmed_at null.
+  Note: insert as draft only (create_draft_order). Never UPDATE status /
+  confirmed_at / cancelled_at directly — call transition_order_status.
+  Until T-037 that RPC only allows draft→cancelled. Do not invent confirmation.
 
-order_items (line snapshots on an order; title/price frozen at create time)
+order_items (line snapshots on an order; mutable only while parent is draft)
   id uuid (PK), order_id uuid, product_id uuid, variant_id uuid,
   workspace_id uuid, seller_id uuid,
   title text, variant_title text, sku text,
   quantity integer (>0), unit_price_amount_minor integer,
-  line_total_amount_minor integer (= quantity * unit_price), currency text,
+  line_total_amount_minor integer (= quantity * unit_price), currency text (= 'PKR'),
   created_at timestamptz, updated_at timestamptz
+  Note: frozen after the order leaves draft. Do not UPDATE/DELETE lines on
+  confirmed/shipped/delivered/cancelled/returned orders.
 
 order_status_history (append-only status changes; rows can never be edited)
   id uuid (PK), order_id uuid, workspace_id uuid, seller_id uuid,
@@ -119,6 +123,7 @@ order_status_history (append-only status changes; rows can never be edited)
   performed_by uuid, note text, created_at timestamptz
   Legal transitions: draft→confirmed|cancelled, confirmed→shipped|cancelled,
   shipped→delivered|returned, delivered→returned. Terminal: cancelled, returned.
+  Transition rows are written only by transition_order_status — do not INSERT them.
 
 product_list_view (a view, read-only, one row per product with rolled-up variant facts)
   id, workspace_id, seller_id, title, slug, description, status, tags, category_ids,

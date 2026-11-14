@@ -849,8 +849,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      order_lifecycle_change_allowed: { Args: never; Returns: boolean }
       run_guarded_mutation: { Args: { p_sql: string }; Returns: Json }
       run_readonly_query: { Args: { p_sql: string }; Returns: Json }
+      transition_order_status: {
+        Args: {
+          p_note?: string
+          p_order_id: string
+          p_to_status: Database["public"]["Enums"]["order_status"]
+          p_workspace_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       inventory_state: "in_stock" | "low_stock" | "out_of_stock" | "untracked"
