@@ -17,6 +17,10 @@ import { getCurrentWorkspace } from "../../../workspaces/workspace-service.js";
  * keys are stripped by zod, and `execute` builds the service input field by
  * field, so nothing extra can reach `createDraftOrder`.
  */
+/** Models often send "" for a field the seller never gave; treat it as absent. */
+const blankAsAbsent = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+
 export const createDraftOrderToolInputSchema = z.object({
   customer: z.object({
     name: z.string().trim().min(1).max(160).describe("Customer's full name"),
@@ -25,12 +29,14 @@ export const createDraftOrderToolInputSchema = z.object({
     addressLine: z
       .string()
       .trim()
+      .min(1)
       .max(300)
-      .optional()
       .describe(
-        "Street address. Optional for a draft, but needed before the order can be confirmed.",
+        "Street address. Required: a draft without an address can never be confirmed, so ask the seller for it.",
       ),
-    email: z.email().optional().describe("Customer email, only if the seller gave one"),
+    email: z
+      .preprocess(blankAsAbsent, z.email().optional())
+      .describe("Customer email, only if the seller gave one"),
   }),
   items: z
     .array(
@@ -53,7 +59,9 @@ export const createDraftOrderToolInputSchema = z.object({
     .nonnegative()
     .optional()
     .describe("Shipping fee in PKR minor units (paisa). Rs 200 = 20000. Defaults to 0."),
-  note: z.string().trim().max(1000).optional().describe("Internal note on the order"),
+  note: z
+    .preprocess(blankAsAbsent, z.string().trim().max(1000).optional())
+    .describe("Internal note on the order"),
 });
 
 export type CreateDraftOrderToolInput = z.infer<typeof createDraftOrderToolInputSchema>;
@@ -102,7 +110,7 @@ export function createDraftOrderTool(auth: SellerContext) {
             name: input.customer.name,
             phone: input.customer.phone,
             city: input.customer.city,
-            ...(input.customer.addressLine ? { addressLine: input.customer.addressLine } : {}),
+            addressLine: input.customer.addressLine,
             ...(input.customer.email ? { email: input.customer.email } : {}),
           },
           items: input.items.map((item) => ({

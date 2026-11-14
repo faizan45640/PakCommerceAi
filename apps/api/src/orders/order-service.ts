@@ -11,6 +11,7 @@ import type {
 import { NotFoundError, ValidationError } from "../lib/http-errors.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import type { SellerContext } from "../middleware/seller-context.js";
+import { assertDraftAmountsFit } from "./order-limits.js";
 import {
   toOrder,
   toOrderDetail,
@@ -49,6 +50,7 @@ export async function createDraftOrder(
   const lines = await resolveLineItems(auth, input);
 
   const shippingFee = input.shippingFee?.amountMinor ?? 0;
+  assertDraftAmountsFit(lines, shippingFee);
   const currency = (input.shippingFee?.currency ?? lines[0]?.currency ?? "PKR") as string;
   const subtotal = lines.reduce(
     (sum, line) => sum + line.unitPriceAmountMinor * line.quantity,
@@ -170,7 +172,10 @@ export async function getOrder(
     .from("order_items")
     .select("*")
     .eq("order_id", orderId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    // Items of one order are inserted in a single statement and share a timestamp, and
+    // order_items has no position column, so id is only a deterministic tiebreaker.
+    .order("id", { ascending: true });
 
   if (itemsError) throw new Error(itemsError.message, { cause: itemsError });
 

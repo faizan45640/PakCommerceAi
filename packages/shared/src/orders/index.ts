@@ -313,10 +313,13 @@ export const orderDetailSchema = orderBaseSchema
   })
   .superRefine(assertOrderTotals);
 
+/** Per-line cap on a draft order quantity. */
+export const MAX_ORDER_ITEM_QUANTITY = 100_000;
+
 export const createDraftOrderItemInputSchema = z.object({
   productId: idSchema,
   variantId: idSchema,
-  quantity: z.int().positive(),
+  quantity: z.int().positive().max(MAX_ORDER_ITEM_QUANTITY),
   unitPrice: moneySchema.optional(),
   title: trimmedText.min(1).max(180).optional(),
   variantTitle: trimmedText.min(1).max(160).nullable().optional(),

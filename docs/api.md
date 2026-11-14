@@ -184,6 +184,13 @@ touch stock; confirming deducts available stock with a `sale` movement.
 Creates a draft order with line items and the initial status-history row in one database
 transaction (`create_draft_order`). Validated against `createDraftOrderInputSchema`.
 
+Limits: money amounts are capped at 2,147,483,647 minor units (the Postgres `integer` maximum), item
+`quantity` at 100,000 per line, and the server rejects a line total, subtotal or total over the money cap
+with **400** (`items.<i>.quantity` or `total`). `customer.addressLine` stays optional here for future
+channels, but a draft without one cannot be confirmed (`address_required`) and drafts cannot be edited,
+so seller-facing UIs and the copilot require it. Order lines are returned ordered by creation time, then id
+(`order_items` has no position column, so id only makes the order deterministic).
+
 ```json
 {
   "workspaceId": "…",
@@ -405,7 +412,7 @@ The chat turn at `POST /api/v1/copilot/chat` (auth required, streams via the Ver
 | `updateProductStock` | Updates quantity on hand for a variant. | Requires Human-in-the-Loop (`user-approval`). Updates `product_variants` directly via caller's authenticated RLS client. |
 | `updateProductPrice` | Updates selling price and compare-at price in PKR. | Requires Human-in-the-Loop (`user-approval`). Updates `product_variants` directly via caller's authenticated RLS client. |
 | `updateProductDetails` | Updates product title, description, status, or tags. | Requires Human-in-the-Loop (`user-approval`). Updates `products` directly via caller's authenticated RLS client. |
-| `createDraftOrder` | Creates a **draft** order for a customer (customer name/phone/city, optional address/email, `items[{variantId, productId, quantity}]`, optional `channel`, `paymentMethod`, `shippingFee` in PKR minor units, `note`). Returns `{ status, orderId, orderStatus: "draft", total, itemCount, message }`. | Requires Human-in-the-Loop (`user-approval`). Calls the same `createDraftOrder` order service as `POST /orders`: the workspace is the seller's current one (as `GET /workspaces/current`, never model-supplied), variants resolve under RLS, and prices are snapshotted server-side. The input has no status, price, title, sku or total, so it can only create drafts, never confirms or cancels, and does not touch stock. The seller confirms from the Orders page. |
+| `createDraftOrder` | Creates a **draft** order for a customer (customer name/phone/city/address line, optional email, `items[{variantId, productId, quantity}]`, optional `channel`, `paymentMethod`, `shippingFee` in PKR minor units, `note`). Returns `{ status, orderId, orderStatus: "draft", total, itemCount, message }`. | Requires Human-in-the-Loop (`user-approval`). Calls the same `createDraftOrder` order service as `POST /orders`: the workspace is the seller's current one (as `GET /workspaces/current`, never model-supplied), variants resolve under RLS, and prices are snapshotted server-side. The input has no status, price, title, sku or total, so it can only create drafts, never confirms or cancels, and does not touch stock. The seller confirms from the Orders page. |
 
 Tools are built per request from the seller context (`createCopilotTools(auth)`), so a seller can only ever read or mutate their own data through them — the same RLS boundary as the REST endpoints.
 

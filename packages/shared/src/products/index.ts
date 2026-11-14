@@ -44,8 +44,11 @@ export const productSearchFieldSchema = z.enum(productSearchFieldValues);
 
 export const currencyCodeSchema = z.literal("PKR");
 
+/** Money columns are Postgres `integer`; anything larger would fail in the database. */
+export const MAX_MONEY_MINOR = 2_147_483_647;
+
 export const moneySchema = z.object({
-  amountMinor: z.int().nonnegative(),
+  amountMinor: z.int().nonnegative().max(MAX_MONEY_MINOR),
   currency: currencyCodeSchema.default("PKR"),
 });
 
