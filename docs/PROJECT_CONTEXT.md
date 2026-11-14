@@ -108,7 +108,7 @@ The **Built?** column reflects the actual database schema and code today.
 | **Store** | A connected ecommerce platform belonging to a seller. A seller may connect multiple stores. | ❌ Not modelled |
 | **Product** | An item sold by the seller. Products may exist across multiple connected stores. | ✅ `products` table, Zod contract, and CRUD API (T-020, T-021) |
 | **Inventory** | The centralized stock state managed by PakCommerce AI. Connected stores synchronize with this central inventory. | 🟡 Per-variant stock on `product_variants` (on hand, reserved, threshold); `inventory_state` is generated from available stock. `inventory` is a read-only view in the contract's shape, and `stock_movements` records every change (T-029). `POST /api/v1/inventory/adjustments` changes stock and writes the movement atomically (T-030). No inventory list endpoint and no sync engine yet |
-| **Order** | A purchase created by customers or synchronized from connected stores. | 🟡 Schema (T-035) + draft/manual API (T-036): `POST/GET /api/v1/orders` via `create_draft_order`. Drafts never touch stock. Confirm/stock deduction (T-037) and dashboard wiring still open. |
+| **Order** | A purchase created by customers or synchronized from connected stores. | 🟡 Schema + draft API + confirm/stock (T-035–T-037): `create_draft_order`, `transition_order_status` (confirm writes `sale` movements). Ship/return and dashboard wiring still open. |
 | **Customer** | A buyer with order history and conversation history. | ❌ Not modelled |
 | **Conversation** | Communication between customers and sellers. May contain AI interactions. | ❌ Not modelled |
 | **Courier** | A delivery provider connected by the seller. | ❌ Not modelled |
@@ -274,9 +274,10 @@ write `quantity_on_hand` directly and leave no movement - they should be moved o
 does not touch stock. The orders API calls it.
 
 `transition_order_status` is the only path that may change `orders.status` (and write a
-matching history row). Raw status UPDATE/INSERT is refused. Until T-037 wires stock into
-that function, only `draft → cancelled` is enabled — confirmation cannot be faked via SQL
-or the copilot. Line items freeze after leaving draft; currency is PKR-only; subtotal must
+matching history row). Raw status UPDATE/INSERT is refused. `draft → confirmed` deducts
+available stock and writes `sale` movements in the same transaction; insufficient stock
+leaves the order in `draft`. `draft → cancelled` does not touch stock. Ship/return still
+come later. Line items freeze after leaving draft; currency is PKR-only; subtotal must
 equal the sum of line totals.
 
 ## Known defects

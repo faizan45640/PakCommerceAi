@@ -176,8 +176,8 @@ reuse it.
 
 ## Orders
 
-Draft and manual orders. Auth required. Drafts **never** touch stock — confirmation and
-reservation/deduction are T-037 and are not exposed here.
+Draft and manual orders, plus confirm/cancel transitions. Auth required. Drafts **never**
+touch stock; confirming deducts available stock with a `sale` movement.
 
 ### `POST /api/v1/orders`
 
@@ -235,18 +235,30 @@ Returns `OrderListItem`s in the list envelope (`data`, `meta`, `nextCursor`).
 Full order with line items. Pass `?workspaceId=…` (required). Another seller's id returns
 `404`, not `403` — same RLS posture as products.
 
+### `POST /api/v1/orders/:orderId/transition`
+
+Validated against `transitionOrderStatusInputSchema` (`workspaceId`, `toStatus`, optional
+`note`; `orderId` comes from the path).
+
+Enabled today:
+
+| `toStatus` | Effect |
+|---|---|
+| `cancelled` | Draft → cancelled. No stock change. |
+| `confirmed` | Draft → confirmed. Requires a delivery address. Deducts available stock (`on_hand - reserved`) per line and writes a `sale` movement per variant. Insufficient stock → **400**, order stays `draft`. |
+
+Ship / return / cancel-after-confirm are not enabled yet.
+
 ### Not here yet
 
 | Gap | Detail |
 |---|---|
-| **Confirm / ship** | Blocked at the DB until T-037 extends `transition_order_status` with stock |
-| **Cancel HTTP** | `transition_order_status` supports `draft → cancelled`; no Express route yet |
+| **Ship / return** | Fulfillment transitions and stock restore come later |
 | **Edit draft** | No PATCH; recreate or wait for a later task |
 | **Dashboard** | Orders UI still uses mocks |
 
 Status, `confirmed_at`, and `cancelled_at` cannot be changed with a raw SQL `UPDATE`
-(including via the copilot). That closes the bypass that would otherwise let confirmation
-happen without stock.
+(including via the copilot) — only `transition_order_status`.
 
 ---
 
@@ -346,7 +358,7 @@ the database refuses both.
 |---|---|
 | **Inventory list** | No `GET /api/v1/inventory`. Read stock through the product endpoints for now. |
 | **Other writers** | Initial stock on product create, and the copilot's `updateProductStock` and `mutateDatabase` tools, still set `quantity_on_hand` directly and record no movement. |
-| **Reservations** | Drafts do not set `reserved_quantity`. Confirmation (T-037) will. |
+| **Reservations** | Confirmation deducts `quantity_on_hand` via `sale`; it does not bump `reserved_quantity`. Soft-reserve-on-confirm can come later if the model changes. |
 
 ---
 

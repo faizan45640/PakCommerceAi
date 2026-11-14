@@ -2,6 +2,7 @@ import type {
   ApiMeta,
   Order,
   OrderListItem,
+  OrderStatus,
   ParsedCreateDraftOrderInput,
   ParsedOrderSearchQuery,
 } from "@pakcommerce/shared";
@@ -17,12 +18,11 @@ import {
 } from "./order-mapper.js";
 
 /**
- * Draft/manual orders.
+ * Draft/manual orders + confirm/cancel transitions.
  *
  * Every query goes through `auth.db` (seller token), so RLS scopes rows inside
- * Postgres. Create goes through `create_draft_order` so the order, items, and
- * initial history row commit together — supabase-js has no multi-statement
- * transactions. Drafts never touch stock (T-037 owns confirmation).
+ * Postgres. Create goes through `create_draft_order`; status changes go through
+ * `transition_order_status` (confirm deducts stock with a sale movement).
  */
 
 interface ResolvedLineItem {
@@ -86,6 +86,25 @@ export async function createDraftOrder(
   if (error) throw translateCreateError(error);
 
   return getOrder(auth, input.workspaceId, orderId as string);
+}
+
+export async function transitionOrderStatus(
+  auth: SellerContext,
+  workspaceId: string,
+  orderId: string,
+  toStatus: OrderStatus,
+  note?: string | null,
+): Promise<Order> {
+  const { error } = await auth.db.rpc("transition_order_status", {
+    p_order_id: orderId,
+    p_workspace_id: workspaceId,
+    p_to_status: toStatus,
+    ...(note == null ? {} : { p_note: note }),
+  });
+
+  if (error) throw translateTransitionError(error);
+
+  return getOrder(auth, workspaceId, orderId);
 }
 
 export async function getOrder(
@@ -263,5 +282,64 @@ function translateCreateError(error: { message: string }) {
   if (/row-level security/i.test(error.message)) {
     return new NotFoundError("Workspace not found.");
   }
+  return new Error(error.message, { cause: error });
+}
+
+function translateTransitionError(error: {
+  message: string;
+  details?: string;
+  code?: string;
+}) {
+  const token = error.message.trim();
+
+  switch (token) {
+    case "order not found":
+      return new NotFoundError("Order not found.");
+    case "address_required":
+      return new ValidationError("A delivery address is required to confirm.", {
+        "customer.addressLine": ["Add a delivery address before confirming."],
+      });
+    case "insufficient_stock": {
+      const [variantId, available, needed] = (error.details ?? "").split(":");
+      return new ValidationError("Not enough stock to confirm this order.", {
+        items: [
+          variantId
+            ? `Variant ${variantId} has ${available ?? "?"} available; ${needed ?? "?"} needed.`
+            : "One or more variants do not have enough available stock.",
+        ],
+      });
+    }
+    case "stock_negative":
+      return new ValidationError("Stock cannot go below zero.", {
+        items: ["Confirming would drive stock below zero."],
+      });
+    case "stock_below_reserved":
+      return new ValidationError("Stock cannot go below what is already reserved.", {
+        items: [
+          `${error.details ?? "Some"} units are reserved for other orders.`,
+        ],
+      });
+    case "variant_not_found":
+      return new ValidationError("A line item variant is no longer available.", {
+        items: ["One or more variants were not found in this workspace."],
+      });
+    default:
+      break;
+  }
+
+  if (/illegal order status transition/i.test(token)) {
+    return new ValidationError("That status change is not allowed.", {
+      toStatus: [token],
+    });
+  }
+  if (/only draft → cancelled\|confirmed/i.test(token) || /fulfillment transitions/i.test(token)) {
+    return new ValidationError("That status change is not enabled yet.", {
+      toStatus: [token],
+    });
+  }
+  if (/no_data_found|PGRST116/i.test(error.code ?? "") || /order not found/i.test(token)) {
+    return new NotFoundError("Order not found.");
+  }
+
   return new Error(error.message, { cause: error });
 }

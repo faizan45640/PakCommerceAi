@@ -309,23 +309,31 @@ describe("order_status_history guards", () => {
     });
   });
 
-  it("transition_order_status refuses confirm until stock work lands", async () => {
+  it("transition_order_status confirms with stock when address and qty allow", async () => {
     await withRollback(client, async () => {
-      const seller = await createSeller(client, "history-confirm-blocked");
+      const seller = await createSeller(client, "history-confirm-ok");
       const productId = await insertProduct(client, seller, "kurta");
-      const variantId = await insertVariant(client, seller, productId);
-      const orderId = await insertOrder(client, seller);
+      const variantId = await insertVariant(client, seller, productId, {
+        quantity: 5,
+      });
+      const orderId = await insertOrder(client, seller, {
+        customerAddressLine: "House 1, Street 2",
+      });
       await insertOrderItem(client, seller, orderId, productId, variantId);
       await insertOrderStatusHistory(client, seller, orderId);
 
-      await expect(
-        asUser(client, seller.userId, () =>
-          client.query(
-            `select public.transition_order_status($1, $2, 'confirmed', null)`,
-            [orderId, seller.workspaceId],
-          ),
+      await asUser(client, seller.userId, () =>
+        client.query(
+          `select public.transition_order_status($1, $2, 'confirmed', null)`,
+          [orderId, seller.workspaceId],
         ),
-      ).rejects.toThrow(/T-037|confirmation\/stock/i);
+      );
+
+      const status = await client.query<{ status: string }>(
+        `select status from public.orders where id = $1`,
+        [orderId],
+      );
+      expect(status.rows[0]?.status).toBe("confirmed");
     });
   });
 

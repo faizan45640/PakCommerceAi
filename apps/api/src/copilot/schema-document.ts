@@ -104,7 +104,8 @@ orders (a purchase; drafts do not touch stock — confirmation is the stock even
   created_at timestamptz, updated_at timestamptz
   Note: insert as draft only (create_draft_order). Never UPDATE status /
   confirmed_at / cancelled_at directly — call transition_order_status.
-  Until T-037 that RPC only allows draft→cancelled. Do not invent confirmation.
+  That RPC allows draft→cancelled and draft→confirmed (confirm deducts stock
+  with a sale movement). Do not invent confirmation via raw SQL.
 
 order_items (line snapshots on an order; mutable only while parent is draft)
   id uuid (PK), order_id uuid, product_id uuid, variant_id uuid,
