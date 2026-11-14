@@ -9,7 +9,7 @@ Base path: `/api/v1`
 ## Authentication
 
 Every protected endpoint (`/api/v1/products`, `/api/v1/inventory`, `/api/v1/orders`,
-`/api/v1/copilot`, …) requires a Supabase access token:
+`/api/v1/customers`, `/api/v1/copilot`, …) requires a Supabase access token:
 
 ```http
 Authorization: Bearer <access_token>
@@ -229,13 +229,14 @@ Validated against `orderSearchQuerySchema`.
 |---|---|
 | `workspaceId` | **Required** |
 | `query` | Case-insensitive match on customer name, phone, or city |
+| `customerId` | Only this customer's orders (the profile's full order history). Another seller's id matches nothing |
 | `statuses` | Comma-separated: `draft,confirmed,…` |
 | `channels` | Comma-separated: `manual,whatsapp,…` |
 | `sort` | `newest`, `updated_desc` (default), `total_asc`, `total_desc` |
 | `limit` | 1–100, default 25 |
 | `cursor` | From the previous response's `nextCursor` |
 
-Returns `OrderListItem`s in the list envelope (`data`, `meta`, `nextCursor`).
+Returns `OrderListItem`s (each with its `customerId`) in the list envelope (`data`, `meta`, `nextCursor`).
 
 ### `GET /api/v1/orders/:orderId`
 
@@ -279,6 +280,99 @@ cancel-after-confirm are not enabled yet. `POST /api/v1/orders` still returns th
 
 Status, `confirmed_at`, and `cancelled_at` cannot be changed with a raw SQL `UPDATE`
 (including via the copilot) — only `transition_order_status`.
+
+---
+
+## Customers
+
+Customer 360: who a customer is, what they have spent, and what happened with them. Auth
+required. Contract: `packages/shared/src/customers`.
+
+### How customers exist
+
+There is no `POST /customers`. **The database creates customers from orders.** A trigger on
+`orders` (`link_order_to_customer`) runs on every insert, so every path that creates orders
+(this API, the copilot tool, future Shopify or WhatsApp sync) is covered:
+
+- **Identity is the normalised phone, and only the phone**, unique per workspace.
+  `normalize_phone` (SQL) and `normalizePhone` (shared) apply the same Pakistan rules, tested
+  against one fixture table: spaces/dashes/brackets stripped, `00` becomes `+`, `03XXXXXXXXX`,
+  `923XXXXXXXXX` and `3XXXXXXXXX` all become `+923XXXXXXXXX`. So `0300-1234567` and
+  `+92 300 1234567` are the same customer.
+- **An order's phone must contain digits.** `customer.phone` is validated by the order contract
+  (**400** with details on `customer.phone`) and by a database check, so a phone like `n/a` is
+  refused rather than creating a junk customer.
+- The same phone under two sellers is two customers.
+- **Email is stored (lower-cased) and searchable, but never used to match orders to
+  customers.** Email-only matching arrives with store sync.
+- A new order refreshes the customer's latest-known name, city, address and email (a missing
+  address or email never erases a known one). **Editing an existing order never changes the
+  customer's details.** The order keeps its own snapshot.
+- **Fixing a phone typo on an order re-links it**: when an order's normalised phone changes it
+  moves to the customer for the new phone (created if needed; an existing customer's details are
+  left alone). The customer it left is **deleted if it has no orders and no notes left**.
+- `orders.customer_id` is set by the trigger and cannot be edited; `customers.phone` cannot be
+  edited either (correct the order instead). The copilot's `mutateDatabase` cannot write
+  `customers`; it can still write `customer_notes`.
+- Legacy orders from before this existed were backfilled; one whose phone has no digits got its
+  own customer keyed `order:<order id>`.
+
+### Spend, counts and tags are computed
+
+Nothing here is stored. The `customer_summary` view (`security_invoker`, so RLS applies)
+computes it from orders on every read.
+
+- **Lifetime spend** = sum of order totals in `confirmed`, `shipped` or `delivered`. Drafts,
+  cancelled and returned orders are excluded. `averageOrderValue` is the mean over those
+  orders, `null` when there are none.
+- `totalOrderCount`, `completedOrderCount`, `statusCounts` (one per status), `firstOrderAt` /
+  `lastOrderAt` (creation time of the earliest / latest order of any status), `noteCount`,
+  `riskNoteCount`.
+- **Tags** are derived, and a customer can have several: `first_time` (no completed - confirmed, shipped or delivered - order yet),
+  `repeat` (two or more), `has_returns` (at least one returned order), `flagged` (at least one
+  risk note).
+
+### `GET /api/v1/customers`
+
+Validated against `customerSearchQuerySchema`.
+
+| Query param | Notes |
+|---|---|
+| `workspaceId` | **Required** |
+| `phone` | Exact match on the normalised phone; whatever format is sent is normalised first (for the WhatsApp agent). **400** if it has no digits |
+| `query` | Case-insensitive substring match on name, phone, city or email. `*` is ignored (it is not a wildcard). A phone typed in any format also matches its normalised form (`0300-1234567` finds `+923001234567`); a partial local number such as `0345 111` matches too |
+| `tags` | Comma-separated: `first_time,repeat,has_returns,flagged`. Several tags narrow: a customer must have all of them |
+| `sort` | `last_order_desc` (default; customers without orders last), `spend_desc`, `name_asc`, `created_desc` |
+| `limit` | 1-100, default 25 |
+| `cursor` | From the previous response's `nextCursor` |
+
+Returns `CustomerListItem`s (`customer` fields + `summary` + `tags`) in the list envelope
+(`data`, `meta`, `nextCursor`).
+
+### `GET /api/v1/customers/:customerId?workspaceId=`
+
+Returns a `CustomerDetail`: the list item plus
+
+- `recentOrders` - the last 20 orders as `OrderListItem`s, newest first. The full history is
+  `GET /api/v1/orders?customerId=<id>`.
+- `notes` - `CustomerNote[]`, newest first, **at most the 50 newest** (`summary.noteCount` is the total).
+- `timeline` - newest first, capped at 50: `order_status_changed`
+  (`{ orderId, fromStatus | null, toStatus, note, at }`; `fromStatus` is `null` on the initial
+  draft creation) and `note_added` (`{ noteId, kind, body, at }`), discriminated on `type`.
+
+Another seller's customer, or an unknown id, returns `404`. A malformed id or a missing
+`workspaceId` returns `400`.
+
+### `POST /api/v1/customers/:customerId/notes`
+
+Body: `{ "workspaceId": "...", "kind": "note" | "risk", "body": "..." }`. `kind` defaults to
+`note`; `body` is trimmed, 1-2000 characters. A `risk` note makes the customer `flagged`.
+`201` with the `CustomerNote`. `404` for a customer the seller cannot see.
+
+### `DELETE /api/v1/customers/:customerId/notes/:noteId?workspaceId=`
+
+Deletes one of the seller's own notes. `204` with no body; `404` if the note does not exist or
+belongs to someone else.
 
 ---
 
