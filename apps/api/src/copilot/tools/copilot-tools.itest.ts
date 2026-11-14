@@ -17,6 +17,7 @@ import type { TestSeller } from "../../testing/api-test-env.js";
 import {
   applyTestEnv,
   createTestSeller,
+  createTestVariant,
   deleteTestSeller,
   productPayload,
 } from "../../testing/api-test-env.js";
@@ -352,5 +353,39 @@ describe("createDraftOrder tool", () => {
       .from("orders")
       .select("id", { count: "exact", head: true });
     expect(count).toBe(0);
+  });
+});
+
+describe("getCustomerProfile tool", () => {
+  async function placeOrder(seller: TestSeller, phone: string, name: string) {
+    const { productId, variantId } = await createTestVariant(seller, { quantity: 10 });
+    const response = await request(app())
+      .post("/api/v1/orders")
+      .set("Authorization", `Bearer ${seller.accessToken}`)
+      .send({
+        workspaceId: seller.workspaceId,
+        customer: { name, phone, city: "Lahore", addressLine: "House 4, Gulberg" },
+        items: [{ productId, variantId, quantity: 1 }],
+      });
+    expect(response.status).toBe(201);
+  }
+
+  it("returns the context for the seller's own customer, by phone in any format", async () => {
+    await placeOrder(alice, "03001234567", "Ayesha Khan");
+
+    const result = await toolsFor(alice).getCustomerProfile.execute({ phone: "+92 300-1234567" });
+
+    if (!("found" in result) || !result.found) throw new Error("expected a found customer");
+    expect(result.customer).toMatchObject({ name: "Ayesha Khan", phone: "+923001234567" });
+    expect(result.summary.totalOrderCount).toBe(1);
+    expect(result.recentOrders).toHaveLength(1);
+  });
+
+  it("does not return another seller's customer", async () => {
+    await placeOrder(bob, "03001234567", "Bob's Customer");
+
+    const result = await toolsFor(alice).getCustomerProfile.execute({ phone: "03001234567" });
+
+    expect(result).toEqual({ found: false, message: expect.any(String) });
   });
 });
