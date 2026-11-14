@@ -49,8 +49,8 @@ Two views: `product_list_view`, `inventory`.
 Stock lives on `product_variants` (on hand, reserved, threshold). `inventory` is a read-only
 view over it, and `stock_movements` is the append-only history of every change.
 `POST /api/v1/inventory/adjustments` changes stock and records the movement in one
-transaction through the `adjust_stock` function. The product API and the copilot's stock
-tools do not go through it yet, so they still change quantities without a movement.
+transaction through the `adjust_stock` function. The copilot's stock tool goes through it
+too. The product API does not yet, so stock set on product create or update still has no movement.
 
 Draft/manual orders land through `POST /api/v1/orders`; confirmation deducts stock via
 `POST /api/v1/orders/:id/transition` (`transition_order_status` + `sale` movements).
@@ -142,7 +142,7 @@ npm run dev
 
 **325 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**222 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+**227 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -156,13 +156,13 @@ npm run dev
 | `packages/integrations` order schema | 17 | Order, item and history columns match the contract, enums match Zod, totals/address/`confirmed_at` checks, illegal transitions and raw status updates refused, history is append-only |
 | `packages/integrations` order isolation | 14 | A seller cannot read, insert, change or delete another seller's orders, items or history; anonymous users read nothing |
 | `packages/integrations` order lifecycle | 9 | Status only changes through the lifecycle gate; cancel is atomic; confirm deducts stock with a sale movement and refuses short stock; lines freeze after leaving draft |
-| `packages/integrations` copilot SQL guards | 10 | The read-only query tool cannot write (even through a function call); neither SQL tool can reach `set_config` — directly, through functions that run SQL from a string (`query_to_xml`, `ts_stat`), through each other, or with escapes — so they cannot fake the seller's identity or open the order lifecycle gate; plain selects and updates still work |
+| `packages/integrations` copilot SQL guards | 15 | The read-only query tool cannot write (even through a function call); neither SQL tool can reach `set_config` — directly, through functions that run SQL from a string (`query_to_xml`, `ts_stat`), through each other, or with escapes — so they cannot fake the seller's identity or open the order lifecycle gate; `mutateDatabase` cannot write orders, order lines, order history or stock movements, or change stock; plain selects, updates and price changes still work |
 | `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
 | `apps/api` inventory API | 23 | Stock adjustments and movement history against a real database: every refusal, nothing written on refusal, filters, paging, isolation |
 | `apps/api` orders API | 16 | Draft create/list/get, order detail (status history, stock checks), confirm with stock deduction, short-stock refusal and cancel against a real database, with RLS isolation |
 | `apps/api` copilot tools | 15 | Read and guarded-write tools against a real database, including `createDraftOrder` (draft only, server-side prices, stock untouched, other sellers refused) |
 
-**549 tests total** (325 Node unit + 2 Python + 222 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
+**554 tests total** (325 Node unit + 2 Python + 227 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 
