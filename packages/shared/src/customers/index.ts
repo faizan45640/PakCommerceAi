@@ -18,7 +18,7 @@ export const CUSTOMER_TIMELINE_LIMIT = 50;
 export const MAX_CUSTOMER_NOTE_LENGTH = 2000;
 
 export const customerTagValues = [
-  "new",
+  "first_time",
   "repeat",
   "has_returns",
   "flagged",
@@ -64,8 +64,11 @@ export const customerSchema = z.object({
   workspaceId: idSchema,
   sellerId: idSchema,
   name: trimmedText.min(1).max(160),
-  /** Normalised (see `normalizePhone`), e.g. `+923001234567`. */
-  phone: trimmedText.min(1).max(32),
+  /**
+   * Normalised (see `normalizePhone`), e.g. `+923001234567`. Legacy orders with
+   * no usable phone are keyed `order:<order id>`, hence the longer limit.
+   */
+  phone: trimmedText.min(1).max(64),
   /** Lower-cased. */
   email: z.email().nullable().optional(),
   city: trimmedText.min(1).max(80),
@@ -101,7 +104,7 @@ export const customerSummarySchema = z.object({
 
 /**
  * Status tags are derived, never stored; a customer can have several.
- *  - new: no completed orders yet
+ *  - first_time: no completed (successful) order yet
  *  - repeat: two or more completed orders
  *  - has_returns: at least one returned order
  *  - flagged: at least one risk note
@@ -112,7 +115,7 @@ export function deriveCustomerTags(summary: {
   statusCounts: { returned: number };
 }): CustomerTag[] {
   const tags: CustomerTag[] = [];
-  if (summary.completedOrderCount === 0) tags.push("new");
+  if (summary.completedOrderCount === 0) tags.push("first_time");
   if (summary.completedOrderCount >= 2) tags.push("repeat");
   if (summary.statusCounts.returned >= 1) tags.push("has_returns");
   if (summary.riskNoteCount >= 1) tags.push("flagged");
@@ -187,6 +190,8 @@ export const customerDetailSchema = customerListItemSchema.extend({
 export const customerSearchQuerySchema = z.object({
   workspaceId: idSchema,
   query: trimmedText.min(1).max(120).optional(),
+  /** Exact match on the normalised phone (the API normalises it); for agents. */
+  phone: trimmedText.min(1).max(32).optional(),
   tags: z.array(customerTagSchema).max(customerTagValues.length).optional(),
   sort: customerSortSchema.default("last_order_desc"),
   limit: z.int().min(1).max(100).default(25),

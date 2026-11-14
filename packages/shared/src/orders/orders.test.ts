@@ -57,6 +57,7 @@ function order(overrides: Record<string, unknown> = {}) {
     id: ORDER_ID,
     sellerId: SELLER_ID,
     workspaceId: WORKSPACE_ID,
+    customerId: "99999999-9999-4999-8999-999999999999",
     status: "draft",
     channel: "whatsapp",
     paymentMethod: "cod",
@@ -524,9 +525,9 @@ describe("orderDetailSchema", () => {
 describe("customerId", () => {
   const CUSTOMER_ID = "99999999-9999-4999-8999-999999999999";
 
-  it("is optional on an order and must be a uuid when present", () => {
+  it("is required on an order and must be a uuid", () => {
     expect(orderSchema.safeParse(order({ customerId: CUSTOMER_ID })).success).toBe(true);
-    expect(orderSchema.safeParse(order()).success).toBe(true);
+    expect(orderSchema.safeParse(order({ customerId: undefined })).success).toBe(false);
     expect(orderSchema.safeParse(order({ customerId: "nope" })).success).toBe(false);
   });
 
@@ -538,5 +539,22 @@ describe("customerId", () => {
     expect(orderSearchQuerySchema.safeParse({ ...base, customerId: "nope" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("customer phone", () => {
+  const input = (phone: string) => ({
+    workspaceId: WORKSPACE_ID,
+    customer: { name: "A", phone, city: "Lahore" },
+    items: [{ productId: PRODUCT_ID, variantId: VARIANT_ID, quantity: 1 }],
+  });
+
+  it("must contain digits", () => {
+    const result = createDraftOrderInputSchema.safeParse(input("n/a n/a"));
+    expect(result.success).toBe(false);
+    expect(
+      result.error?.issues.some((issue) => issue.path.join(".") === "customer.phone"),
+    ).toBe(true);
+    expect(createDraftOrderInputSchema.safeParse(input("0300-1234567")).success).toBe(true);
   });
 });
