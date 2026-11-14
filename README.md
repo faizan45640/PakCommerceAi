@@ -98,6 +98,7 @@ by remembering a `where` clause on each query.
 |---|---|
 | Frontend | Next.js 16.2.12 (App Router, Turbopack), React 19.2.4, TypeScript 5 |
 | Styling | Tailwind CSS v4, shadcn/ui, Radix UI, Recharts |
+| UI behaviors | [UI SDK](https://github.com/vercel-labs/ui) (`@ui-sdk/core`, `@ui-sdk/react`) — accessible popup, selection, focus and typeahead behaviors for building new components. **Beta**, pinned to `0.1.0-beta.1`; upgrade deliberately |
 | Backend | Node 22, Express 5.2.1, `tsx` for dev |
 | Database / Auth | Supabase (PostgreSQL), `@supabase/ssr` |
 | Validation | Zod 4 |
