@@ -7,7 +7,7 @@ import {
 } from "@pakcommerce/shared/orders";
 import { moneySchema } from "@pakcommerce/shared/products";
 
-export { normalizePhone, phoneNormalizationFixtures } from "./phone.js";
+export { normalizePhone, phoneNormalizationFixtures } from "@pakcommerce/shared/customers/phone";
 
 export const customerContractVersion = "2026-11-14";
 
