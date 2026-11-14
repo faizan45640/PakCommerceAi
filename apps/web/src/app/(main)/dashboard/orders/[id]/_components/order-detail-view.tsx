@@ -198,7 +198,13 @@ export function OrderDetailView({ id }: { id: string }) {
         </div>
 
         <div className="flex flex-col gap-6">
-          <OrderCustomerPanel customer={order.customer} isDraft={order.status === "draft"} />
+          <OrderCustomerPanel
+            customer={order.customer}
+            customerId={order.customerId}
+            workspaceId={workspaceId}
+            orderVersion={`${order.status}:${order.updatedAt}`}
+            isDraft={order.status === "draft"}
+          />
           <OrderStatusTimeline history={order.statusHistory} formatDateTime={formatDateTime} />
         </div>
       </div>
