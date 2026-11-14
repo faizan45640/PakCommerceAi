@@ -243,11 +243,19 @@ describe("run_guarded_mutation cannot edit orders or stock", () => {
 
   it("refuses touching stock history", async () => {
     await withRollback(client, async () => {
-      const { seller, variantId } = await draftOrder("mu-movements");
+      const { seller, productId, variantId } = await draftOrder("mu-movements");
 
+      // A seller may record their own movement directly (inventory-rls), so
+      // only the copilot flag refuses this one.
       await expect(
         asUser(client, seller.userId, () =>
-          mutation(`delete from public.stock_movements where variant_id = '${variantId}'`),
+          mutation(
+            `insert into public.stock_movements
+               (variant_id, product_id, workspace_id, seller_id, reason,
+                quantity_delta, before_quantity_on_hand, after_quantity_on_hand, performed_by)
+             values ('${variantId}', '${productId}', '${seller.workspaceId}', '${seller.sellerId}',
+                     'purchase', 5, 10, 15, '${seller.userId}')`,
+          ),
         ),
       ).rejects.toThrow(/copilot_mutation_refused: stock_movements/i);
     });
