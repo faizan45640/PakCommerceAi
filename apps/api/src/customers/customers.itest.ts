@@ -825,7 +825,10 @@ describe("customer profile follows the order lifecycle", () => {
     expect(detail.name).toBe("Ayesha K. Malik");
     expect(detail.city).toBe("Karachi");
     // ...while the first order keeps its own snapshot.
-    expect(detail.recentOrders[1].customer).toMatchObject({ name: "Ayesha Khan", city: "Lahore" });
+    expect(detail.recentOrders[1]).toMatchObject({
+      customerName: "Ayesha Khan",
+      customerCity: "Lahore",
+    });
 
     // 4. Confirming the second: spend adds up and the customer is a repeat.
     await transition(alice, o2.id, "confirmed");
