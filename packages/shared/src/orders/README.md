@@ -108,9 +108,23 @@ Landed in `supabase/migrations/202611140558*_*.sql` and
 - Express: `POST/GET /api/v1/orders`, `GET /api/v1/orders/:orderId`,
   `POST /api/v1/orders/:orderId/transition`
 
+## Order Detail (T-039)
+
+`orderDetailSchema` = every `Order` field plus:
+
+- `statusHistory: OrderStatusHistory[]` — oldest first.
+- `stockChecks: OrderStockCheck[]` — draft orders only (`[]` otherwise). One per line:
+  `{ variantId, productId, title, variantTitle, needed, available, sufficient }`.
+  Same rule as `transition_order_status`: needed is summed per variant, available is
+  `on_hand - reserved`, and untracked variants (`track_inventory` false or null on-hand)
+  report `available: null, sufficient: true` because confirm skips them.
+
+`GET /api/v1/orders/:orderId` and the transition endpoint return it. The order
+refinements (totals, confirm stamp, address) still apply.
+
 ## Out of Scope
 
 - Ship / return / cancel-from-confirmed (stock restore) — later transitions
-- Dashboard UI wiring (T-038–T-040 already use mocks; connect later)
+- Order creation form (T-040) and the overview-tab widgets still use mocks
 - Customer entity and `customerId` foreign key (T-043+)
 - Courier assignment, COD risk, payments

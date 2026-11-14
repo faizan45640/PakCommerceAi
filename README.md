@@ -29,7 +29,7 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot and products pages call the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot, products, and orders (list and detail, with confirm/cancel) pages call the API. Orders overview widgets, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
 | `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD, inventory adjustments, orders (draft + confirm/cancel), and streaming copilot chat — all behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
 | `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, orders, categories, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
@@ -134,13 +134,13 @@ npm run dev
 
 | Workspace | Unit tests | Covers |
 |---|---|---|
-| `packages/shared` | 109 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
+| `packages/shared` | 116 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 129 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
-| `apps/web` | 15 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
+| `apps/api` | 136 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
+| `apps/web` | 19 | `getInitials`, `formatCurrency`, preference parsing, order confirm/cancel gating, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**269 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**287 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
 **164 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
