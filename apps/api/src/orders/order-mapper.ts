@@ -2,11 +2,13 @@ import type { Database } from "@pakcommerce/integrations/supabase";
 import type {
   Order,
   OrderChannel,
+  OrderDetail,
   OrderItem,
   OrderListItem,
   OrderPaymentMethod,
   OrderStatus,
   OrderStatusHistory,
+  OrderStockCheck,
 } from "@pakcommerce/shared";
 
 /**
@@ -21,6 +23,14 @@ export type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 export type OrderItemRow = Database["public"]["Tables"]["order_items"]["Row"];
 export type OrderStatusHistoryRow =
   Database["public"]["Tables"]["order_status_history"]["Row"];
+
+/** The variant columns the confirm function reads to decide stock. */
+export interface VariantStockRow {
+  id: string;
+  track_inventory: boolean;
+  quantity_on_hand: number | null;
+  reserved_quantity: number;
+}
 
 export function toOrderItem(row: OrderItemRow): OrderItem {
   return {
@@ -120,4 +130,58 @@ export function toOrderListItem(
     customerCity: row.customer_city,
     itemCount,
   };
+}
+
+/**
+ * Stock checks for a draft order. Same rule as `transition_order_status`:
+ * - quantities are summed per variant (two lines of one SKU share one check),
+ * - a variant that is untracked (`track_inventory` false or `quantity_on_hand`
+ *   null) is skipped by confirm, so it is sufficient with `available: null`,
+ * - otherwise available = on_hand - reserved, and it is insufficient when
+ *   available < needed.
+ * A variant row that cannot be read is reported insufficient with available 0
+ * (confirm raises `variant_not_found` for it).
+ */
+export function toStockChecks(
+  items: OrderItem[],
+  variantRows: VariantStockRow[],
+): OrderStockCheck[] {
+  const neededByVariant = new Map<string, number>();
+  for (const item of items) {
+    neededByVariant.set(
+      item.variantId,
+      (neededByVariant.get(item.variantId) ?? 0) + item.quantity,
+    );
+  }
+  const variants = new Map(variantRows.map((row) => [row.id, row]));
+
+  return items.map((item) => {
+    const needed = neededByVariant.get(item.variantId) ?? item.quantity;
+    const variant = variants.get(item.variantId);
+    const base = {
+      variantId: item.variantId,
+      productId: item.productId,
+      title: item.title,
+      variantTitle: item.variantTitle ?? null,
+      needed,
+    };
+
+    if (!variant) {
+      return { ...base, available: 0, sufficient: false };
+    }
+    if (!variant.track_inventory || variant.quantity_on_hand === null) {
+      return { ...base, available: null, sufficient: true };
+    }
+
+    const available = variant.quantity_on_hand - variant.reserved_quantity;
+    return { ...base, available, sufficient: available >= needed };
+  });
+}
+
+export function toOrderDetail(
+  order: Order,
+  history: OrderStatusHistory[],
+  stockChecks: OrderStockCheck[],
+): OrderDetail {
+  return { ...order, statusHistory: history, stockChecks };
 }

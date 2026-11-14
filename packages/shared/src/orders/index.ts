@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { moneySchema } from "../products/index.js";
+import { moneySchema } from "@pakcommerce/shared/products";
 
 export const orderStatusValues = [
   "draft",
@@ -283,6 +283,36 @@ function assertOrderTotals(
 
 export const orderSchema = orderBaseSchema.superRefine(assertOrderTotals);
 
+/**
+ * One stock check per line item, for draft orders.
+ *
+ * Mirrors `transition_order_status`: quantities are summed per variant, and
+ * `available` is `quantity_on_hand - reserved_quantity`. Untracked variants
+ * (track_inventory false or null on-hand) are skipped by confirm, so they
+ * report `available: null, sufficient: true`. When two lines share a variant,
+ * each carries the variant's combined `needed`.
+ */
+export const orderStockCheckSchema = z.object({
+  variantId: idSchema,
+  productId: idSchema,
+  title: trimmedText.min(1).max(180),
+  variantTitle: trimmedText.min(1).max(160).nullable().optional(),
+  needed: z.int().positive(),
+  available: z.int().nonnegative().nullable(),
+  sufficient: z.boolean(),
+});
+
+/**
+ * Order detail: every Order field plus status history (oldest first) and, for
+ * drafts only, stock checks (non-draft orders return []).
+ */
+export const orderDetailSchema = orderBaseSchema
+  .extend({
+    statusHistory: z.array(orderStatusHistorySchema),
+    stockChecks: z.array(orderStockCheckSchema),
+  })
+  .superRefine(assertOrderTotals);
+
 export const createDraftOrderItemInputSchema = z.object({
   productId: idSchema,
   variantId: idSchema,
@@ -365,6 +395,8 @@ export type OrderCustomerSnapshot = z.infer<typeof orderCustomerSnapshotSchema>;
 export type OrderItem = z.infer<typeof orderItemSchema>;
 export type OrderStatusHistory = z.infer<typeof orderStatusHistorySchema>;
 export type Order = z.infer<typeof orderSchema>;
+export type OrderStockCheck = z.infer<typeof orderStockCheckSchema>;
+export type OrderDetail = z.infer<typeof orderDetailSchema>;
 export type OrderSort = z.infer<typeof orderSortSchema>;
 export type CreateDraftOrderItemInput = z.input<
   typeof createDraftOrderItemInputSchema

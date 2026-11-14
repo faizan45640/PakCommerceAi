@@ -7,6 +7,8 @@ import {
   createDraftOrderInputSchema,
   orderChannelValues,
   orderContractVersion,
+  orderDetailSchema,
+  orderStockCheckSchema,
   orderItemSchema,
   orderPaymentMethodValues,
   orderSchema,
@@ -419,5 +421,77 @@ describe("orderSearchQuerySchema", () => {
         channels: ["whatsapp", "manual"],
       }).success,
     ).toBe(true);
+  });
+});
+
+function stockCheck(overrides: Record<string, unknown> = {}) {
+  return {
+    variantId: VARIANT_ID,
+    productId: PRODUCT_ID,
+    title: "Lawn Kurta",
+    variantTitle: "Medium",
+    needed: 2,
+    available: 5,
+    sufficient: true,
+    ...overrides,
+  };
+}
+
+describe("orderStockCheckSchema", () => {
+  it("accepts a tracked and an untracked (null available) check", () => {
+    expect(orderStockCheckSchema.safeParse(stockCheck()).success).toBe(true);
+    expect(
+      orderStockCheckSchema.safeParse(stockCheck({ available: null })).success,
+    ).toBe(true);
+  });
+
+  it("rejects negative available and non-positive needed", () => {
+    expect(
+      orderStockCheckSchema.safeParse(stockCheck({ available: -1 })).success,
+    ).toBe(false);
+    expect(
+      orderStockCheckSchema.safeParse(stockCheck({ needed: 0 })).success,
+    ).toBe(false);
+  });
+});
+
+describe("orderDetailSchema", () => {
+  const detail = (overrides: Record<string, unknown> = {}) => ({
+    ...order(),
+    statusHistory: [history({ fromStatus: null, toStatus: "draft" })],
+    stockChecks: [stockCheck()],
+    ...overrides,
+  });
+
+  it("accepts an order with history and stock checks", () => {
+    expect(orderDetailSchema.safeParse(detail()).success).toBe(true);
+  });
+
+  it("accepts an empty history/stockChecks (non-draft orders)", () => {
+    expect(
+      orderDetailSchema.safeParse(detail({ statusHistory: [], stockChecks: [] }))
+        .success,
+    ).toBe(true);
+  });
+
+  it("requires statusHistory and stockChecks", () => {
+    const { statusHistory: _h, ...withoutHistory } = detail();
+    const { stockChecks: _s, ...withoutChecks } = detail();
+    expect(orderDetailSchema.safeParse(withoutHistory).success).toBe(false);
+    expect(orderDetailSchema.safeParse(withoutChecks).success).toBe(false);
+  });
+
+  it("keeps the order refinements (bad subtotal is rejected)", () => {
+    expect(
+      orderDetailSchema.safeParse(detail({ subtotal: money(1) })).success,
+    ).toBe(false);
+  });
+
+  it("validates history rows (illegal pair is rejected)", () => {
+    expect(
+      orderDetailSchema.safeParse(
+        detail({ statusHistory: [history({ toStatus: "shipped" })] }),
+      ).success,
+    ).toBe(false);
   });
 });

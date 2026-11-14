@@ -1,6 +1,7 @@
 import type {
   ApiMeta,
   Order,
+  OrderDetail,
   OrderListItem,
   OrderStatus,
   ParsedCreateDraftOrderInput,
@@ -12,9 +13,14 @@ import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import type { SellerContext } from "../middleware/seller-context.js";
 import {
   toOrder,
+  toOrderDetail,
   toOrderListItem,
+  toOrderStatusHistory,
+  toStockChecks,
   type OrderItemRow,
   type OrderRow,
+  type OrderStatusHistoryRow,
+  type VariantStockRow,
 } from "./order-mapper.js";
 
 /**
@@ -94,7 +100,7 @@ export async function transitionOrderStatus(
   orderId: string,
   toStatus: OrderStatus,
   note?: string | null,
-): Promise<Order> {
+): Promise<OrderDetail> {
   const { error } = await auth.db.rpc("transition_order_status", {
     p_order_id: orderId,
     p_workspace_id: workspaceId,
@@ -104,7 +110,45 @@ export async function transitionOrderStatus(
 
   if (error) throw translateTransitionError(error);
 
-  return getOrder(auth, workspaceId, orderId);
+  return getOrderDetail(auth, workspaceId, orderId);
+}
+
+/** Order + status history (oldest first) + stock checks (drafts only). */
+export async function getOrderDetail(
+  auth: SellerContext,
+  workspaceId: string,
+  orderId: string,
+): Promise<OrderDetail> {
+  const order = await getOrder(auth, workspaceId, orderId);
+
+  const { data: historyRows, error: historyError } = await auth.db
+    .from("order_status_history")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (historyError) {
+    throw new Error(historyError.message, { cause: historyError });
+  }
+
+  let variantRows: VariantStockRow[] = [];
+  if (order.status === "draft") {
+    const variantIds = [...new Set(order.items.map((item) => item.variantId))];
+    const { data, error } = await auth.db
+      .from("product_variants")
+      .select("id, track_inventory, quantity_on_hand, reserved_quantity")
+      .in("id", variantIds);
+
+    if (error) throw new Error(error.message, { cause: error });
+    variantRows = (data ?? []) as VariantStockRow[];
+  }
+
+  return toOrderDetail(
+    order,
+    ((historyRows ?? []) as OrderStatusHistoryRow[]).map(toOrderStatusHistory),
+    order.status === "draft" ? toStockChecks(order.items, variantRows) : [],
+  );
 }
 
 export async function getOrder(
