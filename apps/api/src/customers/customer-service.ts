@@ -1,8 +1,11 @@
 import {
+  CUSTOMER_CONTEXT_ORDERS_LIMIT,
+  CUSTOMER_CONTEXT_RISK_NOTES_LIMIT,
   CUSTOMER_RECENT_ORDERS_LIMIT,
   CUSTOMER_TIMELINE_LIMIT,
   normalizePhone,
   type ApiMeta,
+  type CustomerContext,
   type CustomerDetail,
   type CustomerListItem,
   type CustomerNote,
@@ -137,6 +140,77 @@ export async function getCustomerDetail(
   );
 }
 
+/**
+ * Compact customer context for LLM prompts (copilot tool, WhatsApp Sales Agent).
+ *
+ * Looks the customer up by id or by phone (normalised, exact match), then reuses
+ * the order list and note queries. An unknown customer is `{ found: false }`, not
+ * an error: the agent treats the phone as a new customer. A phone with no digits
+ * is a ValidationError.
+ */
+export async function getCustomerContext(
+  auth: SellerContext,
+  workspaceId: string,
+  lookup: { customerId: string } | { phone: string },
+): Promise<CustomerContext> {
+  let builder = auth.db
+    .from("customer_summary")
+    .select("*")
+    .eq("workspace_id", workspaceId);
+
+  if ("customerId" in lookup) {
+    builder = builder.eq("id", lookup.customerId);
+  } else {
+    const phone = normalizePhone(lookup.phone);
+    if (!phone) {
+      throw new ValidationError("Invalid customer query.", {
+        phone: ["Phone number must contain digits."],
+      });
+    }
+    builder = builder.eq("phone", phone);
+  }
+
+  const { data, error } = await builder.maybeSingle();
+
+  if (error) throw new Error(error.message, { cause: error });
+  if (!data) return { found: false };
+
+  const item = toCustomerListItem(data as unknown as CustomerSummaryRow);
+
+  const [orders, riskNotes] = await Promise.all([
+    listOrders(auth, {
+      workspaceId,
+      customerId: item.id,
+      sort: "newest",
+      limit: CUSTOMER_CONTEXT_ORDERS_LIMIT,
+    }),
+    listNoteRows(auth, workspaceId, item.id, {
+      kind: "risk",
+      limit: CUSTOMER_CONTEXT_RISK_NOTES_LIMIT,
+    }),
+  ]);
+
+  return {
+    found: true,
+    customer: { id: item.id, name: item.name, phone: item.phone, city: item.city },
+    tags: item.tags,
+    summary: {
+      lifetimeSpend: item.summary.lifetimeSpend,
+      completedOrderCount: item.summary.completedOrderCount,
+      totalOrderCount: item.summary.totalOrderCount,
+      returnedOrderCount: item.summary.statusCounts.returned,
+      lastOrderAt: item.summary.lastOrderAt,
+    },
+    recentOrders: orders.items.map((order) => ({
+      id: order.id,
+      status: order.status,
+      total: order.total,
+      createdAt: order.createdAt,
+    })),
+    riskNotes: riskNotes.map((note) => ({ body: note.body, createdAt: note.created_at })),
+  };
+}
+
 export async function createCustomerNote(
   auth: SellerContext,
   customerId: string,
@@ -200,15 +274,20 @@ async function listNoteRows(
   auth: SellerContext,
   workspaceId: string,
   customerId: string,
+  options: { kind?: "note" | "risk"; limit?: number } = {},
 ): Promise<CustomerNoteRow[]> {
-  const { data, error } = await auth.db
+  let builder = auth.db
     .from("customer_notes")
     .select("*")
     .eq("customer_id", customerId)
-    .eq("workspace_id", workspaceId)
+    .eq("workspace_id", workspaceId);
+
+  if (options.kind) builder = builder.eq("kind", options.kind);
+
+  const { data, error } = await builder
     .order("created_at", { ascending: false })
     .order("id", { ascending: true })
-    .limit(CUSTOMER_DETAIL_NOTES_LIMIT);
+    .limit(options.limit ?? CUSTOMER_DETAIL_NOTES_LIMIT);
 
   if (error) throw new Error(error.message, { cause: error });
   return (data ?? []) as CustomerNoteRow[];

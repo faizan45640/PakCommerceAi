@@ -1,5 +1,6 @@
 import {
   createCustomerNoteInputSchema,
+  customerContextQuerySchema,
   customerSearchQuerySchema,
 } from "@pakcommerce/shared";
 import { Router } from "express";
@@ -10,6 +11,7 @@ import { sellerContext } from "../middleware/seller-context.js";
 import {
   createCustomerNote,
   deleteCustomerNote,
+  getCustomerContext,
   getCustomerDetail,
   listCustomers,
 } from "./customer-service.js";
@@ -58,6 +60,31 @@ customerRouter.get("/", async (request, response, next) => {
     const { items, meta, nextCursor } = await listCustomers(auth, query);
 
     response.json({ data: items, meta, nextCursor });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * One call for the WhatsApp Sales Agent: compact context by phone or id.
+ * Registered before `/:customerId` so "context" is not read as an id.
+ */
+customerRouter.get("/context", async (request, response, next) => {
+  try {
+    const auth = sellerContext(request);
+    const { workspaceId, customerId, phone } = parseOrThrow(
+      customerContextQuerySchema,
+      {
+        workspaceId: request.query.workspaceId,
+        customerId: request.query.customerId,
+        phone: request.query.phone,
+      },
+      "customer context query",
+    );
+
+    const lookup = customerId ? { customerId } : { phone: phone as string };
+
+    response.json({ data: await getCustomerContext(auth, workspaceId, lookup) });
   } catch (error) {
     next(error);
   }

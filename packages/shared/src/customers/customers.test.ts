@@ -4,6 +4,8 @@ import {
   CUSTOMER_RECENT_ORDERS_LIMIT,
   CUSTOMER_TIMELINE_LIMIT,
   createCustomerNoteInputSchema,
+  customerContextQuerySchema,
+  customerContextSchema,
   customerDetailSchema,
   customerListItemSchema,
   customerNoteSchema,
@@ -410,5 +412,55 @@ describe("customerSearchQuerySchema", () => {
     expect(customerSearchQuerySchema.safeParse({ ...base, limit: 101 }).success).toBe(false);
     expect(customerSearchQuerySchema.safeParse({ ...base, query: "" }).success).toBe(false);
     expect(customerSearchQuerySchema.safeParse({ workspaceId: "nope" }).success).toBe(false);
+  });
+});
+
+describe("customerContextSchema", () => {
+  const found = {
+    found: true,
+    customer: { id: CUSTOMER_ID, name: "Ayesha Khan", phone: "+923001234567", city: "Lahore" },
+    tags: ["repeat"],
+    summary: {
+      lifetimeSpend: pkr(500000),
+      completedOrderCount: 2,
+      totalOrderCount: 3,
+      returnedOrderCount: 0,
+      lastOrderAt: NOW,
+    },
+    recentOrders: [{ id: ORDER_ID, status: "delivered", total: pkr(250000), createdAt: NOW }],
+    riskNotes: [{ body: "Refused delivery once", createdAt: NOW }],
+  };
+
+  it("accepts a found context and a bare not-found", () => {
+    expect(customerContextSchema.safeParse(found).success).toBe(true);
+    expect(customerContextSchema.safeParse({ found: false }).success).toBe(true);
+  });
+
+  it("rejects a found context with no customer, or more than 5 orders", () => {
+    const { customer: _customer, ...withoutCustomer } = found;
+    expect(customerContextSchema.safeParse(withoutCustomer).success).toBe(false);
+    expect(
+      customerContextSchema.safeParse({
+        ...found,
+        recentOrders: Array.from({ length: 6 }, () => found.recentOrders[0]),
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("customerContextQuerySchema", () => {
+  it("needs exactly one of customerId or phone", () => {
+    const base = { workspaceId: WORKSPACE_ID };
+    expect(customerContextQuerySchema.safeParse({ ...base, phone: "0300 1234567" }).success).toBe(
+      true,
+    );
+    expect(customerContextQuerySchema.safeParse({ ...base, customerId: CUSTOMER_ID }).success).toBe(
+      true,
+    );
+    expect(customerContextQuerySchema.safeParse(base).success).toBe(false);
+    expect(
+      customerContextQuerySchema.safeParse({ ...base, customerId: CUSTOMER_ID, phone: "0300" })
+        .success,
+    ).toBe(false);
   });
 });

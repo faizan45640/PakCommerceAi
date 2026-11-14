@@ -15,6 +15,9 @@ export const customerContractVersion = "2026-11-14";
 export const CUSTOMER_RECENT_ORDERS_LIMIT = 20;
 /** The timeline is capped, newest first. */
 export const CUSTOMER_TIMELINE_LIMIT = 50;
+/** The compact customer context carries only this many orders and risk notes. */
+export const CUSTOMER_CONTEXT_ORDERS_LIMIT = 5;
+export const CUSTOMER_CONTEXT_RISK_NOTES_LIMIT = 5;
 export const MAX_CUSTOMER_NOTE_LENGTH = 2000;
 
 export const customerTagValues = [
@@ -183,6 +186,70 @@ export const customerDetailSchema = customerListItemSchema.extend({
 });
 
 /**
+ * Compact customer context for LLM prompts: the copilot's `getCustomerProfile`
+ * tool and the WhatsApp Sales Agent (`GET /customers/context`). Deliberately
+ * small: no email, address, timeline or full notes.
+ *
+ * `found: false` means no such customer in the workspace; the agent treats the
+ * phone as a new customer.
+ */
+export const customerContextFoundSchema = z.object({
+  found: z.literal(true),
+  customer: z.object({
+    id: idSchema,
+    name: customerSchema.shape.name,
+    phone: customerSchema.shape.phone,
+    city: customerSchema.shape.city,
+  }),
+  tags: z.array(customerTagSchema),
+  summary: z.object({
+    lifetimeSpend: customerMoneySchema,
+    completedOrderCount: z.int().nonnegative(),
+    totalOrderCount: z.int().nonnegative(),
+    returnedOrderCount: z.int().nonnegative(),
+    lastOrderAt: isoDateTimeSchema.nullable(),
+  }),
+  /** Newest first. */
+  recentOrders: z
+    .array(
+      z.object({
+        id: idSchema,
+        status: orderStatusSchema,
+        total: moneySchema,
+        createdAt: isoDateTimeSchema,
+      }),
+    )
+    .max(CUSTOMER_CONTEXT_ORDERS_LIMIT),
+  /** Newest first: notes of kind `risk` only. */
+  riskNotes: z
+    .array(
+      z.object({
+        body: trimmedText.min(1).max(MAX_CUSTOMER_NOTE_LENGTH),
+        createdAt: isoDateTimeSchema,
+      }),
+    )
+    .max(CUSTOMER_CONTEXT_RISK_NOTES_LIMIT),
+});
+
+export const customerContextNotFoundSchema = z.object({ found: z.literal(false) });
+
+export const customerContextSchema = z.discriminatedUnion("found", [
+  customerContextFoundSchema,
+  customerContextNotFoundSchema,
+]);
+
+/** Exactly one of `customerId` or `phone` (the phone is normalised by the API). */
+export const customerContextQuerySchema = z
+  .object({
+    workspaceId: idSchema,
+    customerId: idSchema.optional(),
+    phone: trimmedText.min(1).max(32).optional(),
+  })
+  .refine((value) => (value.customerId === undefined) !== (value.phone === undefined), {
+    message: "Provide exactly one of customerId or phone.",
+  });
+
+/**
  * `query` matches name, phone, city and email (case-insensitive substring); a
  * typed phone in any format also matches its normalised form. Several `tags`
  * narrow the result: a customer must have all of them.
@@ -208,5 +275,8 @@ export type ParsedCreateCustomerNoteInput = z.output<
 export type CustomerTimelineEvent = z.infer<typeof customerTimelineEventSchema>;
 export type CustomerListItem = z.infer<typeof customerListItemSchema>;
 export type CustomerDetail = z.infer<typeof customerDetailSchema>;
+export type CustomerContext = z.infer<typeof customerContextSchema>;
+export type CustomerContextFound = z.infer<typeof customerContextFoundSchema>;
+export type ParsedCustomerContextQuery = z.output<typeof customerContextQuerySchema>;
 export type CustomerSearchQuery = z.input<typeof customerSearchQuerySchema>;
 export type ParsedCustomerSearchQuery = z.output<typeof customerSearchQuerySchema>;
