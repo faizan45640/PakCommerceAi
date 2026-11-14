@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_MONEY_MINOR } from "../products/index.js";
 import {
+  MAX_ORDER_ITEM_QUANTITY,
   ORDER_STATUS_TRANSITIONS,
   assertTransition,
   canTransition,
@@ -326,6 +328,29 @@ describe("orderStatusHistorySchema", () => {
         history({ fromStatus: null, toStatus: "confirmed" }),
       ).success,
     ).toBe(false);
+  });
+});
+
+describe("order amount limits", () => {
+  const base = {
+    workspaceId: WORKSPACE_ID,
+    customer: { name: "Ahmed Khan", phone: "+923001234567", city: "Lahore" },
+    items: [{ productId: PRODUCT_ID, variantId: VARIANT_ID, quantity: 1 }],
+  };
+
+  it("caps item quantity", () => {
+    const withQuantity = (quantity: number) => ({
+      ...base,
+      items: [{ productId: PRODUCT_ID, variantId: VARIANT_ID, quantity }],
+    });
+    expect(createDraftOrderInputSchema.safeParse(withQuantity(MAX_ORDER_ITEM_QUANTITY)).success).toBe(true);
+    expect(createDraftOrderInputSchema.safeParse(withQuantity(MAX_ORDER_ITEM_QUANTITY + 1)).success).toBe(false);
+  });
+
+  it("caps money at the Postgres integer maximum", () => {
+    const withFee = (amountMinor: number) => ({ ...base, shippingFee: { amountMinor, currency: "PKR" } });
+    expect(createDraftOrderInputSchema.safeParse(withFee(MAX_MONEY_MINOR)).success).toBe(true);
+    expect(createDraftOrderInputSchema.safeParse(withFee(MAX_MONEY_MINOR + 1)).success).toBe(false);
   });
 });
 
