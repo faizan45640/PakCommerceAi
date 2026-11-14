@@ -249,3 +249,103 @@ describe("getSchema tool", () => {
     expect(result.status).toBe("error");
   });
 });
+
+describe("createDraftOrder tool", () => {
+  async function variantOf(seller: TestSeller, productId: string) {
+    const { data, error } = await createApiSupabaseUserClient(seller.accessToken)
+      .from("product_variants")
+      .select("id, quantity_on_hand, price_amount_minor")
+      .eq("product_id", productId)
+      .single();
+    expect(error).toBeNull();
+    return data!;
+  }
+
+  async function movementCount(seller: TestSeller) {
+    const { count } = await createApiSupabaseUserClient(seller.accessToken)
+      .from("stock_movements")
+      .select("id", { count: "exact", head: true });
+    return count ?? 0;
+  }
+
+  const customer = { name: "Ali", phone: "03001234567", city: "Lahore" };
+
+  it("creates a draft at the catalogue price and leaves stock alone", async () => {
+    const productId = await createProduct(alice, {
+      title: "Alice Kurta",
+      variants: [
+        {
+          title: "Medium",
+          price: { amountMinor: 250000 },
+          inventory: {
+            trackInventory: true,
+            quantityOnHand: 10,
+            lowStockThreshold: null,
+            state: "in_stock",
+          },
+        },
+      ],
+    });
+    const variant = await variantOf(alice, productId);
+    expect(variant.quantity_on_hand).toBe(10);
+    const movementsBefore = await movementCount(alice);
+
+    const tool = toolsFor(alice).createDraftOrder;
+    expect(tool.needsApproval).toBe(true);
+
+    const result = await tool.execute({
+      customer,
+      items: [{ variantId: variant.id, productId, quantity: 2 }],
+      shippingFee: 20000,
+      // A confused model trying to set its own price/status: must be ignored.
+      ...({ status: "confirmed", unitPrice: 1 } as object),
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") return;
+    expect(result.orderStatus).toBe("draft");
+    expect(result.itemCount).toBe(2);
+    expect(result.total).toBe(2 * 250000 + 20000);
+    expect(result.message).toContain("Ali (Lahore)");
+
+    const db = createApiSupabaseUserClient(alice.accessToken);
+    const { data: order } = await db
+      .from("orders")
+      .select("status, workspace_id, total_amount_minor, confirmed_at")
+      .eq("id", result.orderId)
+      .single();
+    expect(order).toMatchObject({
+      status: "draft",
+      workspace_id: alice.workspaceId,
+      total_amount_minor: 520000,
+      confirmed_at: null,
+    });
+
+    const { data: lines } = await db
+      .from("order_items")
+      .select("unit_price_amount_minor, quantity")
+      .eq("order_id", result.orderId);
+    expect(lines).toEqual([{ unit_price_amount_minor: 250000, quantity: 2 }]);
+
+    const after = await variantOf(alice, productId);
+    expect(after.quantity_on_hand).toBe(variant.quantity_on_hand);
+    expect(await movementCount(alice)).toBe(movementsBefore);
+  });
+
+  it("refuses another seller's variant and creates nothing", async () => {
+    const bobProduct = await createProduct(bob, { title: "Bob Kurta" });
+    const bobVariant = await variantOf(bob, bobProduct);
+
+    const result = await toolsFor(alice).createDraftOrder.execute({
+      customer,
+      items: [{ variantId: bobVariant.id, productId: bobProduct, quantity: 1 }],
+    });
+
+    expect(result.status).toBe("error");
+
+    const { count } = await createApiSupabaseUserClient(alice.accessToken)
+      .from("orders")
+      .select("id", { count: "exact", head: true });
+    expect(count).toBe(0);
+  });
+});

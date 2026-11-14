@@ -17,6 +17,7 @@ const WRITE_TOOLS = new Set([
   "updateProductStock",
   "updateProductPrice",
   "updateProductDetails",
+  "createDraftOrder",
 ]);
 
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +83,28 @@ function changeLines(toolName: string, input: Record<string, unknown>): string[]
     return lines;
   }
 
+  if (toolName === "createDraftOrder") {
+    const customer = (input.customer ?? {}) as Record<string, unknown>;
+    const items = Array.isArray(input.items) ? (input.items as Record<string, unknown>[]) : [];
+    const pieces = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const who = [customer.name, customer.city].filter(Boolean).map(String).join(", ");
+    const lines = [
+      `Create a draft order for ${who || "this customer"}: ${items.length} ${
+        items.length === 1 ? "item" : "items"
+      }, ${pieces} ${pieces === 1 ? "piece" : "pieces"}.`,
+    ];
+    if (customer.phone) lines.push(`Phone: ${String(customer.phone)}.`);
+    if (customer.addressLine) lines.push(`Address: ${String(customer.addressLine)}.`);
+    lines.push(
+      input.paymentMethod === "prepaid" ? "Payment: prepaid." : "Payment: cash on delivery.",
+    );
+    if (Number(input.shippingFee) > 0) {
+      lines.push(`Shipping: ${formatRs(Number(input.shippingFee) / 100)}.`);
+    }
+    lines.push("It stays a draft. You confirm it on the Orders page. Stock is not touched.");
+    return lines;
+  }
+
   const summary = String(input.summary ?? "").trim();
   return [summary || "Rafiq wants to change something in your shop."];
 }
@@ -90,6 +113,7 @@ function approvalTitle(toolName: string): string {
   if (toolName === "updateProductStock") return "Update stock?";
   if (toolName === "updateProductPrice") return "Change this price?";
   if (toolName === "updateProductDetails") return "Update this product?";
+  if (toolName === "createDraftOrder") return "Create this draft order?";
   return "Save this change?";
 }
 
@@ -97,6 +121,7 @@ function savedTitle(toolName: string): string {
   if (toolName === "updateProductStock") return "Stock updated";
   if (toolName === "updateProductPrice") return "Price updated";
   if (toolName === "updateProductDetails") return "Product updated";
+  if (toolName === "createDraftOrder") return "Draft order created";
   return "Change saved";
 }
 
