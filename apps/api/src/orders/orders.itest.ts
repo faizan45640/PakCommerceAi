@@ -727,7 +727,7 @@ describe("T-042 status update", () => {
     expect(response.body.data.cancelledAt).toBeTruthy();
     expect(response.body.data.confirmedAt).toBeNull();
     expect(await historyOf(orderId)).toEqual([
-      { from_status: null, to_status: "draft", note: null },
+      { from_status: null, to_status: "draft", note: "Draft order created" },
       { from_status: "draft", to_status: "cancelled", note: "Customer changed mind" },
     ]);
     expect((await orderRow(orderId))?.cancelled_at).toBeTruthy();
@@ -841,7 +841,7 @@ describe("T-042 confirmed stock deduction", () => {
       },
     ]);
     expect(await historyOf(orderId)).toEqual([
-      { from_status: null, to_status: "draft", note: null },
+      { from_status: null, to_status: "draft", note: "Draft order created" },
       { from_status: "draft", to_status: "confirmed", note: null },
     ]);
     expect((await getDetail(alice, orderId)).stockChecks).toEqual([]);
