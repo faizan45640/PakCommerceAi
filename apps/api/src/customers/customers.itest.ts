@@ -20,6 +20,8 @@ import request from "supertest";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../app.js";
+import { createCopilotTools } from "../copilot/tools/index.js";
+import { sellerContext } from "../middleware/seller-context.js";
 import type { TestSeller } from "../testing/api-test-env.js";
 import {
   applyTestEnv,
@@ -680,5 +682,224 @@ describe("GET /api/v1/customers/context", () => {
     expect(
       (await context(alice, { phone: "03001234567", customerId: randomUUID() })).status,
     ).toBe(400);
+  });
+});
+
+describe("customer profile follows the order lifecycle", () => {
+  const profile = async (seller: TestSeller, customerId: string) => {
+    const response = await as(seller, "get", `${CUSTOMERS}/${customerId}`).query({
+      workspaceId: seller.workspaceId,
+    });
+    expect(response.status).toBe(200);
+    return response.body.data;
+  };
+
+  const context = async (seller: TestSeller, phone: string) => {
+    // Raw URL so the "+" travels as %2B, the way a browser sends it.
+    const response = await as(
+      seller,
+      "get",
+      `${CUSTOMERS}/context?workspaceId=${seller.workspaceId}&phone=${encodeURIComponent(phone)}`,
+    );
+    expect(response.status).toBe(200);
+    return response.body.data;
+  };
+
+  async function place(
+    seller: TestSeller,
+    customer: { name: string; phone: string; city: string },
+    shippingMinor: number,
+  ) {
+    const { productId, variantId } = await createTestVariant(seller, { quantity: 100 });
+    const response = await as(seller, "post", ORDERS).send({
+      workspaceId: seller.workspaceId,
+      customer: { ...customer, addressLine: "House 4, Gulberg" },
+      items: [{ productId, variantId, quantity: 1 }],
+      shippingFee: { amountMinor: shippingMinor, currency: "PKR" },
+    });
+    expect(response.status).toBe(201);
+    return {
+      id: response.body.data.id as string,
+      customerId: response.body.data.customerId as string,
+      total: response.body.data.total.amountMinor as number,
+    };
+  }
+
+  async function transition(seller: TestSeller, orderId: string, toStatus: string) {
+    const response = await as(seller, "post", `${ORDERS}/${orderId}/transition`).send({
+      workspaceId: seller.workspaceId,
+      toStatus,
+    });
+    expect(response.status).toBe(200);
+  }
+
+  const timelineOf = (detail: { timeline: Record<string, unknown>[] }, orderIds: string[]) =>
+    detail.timeline.map((event) =>
+      event.type === "note_added"
+        ? "note"
+        : `${orderIds.indexOf(event.orderId as string) + 1}:${event.fromStatus ?? "none"}>${event.toStatus}`,
+    );
+
+  it("updates totals, history, tags and notes from the first draft to a cancelled third order", async () => {
+    // 1. A draft for a new phone creates one customer with no spend yet.
+    const o1 = await place(
+      alice,
+      { name: "Ayesha Khan", phone: "0300-1234567", city: "Lahore" },
+      0,
+    );
+    expect(o1.total).toBe(250000);
+
+    const found = await list(alice, { query: "+92 300 1234567" });
+    expect(found.body.data).toHaveLength(1);
+    expect(found.body.data[0].id).toBe(o1.customerId);
+
+    let detail = await profile(alice, o1.customerId);
+    expect(detail.summary).toMatchObject({
+      totalOrderCount: 1,
+      completedOrderCount: 0,
+      lifetimeSpend: { amountMinor: 0 },
+    });
+    expect(detail.tags).toContain("first_time");
+    expect(detail.recentOrders.map((o: { id: string }) => o.id)).toEqual([o1.id]);
+    expect(timelineOf(detail, [o1.id])).toEqual(["1:none>draft"]);
+
+    const byOrders = await as(alice, "get", ORDERS).query({
+      workspaceId: alice.workspaceId,
+      customerId: o1.customerId,
+    });
+    expect(byOrders.body.data.map((o: { id: string }) => o.id)).toEqual([o1.id]);
+
+    let ctx = await context(alice, "+92 300 1234567");
+    expect(ctx).toMatchObject({
+      found: true,
+      customer: { id: o1.customerId },
+      summary: { totalOrderCount: 1, completedOrderCount: 0, lifetimeSpend: { amountMinor: 0 } },
+    });
+    expect(ctx.tags).toContain("first_time");
+
+    // 2. Confirming it turns the draft into spend.
+    await transition(alice, o1.id, "confirmed");
+
+    detail = await profile(alice, o1.customerId);
+    expect(detail.summary).toMatchObject({
+      totalOrderCount: 1,
+      completedOrderCount: 1,
+      lifetimeSpend: { amountMinor: o1.total },
+      averageOrderValue: { amountMinor: o1.total },
+    });
+    expect(detail.tags).not.toContain("first_time");
+    expect(timelineOf(detail, [o1.id])).toEqual(["1:draft>confirmed", "1:none>draft"]);
+
+    ctx = await context(alice, "+92 300 1234567");
+    expect(ctx.summary).toMatchObject({
+      completedOrderCount: 1,
+      lifetimeSpend: { amountMinor: o1.total },
+    });
+    const tools = createCopilotTools(
+      sellerContext({
+        auth: { userId: alice.sellerId, email: null, accessToken: alice.accessToken },
+      } as never),
+    );
+    const viaTool = await tools.getCustomerProfile.execute({ phone: "+92 300 1234567" });
+    if (!("found" in viaTool) || !viaTool.found) throw new Error("expected a found customer");
+    expect(viaTool.summary).toMatchObject({
+      totalOrderCount: 1,
+      completedOrderCount: 1,
+      lifetimeSpend: { amountMinor: o1.total },
+    });
+
+    // 3. A second order, phone typed another way, is still the same customer.
+    const o2 = await place(
+      alice,
+      { name: "Ayesha K. Malik", phone: "+92 300 1234567", city: "Karachi" },
+      10001,
+    );
+    expect(o2.customerId).toBe(o1.customerId);
+    expect(o2.total).toBe(260001);
+    expect((await list(alice)).body.data).toHaveLength(1);
+
+    detail = await profile(alice, o1.customerId);
+    expect(detail.summary.totalOrderCount).toBe(2);
+    expect(detail.recentOrders.map((o: { id: string }) => o.id)).toEqual([o2.id, o1.id]);
+    // The customer shows the latest order's name and city...
+    expect(detail.name).toBe("Ayesha K. Malik");
+    expect(detail.city).toBe("Karachi");
+    // ...while the first order keeps its own snapshot.
+    expect(detail.recentOrders[1]).toMatchObject({
+      customerName: "Ayesha Khan",
+      customerCity: "Lahore",
+    });
+
+    // 4. Confirming the second: spend adds up and the customer is a repeat.
+    await transition(alice, o2.id, "confirmed");
+
+    detail = await profile(alice, o1.customerId);
+    expect(detail.summary).toMatchObject({
+      totalOrderCount: 2,
+      completedOrderCount: 2,
+      lifetimeSpend: { amountMinor: 510001 },
+      // mean 255000.5, rounded
+      averageOrderValue: { amountMinor: 255001 },
+    });
+    expect(detail.tags).toContain("repeat");
+
+    // 5. A cancelled third order counts as an order but never as spend.
+    const o3 = await place(
+      alice,
+      { name: "Ayesha K. Malik", phone: "03001234567", city: "Karachi" },
+      0,
+    );
+    await transition(alice, o3.id, "cancelled");
+
+    detail = await profile(alice, o1.customerId);
+    expect(detail.summary).toMatchObject({
+      totalOrderCount: 3,
+      completedOrderCount: 2,
+      lifetimeSpend: { amountMinor: 510001 },
+      averageOrderValue: { amountMinor: 255001 },
+    });
+    expect(detail.summary.statusCounts.cancelled).toBe(1);
+    expect(detail.recentOrders.map((o: { id: string }) => o.id)).toEqual([o3.id, o2.id, o1.id]);
+
+    // 6. A risk note flags the customer; deleting it clears the flag.
+    const note = await as(alice, "post", `${CUSTOMERS}/${o1.customerId}/notes`).send({
+      workspaceId: alice.workspaceId,
+      kind: "risk",
+      body: "Refused delivery once",
+    });
+    expect(note.status).toBe(201);
+
+    detail = await profile(alice, o1.customerId);
+    expect(detail.tags).toContain("flagged");
+    expect(detail.summary).toMatchObject({ noteCount: 1, riskNoteCount: 1 });
+    expect(timelineOf(detail, [o1.id, o2.id, o3.id])[0]).toBe("note");
+
+    const deleted = await as(
+      alice,
+      "delete",
+      `${CUSTOMERS}/${o1.customerId}/notes/${note.body.data.id}`,
+    ).query({ workspaceId: alice.workspaceId });
+    expect(deleted.status).toBe(204);
+
+    detail = await profile(alice, o1.customerId);
+    expect(detail.tags).not.toContain("flagged");
+    expect(detail.summary).toMatchObject({ noteCount: 0, riskNoteCount: 0 });
+    expect(detail.summary.lifetimeSpend.amountMinor).toBe(510001);
+
+    // 7. Another seller with the same phone is a different, separate customer.
+    const bobs = await place(bob, { name: "Bob's Ayesha", phone: "0300 1234567", city: "Multan" }, 0);
+    expect(bobs.customerId).not.toBe(o1.customerId);
+
+    const bobDetail = await profile(bob, bobs.customerId);
+    expect(bobDetail.summary).toMatchObject({
+      totalOrderCount: 1,
+      completedOrderCount: 0,
+      lifetimeSpend: { amountMinor: 0 },
+    });
+    expect(bobDetail.recentOrders.map((o: { id: string }) => o.id)).toEqual([bobs.id]);
+
+    // Alice's numbers did not move.
+    detail = await profile(alice, o1.customerId);
+    expect(detail.summary.totalOrderCount).toBe(3);
   });
 });
