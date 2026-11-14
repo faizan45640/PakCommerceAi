@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Plus, Search } from "lucide-react";
 import type { Product, ProductListItem } from "@pakcommerce/shared";
 
@@ -26,6 +26,8 @@ export function ProductPicker({ workspaceId, onAdd }: ProductPickerProps) {
   const [selected, setSelected] = useState<Product | null>(null);
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
+  // Only the most recent product selection may update state.
+  const selectToken = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(search), 300);
@@ -58,14 +60,18 @@ export function ProductPicker({ workspaceId, onAdd }: ProductPickerProps) {
   const results = loaded?.items ?? [];
 
   async function selectProduct(item: ProductListItem) {
+    const token = ++selectToken.current;
     setIsLoadingProduct(true);
     setProductError(null);
     try {
-      setSelected(await fetchProductById(item.id));
+      const product = await fetchProductById(item.id);
+      if (token === selectToken.current) setSelected(product);
     } catch (err: unknown) {
-      setProductError(err instanceof Error ? err.message : "Failed to load product.");
+      if (token === selectToken.current) {
+        setProductError(err instanceof Error ? err.message : "Failed to load product.");
+      }
     } finally {
-      setIsLoadingProduct(false);
+      if (token === selectToken.current) setIsLoadingProduct(false);
     }
   }
 
@@ -92,7 +98,10 @@ export function ProductPicker({ workspaceId, onAdd }: ProductPickerProps) {
       <div className="flex flex-col gap-3 rounded-lg border p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="font-medium text-sm">{selected.title}</p>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => {
+              selectToken.current++;
+              setSelected(null);
+            }}>
             Back to results
           </Button>
         </div>

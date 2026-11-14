@@ -9,7 +9,9 @@ import {
   emptyOrderForm,
   estimateTotals,
   exceedsStock,
+  ADDRESS_REQUIRED_MESSAGE,
   mapDetailsToErrors,
+  parseQuantity,
   rupeesToMinor,
   validateDraftInput,
 } from "./order-form";
@@ -32,7 +34,13 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
 }
 
 const W = "00000000-0000-4000-8000-0000000000a1";
-const filled = { ...emptyOrderForm, name: "Ali", phone: "03001234567", city: "Lahore" };
+const filled = {
+  ...emptyOrderForm,
+  name: "Ali",
+  phone: "03001234567",
+  city: "Lahore",
+  addressLine: "12 Mall Road",
+};
 
 describe("cartReducer", () => {
   it("adds a new line", () => {
@@ -103,6 +111,19 @@ describe("rupeesToMinor", () => {
   });
 });
 
+describe("parseQuantity", () => {
+  it("accepts positive whole numbers", () => {
+    expect(parseQuantity("1")).toBe(1);
+    expect(parseQuantity(" 12 ")).toBe(12);
+  });
+
+  it("rejects blank, zero, negative, fractional and non-numeric text", () => {
+    for (const text of ["", "  ", "0", "-3", "1.5", "abc", "1e3"]) {
+      expect(parseQuantity(text)).toBeNull();
+    }
+  });
+});
+
 describe("estimateTotals", () => {
   it("sums price x quantity plus shipping", () => {
     const lines = [line({ quantity: 2 }), line({ variantId: "v2", unitPriceMinor: 50000, quantity: 1 })];
@@ -119,13 +140,20 @@ describe("buildDraftInput and validation", () => {
     const input = buildDraftInput(W, filled, [line({ quantity: 2 })], 0);
     expect(input.items).toEqual([{ productId: P1, variantId: V1, quantity: 2 }]);
     expect(input.customer.email).toBeUndefined();
-    expect(input.customer.addressLine).toBeUndefined();
+    expect(input.customer.addressLine).toBe("12 Mall Road");
     expect(input.note).toBeUndefined();
   });
 
-  it("accepts a complete draft without an address", () => {
+  it("accepts a complete draft", () => {
     const errors = validateDraftInput(buildDraftInput(W, filled, [line()], 0));
     expect(errors).toEqual({ fields: {}, lines: {}, general: [] });
+  });
+
+  it("requires an address line, including when it is only whitespace", () => {
+    for (const addressLine of ["", "   "]) {
+      const errors = validateDraftInput(buildDraftInput(W, { ...filled, addressLine }, [line()], 0));
+      expect(errors.fields["customer.addressLine"]).toBe(ADDRESS_REQUIRED_MESSAGE);
+    }
   });
 
   it("reports field errors from the shared schema", () => {

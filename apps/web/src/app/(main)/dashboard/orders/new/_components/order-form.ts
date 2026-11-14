@@ -169,14 +169,38 @@ export function hasErrors(errors: FormErrors): boolean {
   );
 }
 
-/** Client-side check against the same schema the API uses. */
+export const ADDRESS_REQUIRED_MESSAGE =
+  "Address line is required. A draft without an address can't be confirmed.";
+
+/**
+ * Parses a typed quantity into a positive integer, or null when it is blank,
+ * zero, negative, fractional or not a number.
+ */
+export function parseQuantity(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const quantity = Number(trimmed);
+  return Number.isSafeInteger(quantity) && quantity >= 1 ? quantity : null;
+}
+
+export const QUANTITY_INVALID_MESSAGE = "Enter a whole number of 1 or more.";
+
+/**
+ * Client-side check: the same schema the API uses, plus the form's own rule that the
+ * address is required (the API keeps it optional, but a draft without one can never
+ * be confirmed and drafts cannot be edited).
+ */
 export function validateDraftInput(input: CreateDraftOrderInput): FormErrors {
   const result = createDraftOrderInputSchema.safeParse(input);
-  if (result.success) return { fields: {}, lines: {}, general: [] };
   const details: Record<string, string[]> = {};
-  for (const issue of result.error.issues) {
-    const key = issue.path.join(".") || "_";
-    (details[key] ??= []).push(issue.message);
+  if (!result.success) {
+    for (const issue of result.error.issues) {
+      const key = issue.path.join(".") || "_";
+      (details[key] ??= []).push(issue.message);
+    }
+  }
+  if (!input.customer.addressLine && !details["customer.addressLine"]) {
+    details["customer.addressLine"] = [ADDRESS_REQUIRED_MESSAGE];
   }
   return mapDetailsToErrors(details);
 }

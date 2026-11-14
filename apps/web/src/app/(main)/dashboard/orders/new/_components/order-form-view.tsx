@@ -29,6 +29,8 @@ import {
   hasErrors,
   mapDetailsToErrors,
   type OrderFormValues,
+  parseQuantity,
+  QUANTITY_INVALID_MESSAGE,
   rupeesToMinor,
   validateDraftInput,
 } from "./order-form";
@@ -44,6 +46,8 @@ export function OrderFormView() {
   const [lines, dispatch] = useReducer(cartReducer, []);
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Text being typed in a quantity box, keyed by variant id. Absent means "show the cart value".
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let ignore = false;
@@ -67,9 +71,35 @@ export function OrderFormView() {
   const totals = estimateTotals(lines, shippingMinor ?? 0);
   const shortLines = lines.filter(exceedsStock);
 
+  function editQuantity(variantId: string, text: string) {
+    setQuantityDrafts((current) => ({ ...current, [variantId]: text }));
+    const quantity = parseQuantity(text);
+    if (quantity !== null) {
+      dispatch({ type: "setQuantity", variantId, quantity });
+      setErrors((current) => (hasErrors(current) ? { ...current, lines: {} } : current));
+    }
+  }
+
+  function finishQuantity(variantId: string) {
+    setQuantityDrafts((current) => {
+      const rest = { ...current };
+      delete rest[variantId];
+      return rest;
+    });
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!workspaceId || isSubmitting) return;
+
+    const badQuantity = lines.findIndex((line) => {
+      const draft = quantityDrafts[line.variantId];
+      return draft !== undefined && parseQuantity(draft) === null;
+    });
+    if (badQuantity !== -1) {
+      setErrors({ ...NO_ERRORS, lines: { [badQuantity]: QUANTITY_INVALID_MESSAGE } });
+      return;
+    }
 
     if (shippingMinor === null) {
       setErrors({ ...NO_ERRORS, fields: { shippingFee: "Enter a valid amount in rupees, e.g. 250 or 250.50." } });
@@ -180,7 +210,7 @@ export function OrderFormView() {
                 {textField(
                   "addressLine",
                   "Address line",
-                  "Optional for a draft, but an address is needed before you can confirm the order.",
+                  "Required. A draft without an address can't be confirmed.",
                 )}
               </div>
             </CardContent>
@@ -211,16 +241,21 @@ export function OrderFormView() {
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <Input
-                              type="number"
-                              min={1}
-                              step={1}
-                              value={line.quantity}
-                              onChange={(event) => {
-                                const quantity = Math.floor(Number(event.target.value));
-                                if (Number.isFinite(quantity) && quantity >= 1) {
-                                  dispatch({ type: "setQuantity", variantId: line.variantId, quantity });
+                              inputMode="numeric"
+                              value={quantityDrafts[line.variantId] ?? String(line.quantity)}
+                              onChange={(event) => editQuantity(line.variantId, event.target.value)}
+                              onBlur={() => {
+                                const draft = quantityDrafts[line.variantId];
+                                if (draft === undefined || parseQuantity(draft) !== null) {
+                                  finishQuantity(line.variantId);
+                                } else {
+                                  setErrors((current) => ({
+                                    ...current,
+                                    lines: { ...current.lines, [index]: QUANTITY_INVALID_MESSAGE },
+                                  }));
                                 }
                               }}
+                              aria-invalid={quantityDrafts[line.variantId] !== undefined && parseQuantity(quantityDrafts[line.variantId]) === null ? true : undefined}
                               className="w-20"
                               aria-label={`Quantity for ${line.productTitle} ${line.variantTitle}`}
                             />
