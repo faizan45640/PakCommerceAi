@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.18"
   }
   graphql_public: {
     Tables: {
@@ -85,11 +85,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "categories_workspace_seller_fkey"
-            columns: ["workspace_id", "seller_id"]
+            foreignKeyName: "categories_workspace_id_fkey"
+            columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
-            referencedColumns: ["id", "seller_id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -127,6 +127,224 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "copilot_chats_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          line_total_amount_minor: number
+          order_id: string
+          product_id: string
+          quantity: number
+          seller_id: string
+          sku: string | null
+          title: string
+          unit_price_amount_minor: number
+          updated_at: string
+          variant_id: string
+          variant_title: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          line_total_amount_minor: number
+          order_id: string
+          product_id: string
+          quantity: number
+          seller_id: string
+          sku?: string | null
+          title: string
+          unit_price_amount_minor: number
+          updated_at?: string
+          variant_id: string
+          variant_title?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          line_total_amount_minor?: number
+          order_id?: string
+          product_id?: string
+          quantity?: number
+          seller_id?: string
+          sku?: string | null
+          title?: string
+          unit_price_amount_minor?: number
+          updated_at?: string
+          variant_id?: string
+          variant_title?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_workspace_fkey"
+            columns: ["order_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "order_items_variant_fkey"
+            columns: ["variant_id", "product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id", "product_id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "order_items_variant_fkey"
+            columns: ["variant_id", "product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["variant_id", "product_id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "order_items_variant_fkey"
+            columns: ["variant_id", "product_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id", "product_id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "order_items_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      order_status_history: {
+        Row: {
+          created_at: string
+          from_status: Database["public"]["Enums"]["order_status"] | null
+          id: string
+          note: string | null
+          order_id: string
+          performed_by: string | null
+          seller_id: string
+          to_status: Database["public"]["Enums"]["order_status"]
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["order_status"] | null
+          id?: string
+          note?: string | null
+          order_id: string
+          performed_by?: string | null
+          seller_id: string
+          to_status: Database["public"]["Enums"]["order_status"]
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          from_status?: Database["public"]["Enums"]["order_status"] | null
+          id?: string
+          note?: string | null
+          order_id?: string
+          performed_by?: string | null
+          seller_id?: string
+          to_status?: Database["public"]["Enums"]["order_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_history_order_workspace_fkey"
+            columns: ["order_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "order_status_history_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          cancelled_at: string | null
+          channel: Database["public"]["Enums"]["order_channel"]
+          confirmed_at: string | null
+          created_at: string
+          currency: string
+          customer_address_line: string | null
+          customer_city: string
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string
+          id: string
+          note: string | null
+          payment_method: Database["public"]["Enums"]["order_payment_method"]
+          seller_id: string
+          shipping_fee_amount_minor: number
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal_amount_minor: number
+          total_amount_minor: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          channel?: Database["public"]["Enums"]["order_channel"]
+          confirmed_at?: string | null
+          created_at?: string
+          currency?: string
+          customer_address_line?: string | null
+          customer_city: string
+          customer_email?: string | null
+          customer_name: string
+          customer_phone: string
+          id?: string
+          note?: string | null
+          payment_method?: Database["public"]["Enums"]["order_payment_method"]
+          seller_id: string
+          shipping_fee_amount_minor?: number
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_amount_minor: number
+          total_amount_minor: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          channel?: Database["public"]["Enums"]["order_channel"]
+          confirmed_at?: string | null
+          created_at?: string
+          currency?: string
+          customer_address_line?: string | null
+          customer_city?: string
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string
+          id?: string
+          note?: string | null
+          payment_method?: Database["public"]["Enums"]["order_payment_method"]
+          seller_id?: string
+          shipping_fee_amount_minor?: number
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_amount_minor?: number
+          total_amount_minor?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_workspace_seller_fkey"
             columns: ["workspace_id", "seller_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -176,18 +394,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "product_images_product_workspace_fkey"
-            columns: ["product_id", "workspace_id"]
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id", "workspace_id"]
+            referencedRelation: "product_list_view"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "product_images_workspace_seller_fkey"
-            columns: ["workspace_id", "seller_id"]
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_images_workspace_id_fkey"
+            columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
-            referencedColumns: ["id", "seller_id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -616,11 +841,33 @@ export type Database = {
         Returns: string
       }
       create_product: { Args: { payload: Json }; Returns: string }
+      is_allowed_order_status_transition: {
+        Args: {
+          from_status: Database["public"]["Enums"]["order_status"]
+          to_status: Database["public"]["Enums"]["order_status"]
+        }
+        Returns: boolean
+      }
       run_guarded_mutation: { Args: { p_sql: string }; Returns: Json }
       run_readonly_query: { Args: { p_sql: string }; Returns: Json }
     }
     Enums: {
       inventory_state: "in_stock" | "low_stock" | "out_of_stock" | "untracked"
+      order_channel:
+        | "whatsapp"
+        | "shopify"
+        | "woocommerce"
+        | "instagram"
+        | "facebook"
+        | "manual"
+      order_payment_method: "cod" | "prepaid"
+      order_status:
+        | "draft"
+        | "confirmed"
+        | "shipped"
+        | "delivered"
+        | "cancelled"
+        | "returned"
       product_status: "draft" | "active" | "archived"
       product_variant_status: "active" | "inactive"
       seller_verification_status:
@@ -767,6 +1014,23 @@ export const Constants = {
   public: {
     Enums: {
       inventory_state: ["in_stock", "low_stock", "out_of_stock", "untracked"],
+      order_channel: [
+        "whatsapp",
+        "shopify",
+        "woocommerce",
+        "instagram",
+        "facebook",
+        "manual",
+      ],
+      order_payment_method: ["cod", "prepaid"],
+      order_status: [
+        "draft",
+        "confirmed",
+        "shipped",
+        "delivered",
+        "cancelled",
+        "returned",
+      ],
       product_status: ["draft", "active", "archived"],
       product_variant_status: ["active", "inactive"],
       seller_verification_status: [

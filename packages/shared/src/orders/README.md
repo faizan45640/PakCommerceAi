@@ -91,9 +91,17 @@ Additional marketplaces (for example Daraz) are out of scope until a later contr
 - Each row records `fromStatus`, `toStatus`, actor, optional note, and timestamp.
 - `fromStatus` / `toStatus` must be a legal pair from the transition table.
 
+## Schema (T-035)
+
+Landed in `supabase/migrations/202611140558*_*.sql`:
+
+- Enums: `order_status`, `order_channel`, `order_payment_method`
+- Tables: `orders`, `order_items`, `order_status_history` (append-only)
+- RLS: seller-scoped on all three; history is insert/select only
+- Helper: `is_allowed_order_status_transition` mirrors `ORDER_STATUS_TRANSITIONS`
+
 ## Out of Scope
 
-- Database migrations / `orders` tables (T-035)
 - Express CRUD and stock deduction services (T-036, T-037)
 - Dashboard UI wiring (T-038–T-040 already use mocks; connect later)
 - Customer entity and `customerId` foreign key (T-043+)

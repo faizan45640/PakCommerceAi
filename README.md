@@ -38,10 +38,12 @@ When a document describes a feature, check the status table below before assumin
 
 ### Database
 
-Nine tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
-`product_images`, `categories`, `copilot_chats`, `stock_movements`.
-Six enums: `seller_verification_status`, `workspace_status`, `product_status`,
-`product_variant_status`, `inventory_state`, `stock_movement_reason`.
+Twelve tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
+`product_images`, `categories`, `copilot_chats`, `stock_movements`, `orders`,
+`order_items`, `order_status_history`.
+Nine enums: `seller_verification_status`, `workspace_status`, `product_status`,
+`product_variant_status`, `inventory_state`, `stock_movement_reason`, `order_status`,
+`order_channel`, `order_payment_method`.
 Two views: `product_list_view`, `inventory`.
 
 Stock lives on `product_variants` (on hand, reserved, threshold). `inventory` is a read-only
@@ -50,7 +52,8 @@ view over it, and `stock_movements` is the append-only history of every change.
 transaction through the `adjust_stock` function. The product API and the copilot's stock
 tools do not go through it yet, so they still change quantities without a movement.
 
-Orders, customers, conversations, and couriers **do not exist yet**.
+Orders have a schema (T-035) but no draft/confirm API yet. Customers, conversations, and
+couriers **do not exist yet**.
 
 ✅ The schema is reproducible from source. `supabase/migrations/` holds every change and
 `npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are
