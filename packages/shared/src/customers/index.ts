@@ -64,8 +64,11 @@ export const customerSchema = z.object({
   workspaceId: idSchema,
   sellerId: idSchema,
   name: trimmedText.min(1).max(160),
-  /** Normalised (see `normalizePhone`), e.g. `+923001234567`. */
-  phone: trimmedText.min(1).max(32),
+  /**
+   * Normalised (see `normalizePhone`), e.g. `+923001234567`. Legacy orders with
+   * no usable phone are keyed `order:<order id>`, hence the longer limit.
+   */
+  phone: trimmedText.min(1).max(64),
   /** Lower-cased. */
   email: z.email().nullable().optional(),
   city: trimmedText.min(1).max(80),
