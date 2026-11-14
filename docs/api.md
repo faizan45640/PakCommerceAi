@@ -184,6 +184,13 @@ touch stock; confirming deducts available stock with a `sale` movement.
 Creates a draft order with line items and the initial status-history row in one database
 transaction (`create_draft_order`). Validated against `createDraftOrderInputSchema`.
 
+Limits: money amounts are capped at 2,147,483,647 minor units (the Postgres `integer` maximum), item
+`quantity` at 100,000 per line, and the server rejects a line total, subtotal or total over the money cap
+with **400** (`items.<i>.quantity` or `total`). `customer.addressLine` stays optional here for future
+channels, but a draft without one cannot be confirmed (`address_required`) and drafts cannot be edited,
+so seller-facing UIs and the copilot require it. Order lines are returned ordered by creation time, then id
+(`order_items` has no position column, so id only makes the order deterministic).
+
 ```json
 {
   "workspaceId": "…",
@@ -399,13 +406,13 @@ The chat turn at `POST /api/v1/copilot/chat` (auth required, streams via the Ver
 |---|---|---|
 | `searchProducts` | Structured search over the seller's catalogue (text, status, inventory state, tags, sort). Returns `ProductListItem[]` validated against the shared contract. | Reuses the product service + RLS; the model never supplies a `workspaceId` — it is resolved from the seller context. |
 | `getSchema` | Lists the seller's queryable tables and their real columns/types, so the model can confirm what exists before writing SQL. | Runs a fixed introspection query (never model-authored) through `run_readonly_query`; input capped to the owned tables by an enum. |
-| `queryDatabase` | Executes a single read-only SELECT the model wrote, for questions no structured tool covers. | Runs via the `run_readonly_query` Postgres function (SECURITY INVOKER): RLS applies, semicolons and mutating keywords are rejected, bounded to 10s / 200 rows. |
+| `queryDatabase` | Executes a single read-only SELECT the model wrote, for questions no structured tool covers. | Runs via the `run_readonly_query` Postgres function (SECURITY INVOKER) in a **read-only transaction**: RLS applies, nothing can be written (not even through a function call), semicolons, mutating keywords, `set_config` and functions that run SQL from a string (`query_to_xml`, `ts_stat`, …) are rejected, bounded to 10s / 200 rows. |
 | `getCourierPerformance` | City delivery metrics. **Demo stub** — returns fixed sample values until courier data exists. | Read-only. |
-| `mutateDatabase` | Universal guarded write-side mutation tool (UPDATE, INSERT, DELETE). Enables modifying any catalogue or inventory attribute. | Strictly requires Human-in-the-Loop (`user-approval`) in the UI before execution. Runs via `run_guarded_mutation` (SECURITY INVOKER) with Postgres RLS; destructive DDL (`DROP`, `ALTER`, `TRUNCATE`) is forbidden. |
+| `mutateDatabase` | Universal guarded write-side mutation tool (UPDATE, INSERT, DELETE). Enables modifying any catalogue or inventory attribute. | Strictly requires Human-in-the-Loop (`user-approval`) in the UI before execution. Runs via `run_guarded_mutation` (SECURITY INVOKER) with Postgres RLS; destructive DDL (`DROP`, `ALTER`, `TRUNCATE`) is forbidden, and so are `set_config`, functions that run SQL from a string, `U&` escapes and `transition_order_status`, so it cannot fake the seller's identity or change an order's status. |
 | `updateProductStock` | Updates quantity on hand for a variant. | Requires Human-in-the-Loop (`user-approval`). Updates `product_variants` directly via caller's authenticated RLS client. |
 | `updateProductPrice` | Updates selling price and compare-at price in PKR. | Requires Human-in-the-Loop (`user-approval`). Updates `product_variants` directly via caller's authenticated RLS client. |
 | `updateProductDetails` | Updates product title, description, status, or tags. | Requires Human-in-the-Loop (`user-approval`). Updates `products` directly via caller's authenticated RLS client. |
-| `createDraftOrder` | Creates a **draft** order for a customer (customer name/phone/city, optional address/email, `items[{variantId, productId, quantity}]`, optional `channel`, `paymentMethod`, `shippingFee` in PKR minor units, `note`). Returns `{ status, orderId, orderStatus: "draft", total, itemCount, message }`. | Requires Human-in-the-Loop (`user-approval`). Calls the same `createDraftOrder` order service as `POST /orders`: the workspace is the seller's current one (as `GET /workspaces/current`, never model-supplied), variants resolve under RLS, and prices are snapshotted server-side. The input has no status, price, title, sku or total, so it can only create drafts, never confirms or cancels, and does not touch stock. The seller confirms from the Orders page. |
+| `createDraftOrder` | Creates a **draft** order for a customer (customer name/phone/city/address line, optional email, `items[{variantId, productId, quantity}]`, optional `channel`, `paymentMethod`, `shippingFee` in PKR minor units, `note`). Returns `{ status, orderId, orderStatus: "draft", total, itemCount, message }`. | Requires Human-in-the-Loop (`user-approval`). Calls the same `createDraftOrder` order service as `POST /orders`: the workspace is the seller's current one (as `GET /workspaces/current`, never model-supplied), variants resolve under RLS, and prices are snapshotted server-side. The input has no status, price, title, sku or total, so it can only create drafts, never confirms or cancels, and does not touch stock. The seller confirms from the Orders page. |
 
 Tools are built per request from the seller context (`createCopilotTools(auth)`), so a seller can only ever read or mutate their own data through them — the same RLS boundary as the REST endpoints.
 

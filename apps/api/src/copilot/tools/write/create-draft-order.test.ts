@@ -24,7 +24,7 @@ const PRODUCT_ID = "223e4567-e89b-42d3-a456-426614174000";
 const WORKSPACE_ID = "323e4567-e89b-42d3-a456-426614174000";
 
 const validInput = {
-  customer: { name: "Ali", phone: "03001234567", city: "Lahore" },
+  customer: { name: "Ali", phone: "03001234567", city: "Lahore", addressLine: "12 Mall Road" },
   items: [{ variantId: VARIANT_ID, productId: PRODUCT_ID, quantity: 2 }],
 };
 
@@ -46,13 +46,43 @@ describe("createDraftOrderToolInputSchema", () => {
     expect(
       createDraftOrderToolInputSchema.safeParse({
         ...validInput,
-        customer: { name: "Ali", phone: "03001234567" },
+        customer: { name: "Ali", phone: "03001234567", addressLine: "12 Mall Road" },
       }).success,
     ).toBe(false);
     expect(
       createDraftOrderToolInputSchema.safeParse({
         ...validInput,
         items: [{ variantId: VARIANT_ID, productId: PRODUCT_ID, quantity: 0 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a non-blank address line", () => {
+    for (const addressLine of [undefined, "", "   "]) {
+      expect(
+        createDraftOrderToolInputSchema.safeParse({
+          ...validInput,
+          customer: { ...validInput.customer, addressLine },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("treats blank email and note as absent", () => {
+    const parsed = createDraftOrderToolInputSchema.parse({
+      ...validInput,
+      customer: { ...validInput.customer, email: "" },
+      note: "  ",
+    });
+    expect(parsed.customer.email).toBeUndefined();
+    expect(parsed.note).toBeUndefined();
+  });
+
+  it("still rejects a malformed non-blank email", () => {
+    expect(
+      createDraftOrderToolInputSchema.safeParse({
+        ...validInput,
+        customer: { ...validInput.customer, email: "nope" },
       }).success,
     ).toBe(false);
   });
@@ -116,7 +146,7 @@ describe("createDraftOrderTool", () => {
       channel: "manual",
       paymentMethod: "cod",
       shippingFee: { amountMinor: 20000, currency: "PKR" },
-      customer: { name: "Ali", phone: "03001234567", city: "Lahore" },
+      customer: { name: "Ali", phone: "03001234567", city: "Lahore", addressLine: "12 Mall Road" },
       items: [{ variantId: VARIANT_ID, productId: PRODUCT_ID, quantity: 2 }],
     });
     expect(serviceInput).not.toHaveProperty("status");

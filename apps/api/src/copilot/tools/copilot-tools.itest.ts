@@ -268,7 +268,12 @@ describe("createDraftOrder tool", () => {
     return count ?? 0;
   }
 
-  const customer = { name: "Ali", phone: "03001234567", city: "Lahore" };
+  const customer = {
+    name: "Ali",
+    phone: "03001234567",
+    city: "Lahore",
+    addressLine: "12 Mall Road",
+  };
 
   it("creates a draft at the catalogue price and leaves stock alone", async () => {
     const productId = await createProduct(alice, {

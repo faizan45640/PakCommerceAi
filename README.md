@@ -134,15 +134,15 @@ npm run dev
 
 | Workspace | Unit tests | Covers |
 |---|---|---|
-| `packages/shared` | 116 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
+| `packages/shared` | 118 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine, money and quantity caps |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 146 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations, draft-only `createDraftOrder`) |
+| `apps/api` | 153 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations, draft-only `createDraftOrder`) |
 | `apps/web` | 38 | `getInitials`, `formatCurrency`, preference parsing, order confirm/cancel gating, manual order form logic (cart, rupee conversion, quantity parsing, estimate, address-required validation, error mapping), and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**316 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**325 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**218 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+**222 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -156,13 +156,13 @@ npm run dev
 | `packages/integrations` order schema | 17 | Order, item and history columns match the contract, enums match Zod, totals/address/`confirmed_at` checks, illegal transitions and raw status updates refused, history is append-only |
 | `packages/integrations` order isolation | 14 | A seller cannot read, insert, change or delete another seller's orders, items or history; anonymous users read nothing |
 | `packages/integrations` order lifecycle | 9 | Status only changes through the lifecycle gate; cancel is atomic; confirm deducts stock with a sale movement and refuses short stock; lines freeze after leaving draft |
-| `packages/integrations` copilot SQL guards | 6 | The read-only query tool cannot write (even through a function call), and the guarded mutation tool cannot open the order lifecycle gate, use escapes, or call `transition_order_status`; plain selects and updates still work |
+| `packages/integrations` copilot SQL guards | 10 | The read-only query tool cannot write (even through a function call); neither SQL tool can reach `set_config` — directly, through functions that run SQL from a string (`query_to_xml`, `ts_stat`), through each other, or with escapes — so they cannot fake the seller's identity or open the order lifecycle gate; plain selects and updates still work |
 | `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
 | `apps/api` inventory API | 23 | Stock adjustments and movement history against a real database: every refusal, nothing written on refusal, filters, paging, isolation |
 | `apps/api` orders API | 16 | Draft create/list/get, order detail (status history, stock checks), confirm with stock deduction, short-stock refusal and cancel against a real database, with RLS isolation |
 | `apps/api` copilot tools | 15 | Read and guarded-write tools against a real database, including `createDraftOrder` (draft only, server-side prices, stock untouched, other sellers refused) |
 
-**536 tests total** (316 Node unit + 2 Python + 218 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
+**549 tests total** (325 Node unit + 2 Python + 222 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 

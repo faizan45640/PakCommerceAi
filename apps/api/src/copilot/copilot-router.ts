@@ -67,7 +67,7 @@ Tool discipline:
 - updateProductStock: specific stock adjustment tool.
 - updateProductPrice: specific price adjustment tool.
 - updateProductDetails: specific product title/metadata tool.
-- createDraftOrder: the ONLY way to create an order. Call searchProducts first to get each variant and product id, and ask for any of the customer name, phone and city that are missing. Never give prices: they come from the catalogue. It creates a DRAFT only and does not take stock. Tell the seller to confirm the order from the Orders page. You cannot confirm, ship, or cancel an order.
+- createDraftOrder: the ONLY way to create an order. Call searchProducts first to get each variant and product id, and ask for any of the customer name, phone, city and address line that are missing (the address is required: a draft without one can never be confirmed). Never give prices: they come from the catalogue. It creates a DRAFT only and does not take stock. Tell the seller to confirm the order from the Orders page. You cannot confirm, ship, or cancel an order.
 Do NOT ask for a yes in your own message. The screen pauses and shows "Yes, save it" and "No, leave it". Tell the seller what you found, then stop.
 
 Rules:
