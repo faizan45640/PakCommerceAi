@@ -205,7 +205,7 @@ The first request to each route compiles it on demand and can take 5–20 second
 ```bash
 npm run lint         # all workspaces — ✅ passes (real ESLint everywhere)
 npm run typecheck    # all workspaces — ✅ passes
-npm run test         # all workspaces — 259 Node unit tests
+npm run test         # unit tests in all workspaces
 npm run build        # all workspaces — ✅ passes
 npm run ci           # lint + typecheck + test + build
 ```

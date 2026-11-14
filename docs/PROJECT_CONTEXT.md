@@ -21,7 +21,7 @@ Sections describing vision, domain, philosophy, and invariants describe **where 
 
 Before writing code that depends on a feature, check [Implementation Status](#implementation-status). When in doubt, assume it does not exist.
 
-**Last verified against the codebase: 2026-10-11.** `npm run test` passed: 259 Node unit tests (api 119, shared 109, integrations 16, web 15). `npm run test:integration` passed against a freshly reset local database: 154 database tests (integrations 94, api 60). The 2 Python tests live in `apps/ml` and run under `npm run ci:ml`.
+`npm run test` runs the unit tests, `npm run test:integration` the database tests (needs `npx supabase start`), and `npm run ci:ml` the Python tests in `apps/ml`. CI runs all three on every pull request; its summary is the source of truth for what passes.
 
 ---
 
