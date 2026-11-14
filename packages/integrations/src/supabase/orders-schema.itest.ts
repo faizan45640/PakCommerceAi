@@ -18,6 +18,7 @@ import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  asUser,
   connect,
   createSeller,
   insertOrder,
@@ -289,22 +290,42 @@ describe("order_status_history guards", () => {
     });
   });
 
-  it("accepts a legal draft to confirmed transition", async () => {
+  it("refuses raw status updates without the lifecycle gate", async () => {
     await withRollback(client, async () => {
-      const seller = await createSeller(client, "history-legal");
-      const orderId = await insertOrder(client, seller, {
-        status: "confirmed",
-        confirmedAt: new Date().toISOString(),
-        customerAddressLine: "House 1, Street 2",
-      });
+      const seller = await createSeller(client, "history-raw-status");
+      const orderId = await insertOrder(client, seller);
       await insertOrderStatusHistory(client, seller, orderId);
 
-      const historyId = await insertOrderStatusHistory(client, seller, orderId, {
-        fromStatus: "draft",
-        toStatus: "confirmed",
-      });
+      await expect(
+        client.query(
+          `update public.orders
+           set status = 'confirmed',
+               confirmed_at = now(),
+               customer_address_line = 'House 1'
+           where id = $1`,
+          [orderId],
+        ),
+      ).rejects.toThrow(/transition_order_status/i);
+    });
+  });
 
-      expect(historyId).toBeTruthy();
+  it("transition_order_status refuses confirm until stock work lands", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "history-confirm-blocked");
+      const productId = await insertProduct(client, seller, "kurta");
+      const variantId = await insertVariant(client, seller, productId);
+      const orderId = await insertOrder(client, seller);
+      await insertOrderItem(client, seller, orderId, productId, variantId);
+      await insertOrderStatusHistory(client, seller, orderId);
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          client.query(
+            `select public.transition_order_status($1, $2, 'confirmed', null)`,
+            [orderId, seller.workspaceId],
+          ),
+        ),
+      ).rejects.toThrow(/T-037|confirmation\/stock/i);
     });
   });
 

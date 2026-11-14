@@ -271,7 +271,13 @@ write `quantity_on_hand` directly and leave no movement - they should be moved o
 
 `create_draft_order` inserts a draft order, its line items, and the initial
 `order_status_history` row in one statement. It is `SECURITY INVOKER` (RLS applies) and
-does not touch stock. The orders API calls it; confirmation and reservation stay on T-037.
+does not touch stock. The orders API calls it.
+
+`transition_order_status` is the only path that may change `orders.status` (and write a
+matching history row). Raw status UPDATE/INSERT is refused. Until T-037 wires stock into
+that function, only `draft → cancelled` is enabled — confirmation cannot be faked via SQL
+or the copilot. Line items freeze after leaving draft; currency is PKR-only; subtotal must
+equal the sum of line totals.
 
 ## Known defects
 

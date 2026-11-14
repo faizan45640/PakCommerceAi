@@ -201,6 +201,14 @@ export async function insertOrder(
   seller: Seller,
   overrides: Record<string, unknown> = {},
 ): Promise<string> {
+  const status = (overrides.status as string | null | undefined) ?? null;
+  // Non-draft inserts need the lifecycle gate (production path is draft-only).
+  if (status && status !== "draft") {
+    await client.query(
+      `select set_config('pakcommerce.allow_order_lifecycle_change', 'on', true)`,
+    );
+  }
+
   const {
     rows: [order],
   } = await client.query<{ id: string }>(
@@ -218,7 +226,7 @@ export async function insertOrder(
     [
       overrides.workspaceId ?? seller.workspaceId,
       overrides.sellerId ?? seller.sellerId,
-      overrides.status ?? null,
+      status,
       overrides.channel ?? null,
       overrides.paymentMethod ?? null,
       overrides.customerName ?? "Test Customer",
@@ -291,6 +299,15 @@ export async function insertOrderStatusHistory(
   orderId: string,
   overrides: Record<string, unknown> = {},
 ): Promise<string> {
+  const fromStatus =
+    overrides.fromStatus === undefined ? null : overrides.fromStatus;
+  // Transition rows (from_status set) require the lifecycle gate.
+  if (fromStatus !== null && fromStatus !== undefined) {
+    await client.query(
+      `select set_config('pakcommerce.allow_order_lifecycle_change', 'on', true)`,
+    );
+  }
+
   const {
     rows: [history],
   } = await client.query<{ id: string }>(
@@ -306,7 +323,7 @@ export async function insertOrderStatusHistory(
       orderId,
       overrides.workspaceId ?? seller.workspaceId,
       overrides.sellerId ?? seller.sellerId,
-      overrides.fromStatus === undefined ? null : overrides.fromStatus,
+      fromStatus,
       overrides.toStatus ?? null,
       overrides.performedBy ?? seller.userId,
       overrides.note ?? null,

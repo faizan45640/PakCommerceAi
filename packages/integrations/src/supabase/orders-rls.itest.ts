@@ -188,30 +188,25 @@ describe("order_status_history isolation", () => {
     });
   });
 
-  it("seller can append a legal transition on their own order", async () => {
+  it("seller can cancel their own draft through transition_order_status", async () => {
     await withRollback(client, async () => {
       const alice = await sellerWithOrder("alice");
 
-      // Move the order onto the confirmed path so the history row is consistent
-      // with a real transition (status on the order itself is updated separately
-      // by the future T-037 service; here we only assert history insert RLS).
-      await client.query(
-        `update public.orders
-         set status = 'confirmed',
-             confirmed_at = now(),
-             customer_address_line = 'House 1'
-         where id = $1`,
-        [alice.orderId],
-      );
-
-      const historyId = await asUser(client, alice.seller.userId, () =>
-        insertOrderStatusHistory(client, alice.seller, alice.orderId, {
-          fromStatus: "draft",
-          toStatus: "confirmed",
-        }),
-      );
+      const historyId = await asUser(client, alice.seller.userId, async () => {
+        const result = await client.query<{ transition_order_status: string }>(
+          `select public.transition_order_status($1, $2, 'cancelled', 'buyer cancelled')`,
+          [alice.orderId, alice.seller.workspaceId],
+        );
+        return result.rows[0]?.transition_order_status;
+      });
 
       expect(historyId).toBeTruthy();
+
+      const status = await client.query<{ status: string }>(
+        `select status from public.orders where id = $1`,
+        [alice.orderId],
+      );
+      expect(status.rows[0]?.status).toBe("cancelled");
     });
   });
 

@@ -239,9 +239,14 @@ Full order with line items. Pass `?workspaceId=…` (required). Another seller's
 
 | Gap | Detail |
 |---|---|
-| **Confirm / cancel / ship** | Status transitions and stock reservation belong to T-037+ |
+| **Confirm / ship** | Blocked at the DB until T-037 extends `transition_order_status` with stock |
+| **Cancel HTTP** | `transition_order_status` supports `draft → cancelled`; no Express route yet |
 | **Edit draft** | No PATCH; recreate or wait for a later task |
 | **Dashboard** | Orders UI still uses mocks |
+
+Status, `confirmed_at`, and `cancelled_at` cannot be changed with a raw SQL `UPDATE`
+(including via the copilot). That closes the bypass that would otherwise let confirmation
+happen without stock.
 
 ---
 
