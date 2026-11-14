@@ -119,6 +119,21 @@ describe("customers are created by orders", () => {
   });
 });
 
+describe("orders need a usable phone", () => {
+  it("answers 400 on customer.phone for a phone with no digits", async () => {
+    const { productId, variantId } = await createTestVariant(alice);
+
+    const response = await as(alice, "post", ORDERS).send({
+      workspaceId: alice.workspaceId,
+      customer: { name: "A", phone: "n/a n/a", city: "Lahore" },
+      items: [{ productId, variantId, quantity: 1 }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.details["customer.phone"]).toBeDefined();
+  });
+});
+
 describe("GET /api/v1/customers", () => {
   it("returns contract-valid list items with computed spend and tags", async () => {
     await placeOrder(alice, { phone: "03001234567" }, { status: "confirmed", quantity: 2 });
@@ -186,6 +201,30 @@ describe("GET /api/v1/customers", () => {
     expect(partial.body.data.map((c: { name: string }) => c.name)).toEqual(["Sana Malik"]);
   });
 
+  it("filters by exact phone, normalising whatever is typed", async () => {
+    await placeOrder(alice, { name: "Ayesha Khan", phone: "03001234567" });
+    await placeOrder(alice, { name: "Sana Malik", phone: "03451112222" });
+
+    for (const typed of ["0300-1234567", "+92 300 1234567", "3001234567"]) {
+      const response = await list(alice, { phone: typed });
+      expect(response.status, typed).toBe(200);
+      expect(response.body.data.map((c: { name: string }) => c.name)).toEqual(["Ayesha Khan"]);
+    }
+
+    // Exact, not a substring.
+    expect((await list(alice, { phone: "0300-123456" })).body.data).toEqual([]);
+    expect((await list(alice, { phone: "n/a" })).status).toBe(400);
+  });
+
+  it("does not let * act as a wildcard in the search text", async () => {
+    await placeOrder(alice, { name: "Ayesha Khan", phone: "03001234567" });
+
+    expect((await list(alice, { query: "*" })).body.data).toEqual([]);
+    // As a wildcard "A*a" would match "Ayesha Khan".
+    expect((await list(alice, { query: "A*a" })).body.data).toEqual([]);
+    expect((await list(alice, { query: "Ayesha" })).body.data).toHaveLength(1);
+  });
+
   it("treats LIKE wildcards in the query as literal text", async () => {
     await placeOrder(alice, { name: "Ayesha Khan", phone: "03001234567" });
 
@@ -195,7 +234,7 @@ describe("GET /api/v1/customers", () => {
   });
 
   it("filters by derived tags, all of which must match", async () => {
-    // new: only a draft
+    // first_time: only a draft
     await placeOrder(alice, { name: "Newbie", phone: "03001111111" });
     // repeat: two completed orders
     await placeOrder(alice, { name: "Loyal", phone: "03002222222" }, { status: "confirmed" });
@@ -222,15 +261,15 @@ describe("GET /api/v1/customers", () => {
         (c: { name: string }) => c.name,
       );
 
-    expect(await names("new")).toEqual(["Newbie", "Risky"]);
+    expect(await names("first_time")).toEqual(["Newbie", "Risky"]);
     expect(await names("repeat")).toEqual(["Loyal"]);
     expect(await names("flagged")).toEqual(["Loyal", "Risky"]);
     expect(await names("repeat,flagged")).toEqual(["Loyal"]);
-    expect(await names("new,flagged")).toEqual(["Risky"]);
+    expect(await names("first_time,flagged")).toEqual(["Risky"]);
 
     const all = (await list(alice, { sort: "name_asc" })).body.data;
     const tagsOf = (name: string) => all.find((c: { name: string }) => c.name === name).tags;
-    expect(tagsOf("Newbie")).toEqual(["new"]);
+    expect(tagsOf("Newbie")).toEqual(["first_time"]);
     expect(tagsOf("Loyal")).toEqual(["repeat", "flagged"]);
   });
 
@@ -346,6 +385,29 @@ describe("GET /api/v1/customers/:customerId", () => {
     ).toEqual(["note", "second none>draft", "first draft>confirmed", "first none>draft"]);
   });
 
+  it("returns only the 50 newest notes; noteCount is the total", async () => {
+    const placed = await placeOrder(alice, { phone: "03001234567" });
+    for (let start = 1; start <= 51; start += 17) {
+      await Promise.all(
+        Array.from({ length: 17 }, (_, offset) =>
+          as(alice, "post", `${CUSTOMERS}/${placed.customerId}/notes`).send({
+            workspaceId: alice.workspaceId,
+            body: `note ${start + offset}`,
+          }),
+        ),
+      );
+    }
+
+    const response = await as(alice, "get", `${CUSTOMERS}/${placed.customerId}`).query({
+      workspaceId: alice.workspaceId,
+    });
+
+    expect(response.body.data.notes).toHaveLength(50);
+    expect(response.body.data.summary.noteCount).toBe(51);
+    const times = response.body.data.notes.map((n: { createdAt: string }) => Date.parse(n.createdAt));
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+  });
+
   it("returns an empty profile for a customer with a single draft", async () => {
     const placed = await placeOrder(alice, { phone: "03001234567" });
 
@@ -354,7 +416,7 @@ describe("GET /api/v1/customers/:customerId", () => {
     });
 
     expect(response.body.data.notes).toEqual([]);
-    expect(response.body.data.tags).toEqual(["new"]);
+    expect(response.body.data.tags).toEqual(["first_time"]);
     expect(response.body.data.summary.lifetimeSpend.amountMinor).toBe(0);
     expect(response.body.data.timeline).toHaveLength(1);
   });

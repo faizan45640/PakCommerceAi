@@ -38,6 +38,7 @@ function normaliseCustomerQuery(query: Record<string, unknown>): Record<string, 
   return {
     workspaceId: query.workspaceId,
     query: query.query,
+    phone: query.phone,
     tags: list(query.tags),
     sort: query.sort,
     ...(query.limit === undefined ? {} : { limit: Number(query.limit) }),

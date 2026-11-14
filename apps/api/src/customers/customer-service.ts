@@ -10,8 +10,9 @@ import {
   type ParsedCustomerSearchQuery,
 } from "@pakcommerce/shared";
 
-import { NotFoundError } from "../lib/http-errors.js";
+import { NotFoundError, ValidationError } from "../lib/http-errors.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
+import { escapePostgrestFilterValue } from "../lib/postgrest.js";
 import type { SellerContext } from "../middleware/seller-context.js";
 import { listOrders } from "../orders/order-service.js";
 import {
@@ -34,6 +35,9 @@ import {
  * `customer_summary` view.
  */
 
+/** The profile shows the newest notes; `summary.noteCount` is the total. */
+export const CUSTOMER_DETAIL_NOTES_LIMIT = 50;
+
 export async function listCustomers(
   auth: SellerContext,
   query: ParsedCustomerSearchQuery,
@@ -49,7 +53,7 @@ export async function listCustomers(
   // Derived tags are conditions on the computed columns. Several tags narrow.
   for (const tag of query.tags ?? []) {
     switch (tag) {
-      case "new":
+      case "first_time":
         builder = builder.eq("completed_order_count", 0);
         break;
       case "repeat":
@@ -64,8 +68,23 @@ export async function listCustomers(
     }
   }
 
+  if (query.phone) {
+    const phone = normalizePhone(query.phone);
+    if (!phone) {
+      throw new ValidationError("Invalid customer query.", {
+        phone: ["Phone number must contain digits."],
+      });
+    }
+    builder = builder.eq("phone", phone);
+  }
+
   if (query.query) {
-    builder = builder.or(searchFilter(query.query));
+    const filter = searchFilter(query.query);
+    // Nothing left to search for (for example just "*"): match nothing.
+    if (filter === null) {
+      return { items: [], meta: { page, pageSize: query.limit, total: 0 }, nextCursor: null };
+    }
+    builder = builder.or(filter);
   }
 
   builder = applyCustomerSort(builder, query.sort);
@@ -188,7 +207,8 @@ async function listNoteRows(
     .eq("customer_id", customerId)
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
-    .order("id", { ascending: true });
+    .order("id", { ascending: true })
+    .limit(CUSTOMER_DETAIL_NOTES_LIMIT);
 
   if (error) throw new Error(error.message, { cause: error });
   return (data ?? []) as CustomerNoteRow[];
@@ -212,13 +232,20 @@ async function listHistoryRows(
 }
 
 /**
- * The `.or()` predicate for a free-text search.
+ * The `.or()` predicate for a free-text search, or null when there is nothing
+ * to search for.
  *
  * Matches name, phone, city and email. A typed phone in any format also matches
  * through its normalised form (`0300-1234567` finds `+923001234567`), and a
  * partial local number starting with 0 matches the `+92` stored form.
+ *
+ * PostgREST treats `*` in like/ilike values as a wildcard and offers no way to
+ * escape it, so `*` is dropped from the term rather than acting as `%`.
  */
-export function searchFilter(term: string): string {
+export function searchFilter(rawTerm: string): string | null {
+  const term = rawTerm.replace(/\*/g, "").trim();
+  if (!term) return null;
+
   const patterns = new Set<string>([term]);
 
   const normalized = normalizePhone(term);
@@ -242,12 +269,10 @@ export function searchFilter(term: string): string {
   return parts.join(",");
 }
 
-/** A quoted, escaped `%value%` for a PostgREST `ilike` filter. */
+/** A quoted `%value%` for a PostgREST `ilike` filter, with LIKE wildcards made literal. */
 function likeValue(value: string): string {
-  // First make LIKE wildcards literal, then escape for PostgREST's quoted form.
   const literal = value.replace(/[\\%_]/g, "\\$&");
-  const quoted = literal.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `"%${quoted}%"`;
+  return `"%${escapePostgrestFilterValue(literal)}%"`;
 }
 
 function applyCustomerSort(

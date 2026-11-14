@@ -27,6 +27,13 @@ describe("searchFilter", () => {
     expect(searchFilter("Sana")).not.toContain("+92");
   });
 
+  it("drops * so it cannot act as a wildcard", () => {
+    expect(searchFilter("*")).toBeNull();
+    expect(searchFilter(" ** ")).toBeNull();
+    expect(searchFilter("A*a")).toBe(searchFilter("Aa"));
+    expect(searchFilter("A*a")).not.toContain("*");
+  });
+
   it("escapes LIKE wildcards and quotes so they cannot rewrite the filter", () => {
     const filter = searchFilter('50%_",x');
     expect(filter).toContain('name.ilike."%50\\\\%\\\\_\\",x%"');

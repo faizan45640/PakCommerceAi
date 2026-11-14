@@ -161,8 +161,8 @@ describe("toCustomerListItem tags", () => {
   const tags = (overrides: Partial<CustomerSummaryRow>) =>
     toCustomerListItem(summaryRow(overrides)).tags;
 
-  it("tags a customer with no completed orders as new", () => {
-    expect(tags({ completed_order_count: 0, total_order_count: 1 })).toEqual(["new"]);
+  it("tags a customer with no completed orders as first_time", () => {
+    expect(tags({ completed_order_count: 0, total_order_count: 1 })).toEqual(["first_time"]);
   });
 
   it("tags two completed orders as repeat", () => {

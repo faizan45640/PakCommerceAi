@@ -9,6 +9,7 @@ import type {
 } from "@pakcommerce/shared";
 
 import { NotFoundError, ValidationError } from "../lib/http-errors.js";
+import { escapePostgrestFilterValue } from "../lib/postgrest.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import type { SellerContext } from "../middleware/seller-context.js";
 import { assertDraftAmountsFit } from "./order-limits.js";
@@ -317,10 +318,6 @@ function applyOrderSort(
         .order("updated_at", { ascending: false })
         .order("id", { ascending: true });
   }
-}
-
-function escapePostgrestFilterValue(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function translateCreateError(error: { message: string }) {
