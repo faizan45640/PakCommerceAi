@@ -185,6 +185,8 @@ const orderBaseSchema = z.object({
   id: idSchema,
   sellerId: idSchema,
   workspaceId: idSchema,
+  /** The Customer 360 record this order belongs to (linked by phone). */
+  customerId: idSchema.optional(),
   status: orderStatusSchema,
   channel: orderChannelSchema,
   paymentMethod: orderPaymentMethodSchema.default("cod"),
@@ -360,6 +362,8 @@ export const transitionOrderStatusInputSchema = z
 export const orderSearchQuerySchema = z.object({
   workspaceId: idSchema,
   query: trimmedText.min(1).max(120).optional(),
+  /** Only this customer's orders (the profile's full order history). */
+  customerId: idSchema.optional(),
   statuses: z
     .array(orderStatusSchema)
     .max(orderStatusValues.length)
@@ -378,6 +382,7 @@ export const orderListItemSchema = orderBaseSchema
     id: true,
     sellerId: true,
     workspaceId: true,
+    customerId: true,
     status: true,
     channel: true,
     paymentMethod: true,

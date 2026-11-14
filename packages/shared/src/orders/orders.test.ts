@@ -520,3 +520,23 @@ describe("orderDetailSchema", () => {
     ).toBe(false);
   });
 });
+
+describe("customerId", () => {
+  const CUSTOMER_ID = "99999999-9999-4999-8999-999999999999";
+
+  it("is optional on an order and must be a uuid when present", () => {
+    expect(orderSchema.safeParse(order({ customerId: CUSTOMER_ID })).success).toBe(true);
+    expect(orderSchema.safeParse(order()).success).toBe(true);
+    expect(orderSchema.safeParse(order({ customerId: "nope" })).success).toBe(false);
+  });
+
+  it("filters an order search to one customer", () => {
+    const base = { workspaceId: WORKSPACE_ID };
+    expect(
+      orderSearchQuerySchema.safeParse({ ...base, customerId: CUSTOMER_ID }).success,
+    ).toBe(true);
+    expect(orderSearchQuerySchema.safeParse({ ...base, customerId: "nope" }).success).toBe(
+      false,
+    );
+  });
+});
