@@ -840,6 +840,7 @@ export type Database = {
         }
         Returns: string
       }
+      create_draft_order: { Args: { payload: Json }; Returns: string }
       create_product: { Args: { payload: Json }; Returns: string }
       is_allowed_order_status_transition: {
         Args: {

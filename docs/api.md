@@ -8,7 +8,8 @@ Base path: `/api/v1`
 
 ## Authentication
 
-Every endpoint below `/api/v1/products` requires a Supabase access token:
+Every protected endpoint (`/api/v1/products`, `/api/v1/inventory`, `/api/v1/orders`,
+`/api/v1/copilot`, …) requires a Supabase access token:
 
 ```http
 Authorization: Bearer <access_token>
@@ -173,6 +174,77 @@ reuse it.
 
 ---
 
+## Orders
+
+Draft and manual orders. Auth required. Drafts **never** touch stock — confirmation and
+reservation/deduction are T-037 and are not exposed here.
+
+### `POST /api/v1/orders`
+
+Creates a draft order with line items and the initial status-history row in one database
+transaction (`create_draft_order`). Validated against `createDraftOrderInputSchema`.
+
+```json
+{
+  "workspaceId": "…",
+  "channel": "manual",
+  "customer": {
+    "name": "Ayesha Khan",
+    "phone": "+923001112233",
+    "city": "Lahore"
+  },
+  "items": [
+    { "productId": "…", "variantId": "…", "quantity": 2 }
+  ],
+  "note": "WhatsApp intake"
+}
+```
+
+- `channel` defaults to `manual`; `paymentMethod` defaults to `cod`
+- Line prices snapshot from the variant when `unitPrice` is omitted
+- `subtotal` / `total` are computed server-side (`total = subtotal + shippingFee`)
+- `sellerId` comes from the token; anything sent in the body is ignored
+- At least one item is required
+
+`201` with the full `Order` (items included). Stock quantities are unchanged.
+
+| Status | When |
+|---|---|
+| 400 | Body fails the contract, variant missing from the workspace, or productId/variant mismatch |
+| 401 | Missing or invalid token |
+| 404 | Workspace invisible under RLS |
+
+### `GET /api/v1/orders`
+
+Validated against `orderSearchQuerySchema`.
+
+| Query param | Notes |
+|---|---|
+| `workspaceId` | **Required** |
+| `query` | Case-insensitive match on customer name, phone, or city |
+| `statuses` | Comma-separated: `draft,confirmed,…` |
+| `channels` | Comma-separated: `manual,whatsapp,…` |
+| `sort` | `newest`, `updated_desc` (default), `total_asc`, `total_desc` |
+| `limit` | 1–100, default 25 |
+| `cursor` | From the previous response's `nextCursor` |
+
+Returns `OrderListItem`s in the list envelope (`data`, `meta`, `nextCursor`).
+
+### `GET /api/v1/orders/:orderId`
+
+Full order with line items. Pass `?workspaceId=…` (required). Another seller's id returns
+`404`, not `403` — same RLS posture as products.
+
+### Not here yet
+
+| Gap | Detail |
+|---|---|
+| **Confirm / cancel / ship** | Status transitions and stock reservation belong to T-037+ |
+| **Edit draft** | No PATCH; recreate or wait for a later task |
+| **Dashboard** | Orders UI still uses mocks |
+
+---
+
 ## Limitations
 
 Honest list of what this does not do yet.
@@ -269,7 +341,7 @@ the database refuses both.
 |---|---|
 | **Inventory list** | No `GET /api/v1/inventory`. Read stock through the product endpoints for now. |
 | **Other writers** | Initial stock on product create, and the copilot's `updateProductStock` and `mutateDatabase` tools, still set `quantity_on_hand` directly and record no movement. |
-| **Reservations** | Nothing sets `reserved_quantity` yet; it arrives with orders. |
+| **Reservations** | Drafts do not set `reserved_quantity`. Confirmation (T-037) will. |
 
 ---
 
