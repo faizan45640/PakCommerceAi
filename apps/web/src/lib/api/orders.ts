@@ -1,4 +1,6 @@
 import type {
+  CreateDraftOrderInput,
+  Order,
   OrderDetail,
   OrderListItem,
   OrderStatus,
@@ -65,6 +67,14 @@ export async function transitionOrder(
   const response = await apiFetch<ApiDataResponse<OrderDetail>>(`/api/v1/orders/${id}/transition`, {
     method: "POST",
     body: JSON.stringify({ workspaceId, toStatus, ...(note?.trim() ? { note: note.trim() } : {}) }),
+  });
+  return response.data;
+}
+
+export async function createDraftOrder(input: CreateDraftOrderInput): Promise<Order> {
+  const response = await apiFetch<ApiDataResponse<Order>>("/api/v1/orders", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
   return response.data;
 }
