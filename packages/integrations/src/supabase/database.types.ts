@@ -413,7 +413,7 @@ export type Database = {
           customer_address_line?: string | null
           customer_city: string
           customer_email?: string | null
-          customer_id?: string
+          customer_id: string
           customer_name: string
           customer_phone: string
           id?: string

@@ -13,6 +13,9 @@ import {
   normalizePhone,
   phoneNormalizationFixtures,
 } from "@pakcommerce/shared/customers";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -288,7 +291,7 @@ describe("customer constraints", () => {
     });
   });
 
-  it("an order cannot point at a customer of another workspace", async () => {
+  it("customer_id cannot be edited directly", async () => {
     await withRollback(client, async () => {
       const alice = await sellerWithVariant("ctr-fk-a");
       const bob = await sellerWithVariant("ctr-fk-b");
@@ -301,7 +304,21 @@ describe("customer constraints", () => {
           aliceOrder,
           bobCustomer,
         ]),
-      ).rejects.toThrow(/orders_customer_workspace_fkey/);
+      ).rejects.toThrow(/customer_id.*cannot be edited/);
+    });
+  });
+
+  it("customers.phone cannot be edited", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("ctr-phone-edit");
+      const orderId = await draftOrder(seller, productId, variantId);
+      const { customer_id } = await customerOf(orderId);
+
+      await expect(
+        client.query(`update public.customers set phone = '+923009999999' where id = $1`, [
+          customer_id,
+        ]),
+      ).rejects.toThrow(/identity key/);
     });
   });
 
@@ -463,59 +480,166 @@ describe("order -> customer linking", () => {
     });
   });
 
-  it("re-links an order when its phone changes", async () => {
+  it("refuses a new order whose phone has no digits", async () => {
     await withRollback(client, async () => {
-      const { seller, productId, variantId } = await sellerWithVariant("link-update");
-      const orderId = await draftOrder(seller, productId, variantId, {
-        customerPhone: "03001234567",
-      });
-      const before = (await customerOf(orderId)).customer_id;
-
-      await client.query(
-        `update public.orders set customer_phone = '03451112222' where id = $1`,
-        [orderId],
+      const { seller } = await sellerWithVariant("link-junk");
+      await expect(insertOrder(client, seller, { customerPhone: "n/a n/a" })).rejects.toThrow(
+        /must contain digits/,
       );
-
-      const after = await customerOf(orderId);
-      expect(after.customer_id).not.toBe(before);
-      expect(after.phone).toBe("+923451112222");
     });
   });
 
-  it("matches by email only when the phone has no digits", async () => {
+  it("refuses changing an order's phone to one with no digits", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("link-junk-upd");
+      const orderId = await draftOrder(seller, productId, variantId);
+      await expect(
+        client.query(`update public.orders set customer_phone = 'unknown' where id = $1`, [
+          orderId,
+        ]),
+      ).rejects.toThrow(/must contain digits/);
+    });
+  });
+
+  it("does not match by email: a shared email with a different phone is a different customer", async () => {
     await withRollback(client, async () => {
       const { seller, productId, variantId } = await sellerWithVariant("link-email");
       const first = await draftOrder(seller, productId, variantId, {
         customerPhone: "03001234567",
-        customerEmail: "Ayesha@example.com",
-      });
-      const noPhone = await draftOrder(seller, productId, variantId, {
-        customerPhone: "n/a n/a",
         customerEmail: "ayesha@example.com",
       });
-      const withPhone = await draftOrder(seller, productId, variantId, {
+      const second = await draftOrder(seller, productId, variantId, {
         customerPhone: "03451112222",
         customerEmail: "ayesha@example.com",
       });
-
-      // Unusable phone + known email -> the existing customer.
-      expect((await customerOf(noPhone)).customer_id).toBe(
-        (await customerOf(first)).customer_id,
-      );
-      // A usable phone always wins over a shared email.
-      expect((await customerOf(withPhone)).customer_id).not.toBe(
+      expect((await customerOf(second)).customer_id).not.toBe(
         (await customerOf(first)).customer_id,
       );
     });
   });
 
-  it("keeps an order with an unusable phone and no email", async () => {
+  it("editing an old order does not change the customer's details", async () => {
     await withRollback(client, async () => {
-      const { seller, productId, variantId } = await sellerWithVariant("link-junk");
-      const orderId = await draftOrder(seller, productId, variantId, {
-        customerPhone: "unknown",
+      const { seller, productId, variantId } = await sellerWithVariant("link-old-edit");
+      const old = await draftOrder(seller, productId, variantId, {
+        customerName: "Ayesha",
+        customerCity: "Lahore",
+        customerPhone: "03001234567",
       });
-      expect((await customerOf(orderId)).phone).toBe("unknown");
+      const latest = await draftOrder(seller, productId, variantId, {
+        customerName: "Ayesha Khan",
+        customerCity: "Karachi",
+        customerEmail: "new@example.com",
+        customerPhone: "0300 1234567",
+      });
+      const before = await customerOf(latest);
+
+      // Edit the old order: new snapshot values, same phone in another format.
+      await client.query(
+        `update public.orders
+         set customer_name = 'Old Name', customer_city = 'Quetta',
+             customer_email = 'old@example.com', customer_phone = '+92 300 1234567'
+         where id = $1`,
+        [old],
+      );
+
+      expect(await customerOf(old)).toEqual(before);
+      expect(await customerOf(latest)).toEqual(before);
+    });
+  });
+
+  it("a phone typo fix re-links the order and deletes the orphaned customer", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("link-typo");
+      const orderId = await draftOrder(seller, productId, variantId, {
+        customerName: "Ayesha",
+        customerPhone: "03001234567",
+      });
+      const typoCustomer = (await customerOf(orderId)).customer_id;
+
+      await client.query(
+        `update public.orders set customer_phone = '03001234568' where id = $1`,
+        [orderId],
+      );
+
+      const after = await customerOf(orderId);
+      expect(after.customer_id).not.toBe(typoCustomer);
+      expect(after).toMatchObject({ phone: "+923001234568", name: "Ayesha" });
+
+      const { rows } = await client.query(
+        `select id from public.customers where workspace_id = $1`,
+        [seller.workspaceId],
+      );
+      expect(rows.map((row) => row.id)).toEqual([after.customer_id]);
+    });
+  });
+
+  it("re-linking onto an existing customer leaves that customer's details alone", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("link-merge");
+      const existing = await draftOrder(seller, productId, variantId, {
+        customerName: "Real Name",
+        customerCity: "Karachi",
+        customerPhone: "03451112222",
+      });
+      const typo = await draftOrder(seller, productId, variantId, {
+        customerName: "Typo Name",
+        customerCity: "Lahore",
+        customerPhone: "03451112223",
+      });
+
+      await client.query(
+        `update public.orders set customer_phone = '0345-1112222' where id = $1`,
+        [typo],
+      );
+
+      expect((await customerOf(typo)).customer_id).toBe((await customerOf(existing)).customer_id);
+      expect(await customerOf(typo)).toMatchObject({ name: "Real Name", city: "Karachi" });
+      const { rows } = await client.query(
+        `select count(*)::int as n from public.customers where workspace_id = $1`,
+        [seller.workspaceId],
+      );
+      expect(rows[0].n).toBe(1);
+    });
+  });
+
+  it("keeps the previous customer after a re-link when it still has other orders", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("link-keep-orders");
+      const a = await draftOrder(seller, productId, variantId, { customerPhone: "03001234567" });
+      const b = await draftOrder(seller, productId, variantId, { customerPhone: "03001234567" });
+      const shared = (await customerOf(a)).customer_id;
+
+      await client.query(`update public.orders set customer_phone = '03009999999' where id = $1`, [
+        b,
+      ]);
+
+      expect((await customerOf(a)).customer_id).toBe(shared);
+      expect((await customerOf(b)).customer_id).not.toBe(shared);
+    });
+  });
+
+  it("keeps the previous customer after a re-link when it has notes", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("link-keep-notes");
+      const orderId = await draftOrder(seller, productId, variantId, {
+        customerPhone: "03001234567",
+      });
+      const previous = (await customerOf(orderId)).customer_id;
+      await client.query(
+        `insert into public.customer_notes (customer_id, workspace_id, seller_id, kind, body)
+         values ($1, $2, $3, 'risk', 'refused delivery')`,
+        [previous, seller.workspaceId, seller.sellerId],
+      );
+
+      await client.query(`update public.orders set customer_phone = '03009999999' where id = $1`, [
+        orderId,
+      ]);
+
+      const { rows } = await client.query(`select id from public.customers where id = $1`, [
+        previous,
+      ]);
+      expect(rows).toHaveLength(1);
     });
   });
 
@@ -685,6 +809,127 @@ describe("customer_summary", () => {
       expect(
         (await summaryOf((await customerOf(b)).customer_id)).lifetime_spend_amount_minor,
       ).toBe("900000");
+    });
+  });
+});
+
+describe("backfill of legacy orders", () => {
+  it("links legacy orders by normalised phone and gives a no-digit phone its own customer", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("backfill");
+
+      // Recreate the pre-migration shape: no link, no phone rule, no trigger.
+      await client.query(`alter table public.orders disable trigger orders_link_customer`);
+      await client.query(`alter table public.orders alter column customer_id drop not null`);
+      await client.query(
+        `alter table public.orders drop constraint orders_customer_phone_has_digits`,
+      );
+
+      const legacy = async (phone: string, name: string, createdAt: string) => {
+        const {
+          rows: [order],
+        } = await client.query<{ id: string }>(
+          `insert into public.orders
+             (workspace_id, seller_id, customer_name, customer_phone, customer_city,
+              customer_email, subtotal_amount_minor, total_amount_minor, created_at)
+           values ($1, $2, $3, $4, 'Lahore', $5, 100, 100, $6) returning id`,
+          [
+            seller.workspaceId,
+            seller.sellerId,
+            name,
+            phone,
+            name === "Latest" ? "latest@example.com" : null,
+            createdAt,
+          ],
+        );
+        await insertOrderItem(client, seller, order.id, productId, variantId, {
+          unitPrice: 100,
+        });
+        return order.id;
+      };
+
+      const first = await legacy("0300-1234567", "Early", "2026-01-01T00:00:00Z");
+      const second = await legacy("+92 300 1234567", "Latest", "2026-02-01T00:00:00Z");
+      const junkA = await legacy("n/a n/a", "Junk A", "2026-01-01T00:00:00Z");
+      const junkB = await legacy("n/a n/a", "Junk B", "2026-01-02T00:00:00Z");
+
+      const migration = readFileSync(
+        join(__dirname, "../../../../supabase/migrations/20261114190000_customers_and_order_linking.sql"),
+        "utf8",
+      );
+      const block = migration.slice(
+        migration.indexOf("-- BACKFILL BEGIN"),
+        migration.indexOf("-- BACKFILL END"),
+      );
+      expect(block).toContain("insert into public.customers");
+      await client.query(block);
+
+      const link = async (id: string) =>
+        (
+          await client.query(
+            `select c.id, c.name, c.phone, c.email from public.orders o
+             join public.customers c on c.id = o.customer_id where o.id = $1`,
+            [id],
+          )
+        ).rows[0];
+
+      const a = await link(first);
+      const b = await link(second);
+      expect(a.id).toBe(b.id);
+      // Latest order's name; its email.
+      expect(a).toMatchObject({ phone: "+923001234567", name: "Latest", email: "latest@example.com" });
+
+      const ja = await link(junkA);
+      const jb = await link(junkB);
+      expect(ja.id).not.toBe(jb.id);
+      expect(ja.phone).toBe(`order:${junkA}`);
+      expect(jb.phone).toBe(`order:${junkB}`);
+
+      // Running it again changes nothing.
+      await client.query(block);
+      const { rows } = await client.query(
+        `select count(*)::int as n from public.customers where workspace_id = $1`,
+        [seller.workspaceId],
+      );
+      expect(rows[0].n).toBe(3);
+    });
+  });
+});
+
+describe("copilot mutateDatabase guards", () => {
+  const mutation = (sql: string) =>
+    client.query<{ result: { rows_affected: number } }>(
+      `select public.run_guarded_mutation($1) as result`,
+      [sql],
+    );
+
+  it("cannot write customers", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("cop-customers");
+      const orderId = await draftOrder(seller, productId, variantId);
+      const { customer_id } = await customerOf(orderId);
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(`update public.customers set name = 'Hacked' where id = '${customer_id}'`),
+        ),
+      ).rejects.toThrow(/copilot_mutation_refused/);
+    });
+  });
+
+  it("can still write customer notes", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId, variantId } = await sellerWithVariant("cop-notes");
+      const orderId = await draftOrder(seller, productId, variantId);
+      const { customer_id } = await customerOf(orderId);
+
+      const { rows } = await asUser(client, seller.userId, () =>
+        mutation(
+          `insert into public.customer_notes (customer_id, workspace_id, seller_id, kind, body)
+           values ('${customer_id}', '${seller.workspaceId}', '${seller.sellerId}', 'risk', 'Refused delivery')`,
+        ),
+      );
+      expect(rows[0].result.rows_affected).toBe(1);
     });
   });
 });
