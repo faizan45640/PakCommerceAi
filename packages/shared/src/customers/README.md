@@ -40,7 +40,8 @@ order has no usable phone. Phone always wins.
   + `notes` + `timeline`.
 - `customerNoteSchema` / `createCustomerNoteInputSchema`: kind `note | risk`,
   body 1-2000 characters.
-- `customerSearchQuerySchema`: `workspaceId, query, tags[], sort, limit, cursor`.
+- `customerSearchQuerySchema`: `workspaceId, query, phone, tags[], sort, limit, cursor`.
+  `phone` is an exact match on the normalised phone (the API normalises it).
 - `customerTimelineEventSchema`: discriminated on `type`.
 
 ## Spend rule
@@ -55,7 +56,7 @@ Derived by `deriveCustomerTags`, never stored. A customer can have several.
 
 | Tag | Meaning |
 |---|---|
-| `new` | no completed orders |
+| `first_time` | no completed (successful) order yet |
 | `repeat` | two or more completed orders |
 | `has_returns` | at least one returned order |
 | `flagged` | at least one risk note |

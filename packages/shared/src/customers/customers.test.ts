@@ -173,8 +173,8 @@ describe("deriveCustomerTags", () => {
     statusCounts: { returned: 0 },
   };
 
-  it("tags a customer with no completed orders as new", () => {
-    expect(deriveCustomerTags({ ...base, completedOrderCount: 0 })).toEqual(["new"]);
+  it("tags a customer with no completed orders as first_time", () => {
+    expect(deriveCustomerTags({ ...base, completedOrderCount: 0 })).toEqual(["first_time"]);
   });
 
   it("gives a single completed order no tag", () => {
@@ -376,6 +376,16 @@ describe("customerSearchQuerySchema", () => {
   it("applies defaults", () => {
     const parsed = customerSearchQuerySchema.parse({ workspaceId: WORKSPACE_ID });
     expect(parsed).toMatchObject({ sort: "last_order_desc", limit: 25 });
+  });
+
+  it("accepts an exact phone filter", () => {
+    expect(
+      customerSearchQuerySchema.safeParse({ workspaceId: WORKSPACE_ID, phone: "0300-1234567" })
+        .success,
+    ).toBe(true);
+    expect(
+      customerSearchQuerySchema.safeParse({ workspaceId: WORKSPACE_ID, phone: "" }).success,
+    ).toBe(false);
   });
 
   it("accepts query, tags and each sort", () => {

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { moneySchema } from "@pakcommerce/shared/products";
 
+import { normalizePhone } from "@pakcommerce/shared/customers/phone";
+
 export const orderStatusValues = [
   "draft",
   "confirmed",
@@ -81,7 +83,12 @@ export function assertTransition(from: OrderStatus, to: OrderStatus): void {
 
 export const orderCustomerSnapshotSchema = z.object({
   name: trimmedText.min(1).max(160),
-  phone: trimmedText.min(5).max(32),
+  phone: trimmedText
+    .min(5)
+    .max(32)
+    .refine((phone) => normalizePhone(phone) !== "", {
+      message: "Phone number must contain digits.",
+    }),
   city: trimmedText.min(1).max(80),
   email: z.email().nullable().optional(),
   addressLine: trimmedText.max(300).nullable().optional(),
@@ -186,7 +193,7 @@ const orderBaseSchema = z.object({
   sellerId: idSchema,
   workspaceId: idSchema,
   /** The Customer 360 record this order belongs to (linked by phone). */
-  customerId: idSchema.optional(),
+  customerId: idSchema,
   status: orderStatusSchema,
   channel: orderChannelSchema,
   paymentMethod: orderPaymentMethodSchema.default("cod"),
