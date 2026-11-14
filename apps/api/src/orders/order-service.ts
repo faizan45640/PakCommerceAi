@@ -194,6 +194,7 @@ export async function listOrders(
     .select("*, order_items(count)", { count: "exact" })
     .eq("workspace_id", query.workspaceId);
 
+  if (query.customerId) builder = builder.eq("customer_id", query.customerId);
   if (query.statuses?.length) builder = builder.in("status", query.statuses);
   if (query.channels?.length) builder = builder.in("channel", query.channels);
   if (query.query) {

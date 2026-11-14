@@ -5,6 +5,7 @@ import { requireAuth } from "./middleware/auth.js";
 import { supabaseTokenVerifier } from "./middleware/verify-supabase-token.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { categoryRouter } from "./categories/category-router.js";
+import { customerRouter } from "./customers/customer-router.js";
 import { inventoryRouter } from "./inventory/inventory-router.js";
 import { orderRouter } from "./orders/order-router.js";
 import { productRouter } from "./products/product-router.js";
@@ -51,6 +52,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/v1/workspaces/:workspaceId/categories", requireAuth(supabaseTokenVerifier), categoryRouter);
   app.use("/api/v1/products", requireAuth(supabaseTokenVerifier), productRouter);
   app.use("/api/v1/inventory", requireAuth(supabaseTokenVerifier), inventoryRouter);
+  app.use("/api/v1/customers", requireAuth(supabaseTokenVerifier), customerRouter);
   app.use("/api/v1/orders", requireAuth(supabaseTokenVerifier), orderRouter);
   app.use("/api/v1/workspaces", requireAuth(supabaseTokenVerifier), workspaceRouter);
 

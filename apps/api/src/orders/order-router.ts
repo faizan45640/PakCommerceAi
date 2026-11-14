@@ -35,6 +35,7 @@ function normaliseOrderQuery(query: Record<string, unknown>): Record<string, unk
   return {
     workspaceId: query.workspaceId,
     query: query.query,
+    customerId: query.customerId,
     statuses: list(query.statuses),
     channels: list(query.channels),
     sort: query.sort,
