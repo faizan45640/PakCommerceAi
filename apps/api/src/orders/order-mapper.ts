@@ -74,8 +74,7 @@ export function toOrder(row: OrderRow, itemRows: OrderItemRow[]): Order {
     id: row.id,
     sellerId: row.seller_id,
     workspaceId: row.workspace_id,
-    // orders.customer_id is added to the generated row types by the schema PR.
-    customerId: (row as OrderRow & { customer_id: string }).customer_id,
+    customerId: row.customer_id,
     status: row.status as OrderStatus,
     channel: row.channel as OrderChannel,
     paymentMethod: row.payment_method as OrderPaymentMethod,
@@ -116,8 +115,7 @@ export function toOrderListItem(
     id: row.id,
     sellerId: row.seller_id,
     workspaceId: row.workspace_id,
-    // orders.customer_id is added to the generated row types by the schema PR.
-    customerId: (row as OrderRow & { customer_id: string }).customer_id,
+    customerId: row.customer_id,
     status: row.status as OrderStatus,
     channel: row.channel as OrderChannel,
     paymentMethod: row.payment_method as OrderPaymentMethod,

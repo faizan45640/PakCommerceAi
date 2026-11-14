@@ -16,7 +16,7 @@ This repository is **early-stage**. The target system describes the **complete o
 |---|---|
 | **Proposal** | The 20-week target. Aspirational. |
 | **This codebase** | Phase 3 is done. The catalogue API and seller copilot are in. Store sync, WhatsApp, RAG, and the COD model are not. |
-| **Built so far** | Supabase Auth, workspace/product/inventory/order schema, product CRUD, inventory adjustments, draft/manual orders, confirm-with-stock deduction, a streaming Business Copilot with guarded writes, and the dashboard shell. |
+| **Built so far** | Supabase Auth, workspace/product/inventory/order/customer schema, product CRUD, inventory adjustments, draft/manual orders, confirm-with-stock deduction, a streaming Business Copilot with guarded writes, and the dashboard shell. |
 | **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, ship/return flows, audit logs. |
 
 When a document describes a feature, check the status table below before assuming it exists.
@@ -38,13 +38,13 @@ When a document describes a feature, check the status table below before assumin
 
 ### Database
 
-Twelve tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
+Fourteen tables: `profiles`, `seller_profiles`, `workspaces`, `products`, `product_variants`,
 `product_images`, `categories`, `copilot_chats`, `stock_movements`, `orders`,
-`order_items`, `order_status_history`.
-Nine enums: `seller_verification_status`, `workspace_status`, `product_status`,
+`order_items`, `order_status_history`, `customers`, `customer_notes`.
+Ten enums: `seller_verification_status`, `workspace_status`, `product_status`,
 `product_variant_status`, `inventory_state`, `stock_movement_reason`, `order_status`,
-`order_channel`, `order_payment_method`.
-Two views: `product_list_view`, `inventory`.
+`order_channel`, `order_payment_method`, `customer_note_kind`.
+Three views: `product_list_view`, `inventory`, `customer_summary`.
 
 Stock lives on `product_variants` (on hand, reserved, threshold). `inventory` is a read-only
 view over it, and `stock_movements` is the append-only history of every change.
@@ -54,7 +54,9 @@ too. The product API does not yet, so stock set on product create or update stil
 
 Draft/manual orders land through `POST /api/v1/orders`; confirmation deducts stock via
 `POST /api/v1/orders/:id/transition` (`transition_order_status` + `sale` movements).
-Ship/return, customers, conversations, and couriers **do not exist yet**.
+Every order is linked to a customer by a database trigger, keyed on the normalised phone
+(`normalize_phone`), and `customer_summary` computes lifetime spend and order counts from
+orders. Ship/return, conversations, and couriers **do not exist yet**.
 
 ✅ The schema is reproducible from source. `supabase/migrations/` holds every change and
 `npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are

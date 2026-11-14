@@ -21,6 +21,7 @@ function orderRow(overrides: Partial<OrderRow> = {}): OrderRow {
     status: "draft",
     channel: "manual",
     payment_method: "cod",
+    customer_id: "44444444-4444-4444-8444-444444444444",
     customer_name: "Ayesha",
     customer_phone: "+923001234567",
     customer_city: "Lahore",

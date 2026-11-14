@@ -525,8 +525,9 @@ describe("orderDetailSchema", () => {
 describe("customerId", () => {
   const CUSTOMER_ID = "99999999-9999-4999-8999-999999999999";
 
-  it("must be a uuid when present", () => {
+  it("is required on an order and must be a uuid", () => {
     expect(orderSchema.safeParse(order({ customerId: CUSTOMER_ID })).success).toBe(true);
+    expect(orderSchema.safeParse(order({ customerId: undefined })).success).toBe(false);
     expect(orderSchema.safeParse(order({ customerId: "nope" })).success).toBe(false);
   });
 
