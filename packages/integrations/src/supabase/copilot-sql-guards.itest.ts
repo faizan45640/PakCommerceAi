@@ -85,6 +85,31 @@ describe("run_readonly_query", () => {
       ).rejects.toThrow(/read-only transaction/i);
     });
   });
+  it("refuses SQL hidden in a string with query_to_xml (identity forgery)", async () => {
+    await withRollback(client, async () => {
+      const { seller } = await draftOrder("ro-claims");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          readonly(
+            `select query_to_xml('select set_con' || 'fig(''request.jwt.claims'', ''{"sub":"00000000-0000-0000-0000-000000000000"}'', true)', false, false, '') as x`,
+          ),
+        ),
+      ).rejects.toThrow(/forbidden function or escape/i);
+    });
+  });
+
+  it("refuses ts_stat, which also runs SQL from a string", async () => {
+    await withRollback(client, async () => {
+      const { seller } = await draftOrder("ro-tsstat");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          readonly(`select * from ts_stat('select to_tsvector(title) from public.products')`),
+        ),
+      ).rejects.toThrow(/forbidden function or escape/i);
+    });
+  });
 });
 
 describe("run_guarded_mutation", () => {
@@ -145,6 +170,38 @@ describe("run_guarded_mutation", () => {
             `update public.products p set title = p.title
              from (select public.transition_order_status('${orderId}', '${seller.workspaceId}', 'cancelled')) t
              where p.id = '${productId}'`,
+          ),
+        ),
+      ).rejects.toThrow(/forbidden function or escape/i);
+    });
+  });
+
+  it("refuses a gate opened through query_to_xml string assembly", async () => {
+    await withRollback(client, async () => {
+      const { seller, orderId } = await draftOrder("mu-xml");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(
+            `update public.orders
+             set status = 'confirmed', confirmed_at = now(), customer_address_line = 'x'
+             where id = '${orderId}'
+               and (select query_to_xml('select set_con' || 'fig(''pakcommerce.allow_order_lifecycle_change'', ''on'', true)', false, false, '')) is not null`,
+          ),
+        ),
+      ).rejects.toThrow(/forbidden function or escape/i);
+    });
+  });
+
+  it("refuses a nested run_readonly_query call", async () => {
+    await withRollback(client, async () => {
+      const { seller, productId } = await draftOrder("mu-nested");
+
+      await expect(
+        asUser(client, seller.userId, () =>
+          mutation(
+            `update public.products set title = title
+             where id = '${productId}' and (select public.run_readonly_query('select 1')) is not null`,
           ),
         ),
       ).rejects.toThrow(/forbidden function or escape/i);
