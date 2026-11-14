@@ -1,7 +1,14 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import type { OrderDetail } from "@pakcommerce/shared";
+import type { CustomerTag, OrderDetail } from "@pakcommerce/shared";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchCustomerById } from "@/lib/api/customers";
+
+import { CustomerLink } from "../../../customers/_components/customer-link";
+import { CustomerTagList } from "../../../customers/_components/customer-tag-badge";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -14,11 +21,32 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function OrderCustomerPanel({
   customer,
+  customerId,
+  workspaceId,
   isDraft,
 }: {
   customer: OrderDetail["customer"];
+  customerId: string;
+  workspaceId: string;
   isDraft: boolean;
 }) {
+  // Tags are a nicety (first-time buyers matter for COD risk); the panel works without them.
+  const [tags, setTags] = useState<CustomerTag[] | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    fetchCustomerById(workspaceId, customerId)
+      .then((detail) => {
+        if (!ignore) setTags(detail.tags);
+      })
+      .catch(() => {
+        if (!ignore) setTags(null);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [workspaceId, customerId]);
+
   const address = customer.addressLine?.trim();
 
   return (
@@ -29,8 +57,15 @@ export function OrderCustomerPanel({
       <CardContent>
         <dl className="flex flex-col gap-3">
           <Row label="Name">
-            <span className="font-medium">{customer.name}</span>
+            <CustomerLink customerId={customerId} className="font-medium">
+              {customer.name}
+            </CustomerLink>
           </Row>
+          {tags ? (
+            <Row label="Customer tags">
+              <CustomerTagList tags={tags} />
+            </Row>
+          ) : null}
           <Row label="Phone">{customer.phone}</Row>
           <Row label="City">{customer.city}</Row>
           <Row label="Email">{customer.email || <span className="text-muted-foreground">—</span>}</Row>
