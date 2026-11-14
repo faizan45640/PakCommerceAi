@@ -3,6 +3,7 @@ node_modules/
 .cursor/
 .vscode/
 .opencode/
+.mcp.json
 # Build output
 dist/
 build/

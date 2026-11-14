@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   toOrder,
   toOrderItem,
+  toOrderDetail,
   toOrderListItem,
   toOrderStatusHistory,
+  toStockChecks,
+  type VariantStockRow,
   type OrderItemRow,
   type OrderRow,
   type OrderStatusHistoryRow,
@@ -116,5 +119,72 @@ describe("toOrderStatusHistory", () => {
       toStatus: "draft",
       note: "Draft order created",
     });
+  });
+});
+
+describe("toStockChecks", () => {
+  const variant = (overrides: Partial<VariantStockRow> = {}): VariantStockRow => ({
+    id: "66666666-6666-4666-8666-666666666666",
+    track_inventory: true,
+    quantity_on_hand: 10,
+    reserved_quantity: 0,
+    ...overrides,
+  });
+
+  it("is sufficient when available (on_hand - reserved) covers the quantity", () => {
+    const [check] = toStockChecks([toOrderItem(itemRow())], [variant()]);
+    expect(check).toMatchObject({ needed: 2, available: 10, sufficient: true });
+  });
+
+  it("subtracts reserved quantity, like the confirm function", () => {
+    const [check] = toStockChecks(
+      [toOrderItem(itemRow({ quantity: 4 }))],
+      [variant({ quantity_on_hand: 5, reserved_quantity: 2 })],
+    );
+    expect(check).toMatchObject({ needed: 4, available: 3, sufficient: false });
+  });
+
+  it("treats exactly-enough stock as sufficient", () => {
+    const [check] = toStockChecks(
+      [toOrderItem(itemRow({ quantity: 2 }))],
+      [variant({ quantity_on_hand: 2 })],
+    );
+    expect(check?.sufficient).toBe(true);
+  });
+
+  it("skips untracked variants (track_inventory false or null on-hand)", () => {
+    const item = toOrderItem(itemRow());
+    expect(
+      toStockChecks([item], [variant({ track_inventory: false })])[0],
+    ).toMatchObject({ available: null, sufficient: true });
+    expect(
+      toStockChecks([item], [variant({ quantity_on_hand: null })])[0],
+    ).toMatchObject({ available: null, sufficient: true });
+  });
+
+  it("sums quantities per variant across lines", () => {
+    const first = toOrderItem(itemRow({ quantity: 3 }));
+    const second = toOrderItem(
+      itemRow({ id: "99999999-9999-4999-8999-999999999999", quantity: 3 }),
+    );
+    const checks = toStockChecks(
+      [first, second],
+      [variant({ quantity_on_hand: 5 })],
+    );
+    expect(checks).toHaveLength(2);
+    expect(checks.every((c) => c.needed === 6 && !c.sufficient)).toBe(true);
+  });
+
+  it("flags a variant that cannot be read as insufficient", () => {
+    const [check] = toStockChecks([toOrderItem(itemRow())], []);
+    expect(check).toMatchObject({ available: 0, sufficient: false });
+  });
+});
+
+describe("toOrderDetail", () => {
+  it("is the order plus history and stock checks", () => {
+    const base = toOrder(orderRow(), [itemRow()]);
+    const detail = toOrderDetail(base, [], []);
+    expect(detail).toEqual({ ...base, statusHistory: [], stockChecks: [] });
   });
 });

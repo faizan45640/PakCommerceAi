@@ -232,8 +232,20 @@ Returns `OrderListItem`s in the list envelope (`data`, `meta`, `nextCursor`).
 
 ### `GET /api/v1/orders/:orderId`
 
-Full order with line items. Pass `?workspaceId=…` (required). Another seller's id returns
-`404`, not `403` — same RLS posture as products.
+Returns an `OrderDetail` (`orderDetailSchema`): every `Order` field plus
+
+- `statusHistory` — `OrderStatusHistory[]`, oldest first (a draft starts with `null → draft`).
+- `stockChecks` — for **draft** orders only (`[]` otherwise), one entry per line item:
+  `{ variantId, productId, title, variantTitle, needed, available, sufficient }`.
+  It applies the same rule as `transition_order_status`: quantities are summed per variant
+  (lines sharing a variant each report the combined `needed`), `available = on_hand - reserved`,
+  `sufficient = available >= needed`. A variant with `track_inventory = false` or null
+  on-hand is skipped by confirm, so it reports `available: null, sufficient: true`.
+  It is a read-time snapshot; confirm re-checks under a row lock, so a race can still
+  return `400`.
+
+Pass `?workspaceId=…` (required). Another seller's id returns `404`, not `403` — same RLS
+posture as products.
 
 ### `POST /api/v1/orders/:orderId/transition`
 
@@ -247,7 +259,8 @@ Enabled today:
 | `cancelled` | Draft → cancelled. No stock change. |
 | `confirmed` | Draft → confirmed. Requires a delivery address. Deducts available stock (`on_hand - reserved`) per line and writes a `sale` movement per variant. Insufficient stock → **400**, order stays `draft`. |
 
-Ship / return / cancel-after-confirm are not enabled yet.
+Returns the updated `OrderDetail` (same shape as `GET /:orderId`). Ship / return /
+cancel-after-confirm are not enabled yet. `POST /api/v1/orders` still returns the plain `Order`.
 
 ### Not here yet
 
@@ -255,7 +268,7 @@ Ship / return / cancel-after-confirm are not enabled yet.
 |---|---|
 | **Ship / return** | Fulfillment transitions and stock restore come later |
 | **Edit draft** | No PATCH; recreate or wait for a later task |
-| **Dashboard** | Orders UI still uses mocks |
+| **Dashboard** | Orders list and detail page are real; the order form (T-040) and overview widgets are not |
 
 Status, `confirmed_at`, and `cancelled_at` cannot be changed with a raw SQL `UPDATE`
 (including via the copilot) — only `transition_order_status`.

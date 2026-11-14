@@ -5,7 +5,7 @@
  * stock. Requires the local Supabase stack: `npx supabase start`.
  */
 
-import { orderListItemSchema, orderSchema } from "@pakcommerce/shared";
+import { orderDetailSchema, orderListItemSchema, orderSchema } from "@pakcommerce/shared";
 import request from "supertest";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -249,7 +249,71 @@ describe("GET /api/v1/orders/:orderId", () => {
 
     expect(response.status).toBe(200);
     expect(orderSchema.safeParse(response.body.data).success).toBe(true);
+    expect(orderDetailSchema.safeParse(response.body.data).success).toBe(true);
     expect(response.body.data.id).toBe(created.body.data.id);
+  });
+
+  it("includes initial history and a sufficient stock check for a draft", async () => {
+    const { productId, variantId } = await createTestVariant(alice, {
+      quantity: 10,
+    });
+    const created = await as(alice, "post", ORDERS).send(
+      draftBody(alice, productId, variantId),
+    );
+
+    const response = await as(alice, "get", `${ORDERS}/${created.body.data.id}`).query({
+      workspaceId: alice.workspaceId,
+    });
+
+    expect(response.body.data.statusHistory).toHaveLength(1);
+    expect(response.body.data.statusHistory[0]).toMatchObject({
+      fromStatus: null,
+      toStatus: "draft",
+    });
+    expect(response.body.data.stockChecks).toEqual([
+      expect.objectContaining({
+        variantId,
+        productId,
+        needed: 2,
+        available: 10,
+        sufficient: true,
+      }),
+    ]);
+  });
+
+  it("reports insufficient stock on a draft when stock is short", async () => {
+    const { productId, variantId } = await createTestVariant(alice, {
+      quantity: 1,
+    });
+    const created = await as(alice, "post", ORDERS).send(
+      draftBody(alice, productId, variantId),
+    );
+
+    const response = await as(alice, "get", `${ORDERS}/${created.body.data.id}`).query({
+      workspaceId: alice.workspaceId,
+    });
+
+    expect(response.body.data.stockChecks).toEqual([
+      expect.objectContaining({ needed: 2, available: 1, sufficient: false }),
+    ]);
+  });
+
+  it("treats an untracked variant as sufficient with null available", async () => {
+    const { productId, variantId } = await createTestVariant(alice, {
+      trackInventory: false,
+      quantity: null,
+    });
+    const created = await as(alice, "post", ORDERS).send(
+      draftBody(alice, productId, variantId),
+    );
+
+    const response = await as(alice, "get", `${ORDERS}/${created.body.data.id}`).query({
+      workspaceId: alice.workspaceId,
+    });
+
+    expect(response.body.data.stockChecks).toEqual([
+      expect.objectContaining({ needed: 2, available: null, sufficient: true }),
+    ]);
   });
 
   it("returns 404 for another seller's order", async () => {
@@ -295,7 +359,15 @@ describe("POST /api/v1/orders/:orderId/transition", () => {
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe("confirmed");
     expect(response.body.data.confirmedAt).toBeTruthy();
-    expect(orderSchema.safeParse(response.body.data).success).toBe(true);
+    expect(orderDetailSchema.safeParse(response.body.data).success).toBe(true);
+    expect(
+      response.body.data.statusHistory.map(
+        (h: { fromStatus: string | null; toStatus: string }) =>
+          `${h.fromStatus}>${h.toStatus}`,
+      ),
+    ).toEqual(["null>draft", "draft>confirmed"]);
+    // Stock checks are for drafts only.
+    expect(response.body.data.stockChecks).toEqual([]);
 
     const admin = createSupabaseAdminClient({
       url: LOCAL_SUPABASE_URL,

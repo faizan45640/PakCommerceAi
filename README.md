@@ -29,7 +29,7 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot and products pages call the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot, products, and orders (list and detail, with confirm/cancel) pages call the API. Orders overview widgets, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
 | `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD, inventory adjustments, orders (draft + confirm/cancel), and streaming copilot chat — all behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
 | `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, orders, categories, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
@@ -134,15 +134,15 @@ npm run dev
 
 | Workspace | Unit tests | Covers |
 |---|---|---|
-| `packages/shared` | 109 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
+| `packages/shared` | 116 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 139 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations, draft-only `createDraftOrder`) |
-| `apps/web` | 15 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
+| `apps/api` | 146 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations, draft-only `createDraftOrder`) |
+| `apps/web` | 19 | `getInitials`, `formatCurrency`, preference parsing, order confirm/cancel gating, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**279 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**297 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**166 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+**212 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -153,12 +153,15 @@ npm run dev
 | `packages/integrations` inventory isolation | 10 | A seller cannot read another's movements or inventory, record one in someone else's name, or edit or delete their own |
 | `packages/integrations` copilot chat isolation | 7 | A seller cannot read or change another seller's chats |
 | `packages/integrations` identity isolation | 14 | A seller cannot read another's profile, business details, or workspaces; workspaces cannot be reassigned or hard-deleted |
+| `packages/integrations` order schema | 17 | Order, item and history columns match the contract, enums match Zod, totals/address/`confirmed_at` checks, illegal transitions and raw status updates refused, history is append-only |
+| `packages/integrations` order isolation | 14 | A seller cannot read, insert, change or delete another seller's orders, items or history; anonymous users read nothing |
+| `packages/integrations` order lifecycle | 9 | Status only changes through the lifecycle gate; cancel is atomic; confirm deducts stock with a sale movement and refuses short stock; lines freeze after leaving draft |
 | `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
 | `apps/api` inventory API | 23 | Stock adjustments and movement history against a real database: every refusal, nothing written on refusal, filters, paging, isolation |
-| `apps/api` orders API | 10 | Draft create/list/get against a real database: price snapshot, no stock mutation, validation, RLS isolation |
+| `apps/api` orders API | 16 | Draft create/list/get, order detail (status history, stock checks), confirm with stock deduction, short-stock refusal and cancel against a real database, with RLS isolation |
 | `apps/api` copilot tools | 15 | Read and guarded-write tools against a real database, including `createDraftOrder` (draft only, server-side prices, stock untouched, other sellers refused) |
 
-**447 tests total** (279 Node unit + 2 Python + 166 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
+**511 tests total** (297 Node unit + 2 Python + 212 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 
