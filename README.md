@@ -135,37 +135,15 @@ npm run dev
 
 ### Test suite
 
-| Workspace | Unit tests | Covers |
+| Command | Needs | Runs |
 |---|---|---|
-| `packages/shared` | 118 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine, money and quantity caps |
-| `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 153 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations, draft-only `createDraftOrder`) |
-| `apps/web` | 38 | `getInitials`, `formatCurrency`, preference parsing, order confirm/cancel gating, manual order form logic (cart, rupee conversion, quantity parsing, estimate, address-required validation, error mapping), and the API-centric architecture guard |
-| `apps/ml` | 2 | Package import and Python version pin consistency |
+| `npm run test` | Node only | Unit tests in every workspace (`*.test.ts`): Zod contracts, mappers, copilot tools, web form and gating logic |
+| `npm run test:integration` | `npx supabase start` | Database tests (`*.itest.ts`) in `packages/integrations` (schema, RLS isolation, stock, order lifecycle, copilot SQL guards) and `apps/api` (each API against a real database) |
+| `npm run ci:ml` | Python 3.12 | `apps/ml` ruff + pytest |
 
-**325 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+CI runs all three on every pull request and lists each test on the run's summary page. Counts are not kept here; the CI summary is the source of truth.
 
-**257 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
-
-| Suite | Tests | Covers |
-|---|---|---|
-| `packages/integrations` schema conformance | 19 | Columns match the contract, enums match Zod, constraints reject bad data, `inventory_state` computes correctly |
-| `packages/integrations` catalogue isolation | 8 | A seller cannot read, insert, reassign, or delete another seller's products or variants |
-| `packages/integrations` inventory conformance | 22 | Movement and inventory columns match the contract, reasons match Zod, movements must add up and cannot be edited, state follows available stock, a workspace can still be removed |
-| `packages/integrations` stock adjustment | 14 | `adjust_stock` writes quantity and movement together, refuses negative, below-reserved, unchanged and untracked, and cannot touch another seller's variant |
-| `packages/integrations` inventory isolation | 10 | A seller cannot read another's movements or inventory, record one in someone else's name, or edit or delete their own |
-| `packages/integrations` copilot chat isolation | 7 | A seller cannot read or change another seller's chats |
-| `packages/integrations` identity isolation | 14 | A seller cannot read another's profile, business details, or workspaces; workspaces cannot be reassigned or hard-deleted |
-| `packages/integrations` order schema | 17 | Order, item and history columns match the contract, enums match Zod, totals/address/`confirmed_at` checks, illegal transitions and raw status updates refused, history is append-only |
-| `packages/integrations` order isolation | 14 | A seller cannot read, insert, change or delete another seller's orders, items or history; anonymous users read nothing |
-| `packages/integrations` order lifecycle | 9 | Status only changes through the lifecycle gate; cancel is atomic; confirm deducts stock with a sale movement and refuses short stock; lines freeze after leaving draft |
-| `packages/integrations` copilot SQL guards | 15 | The read-only query tool cannot write (even through a function call); neither SQL tool can reach `set_config` — directly, through functions that run SQL from a string (`query_to_xml`, `ts_stat`), through each other, or with escapes — so they cannot fake the seller's identity or open the order lifecycle gate; `mutateDatabase` cannot write orders, order lines, order history or stock movements, or change stock; plain selects, updates and price changes still work |
-| `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
-| `apps/api` inventory API | 23 | Stock adjustments and movement history against a real database: every refusal, nothing written on refusal, filters, paging, isolation |
-| `apps/api` orders API | 46 | Draft create (every field, price snapshot, 400 field paths), list/get, order detail with stock checks, cancel, refused transitions, confirm with stock deduction (summed lines, reserved stock, untracked), failed stock (atomic across lines, missing address, competing drafts), and agreement between the detail warning and confirm, against a real database with RLS isolation |
-| `apps/api` copilot tools | 15 | Read and guarded-write tools against a real database, including `createDraftOrder` (draft only, server-side prices, stock untouched, other sellers refused) |
-
-**584 tests total** (325 Node unit + 2 Python + 257 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
+Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 
