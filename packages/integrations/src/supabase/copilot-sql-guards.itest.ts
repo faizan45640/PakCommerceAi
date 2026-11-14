@@ -42,7 +42,7 @@ async function draftOrder(label: string) {
   const orderId = await insertOrder(client, seller);
   await insertOrderItem(client, seller, orderId, productId, variantId);
   await insertOrderStatusHistory(client, seller, orderId);
-  return { seller, productId, orderId };
+  return { seller, productId, variantId, orderId };
 }
 
 function readonly(sql: string) {
@@ -74,17 +74,20 @@ describe("run_readonly_query", () => {
 
   it("refuses a write hidden inside a function call", async () => {
     await withRollback(client, async () => {
-      const { seller, orderId } = await draftOrder("ro-transition");
+      const { seller, variantId } = await draftOrder("ro-write");
 
+      // adjust_stock is not on the name list, so only the read-only
+      // transaction stands between this text and a stock change.
       await expect(
         asUser(client, seller.userId, () =>
           readonly(
-            `select public.transition_order_status('${orderId}', '${seller.workspaceId}', 'cancelled')`,
+            `select public.adjust_stock('${seller.workspaceId}', '${variantId}', 3, 'manual_adjustment', 'probe')`,
           ),
         ),
       ).rejects.toThrow(/read-only transaction/i);
     });
   });
+
   it("refuses SQL hidden in a string with query_to_xml (identity forgery)", async () => {
     await withRollback(client, async () => {
       const { seller } = await draftOrder("ro-claims");
