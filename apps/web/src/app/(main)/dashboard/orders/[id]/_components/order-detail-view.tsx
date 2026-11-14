@@ -202,6 +202,7 @@ export function OrderDetailView({ id }: { id: string }) {
             customer={order.customer}
             customerId={order.customerId}
             workspaceId={workspaceId}
+            orderVersion={`${order.status}:${order.updatedAt}`}
             isDraft={order.status === "draft"}
           />
           <OrderStatusTimeline history={order.statusHistory} formatDateTime={formatDateTime} />

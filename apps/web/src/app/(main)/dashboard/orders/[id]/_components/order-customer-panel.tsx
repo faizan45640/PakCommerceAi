@@ -23,11 +23,14 @@ export function OrderCustomerPanel({
   customer,
   customerId,
   workspaceId,
+  orderVersion,
   isDraft,
 }: {
   customer: OrderDetail["customer"];
   customerId: string;
   workspaceId: string;
+  /** Changes when the order does (e.g. `updatedAt`), so the tags are re-read after confirm/cancel. */
+  orderVersion: string;
   isDraft: boolean;
 }) {
   // Tags are a nicety (first-time buyers matter for COD risk); the panel works without them.
@@ -45,7 +48,7 @@ export function OrderCustomerPanel({
     return () => {
       ignore = true;
     };
-  }, [workspaceId, customerId]);
+  }, [workspaceId, customerId, orderVersion]);
 
   const address = customer.addressLine?.trim();
 
