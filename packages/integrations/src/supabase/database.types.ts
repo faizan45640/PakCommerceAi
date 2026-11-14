@@ -134,6 +134,111 @@ export type Database = {
           },
         ]
       }
+      customer_notes: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: Database["public"]["Enums"]["customer_note_kind"]
+          seller_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          kind?: Database["public"]["Enums"]["customer_note_kind"]
+          seller_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["customer_note_kind"]
+          seller_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_notes_customer_workspace_fkey"
+            columns: ["customer_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "customer_summary"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "customer_notes_customer_workspace_fkey"
+            columns: ["customer_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "customer_notes_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          address_line: string | null
+          city: string
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string
+          seller_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          address_line?: string | null
+          city: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone: string
+          seller_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          address_line?: string | null
+          city?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string
+          seller_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string
@@ -285,6 +390,7 @@ export type Database = {
           customer_address_line: string | null
           customer_city: string
           customer_email: string | null
+          customer_id: string
           customer_name: string
           customer_phone: string
           id: string
@@ -307,6 +413,7 @@ export type Database = {
           customer_address_line?: string | null
           customer_city: string
           customer_email?: string | null
+          customer_id?: string
           customer_name: string
           customer_phone: string
           id?: string
@@ -329,6 +436,7 @@ export type Database = {
           customer_address_line?: string | null
           customer_city?: string
           customer_email?: string | null
+          customer_id?: string
           customer_name?: string
           customer_phone?: string
           id?: string
@@ -343,6 +451,20 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_customer_workspace_fkey"
+            columns: ["customer_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "customer_summary"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "orders_customer_workspace_fkey"
+            columns: ["customer_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "orders_workspace_seller_fkey"
             columns: ["workspace_id", "seller_id"]
@@ -763,6 +885,43 @@ export type Database = {
       }
     }
     Views: {
+      customer_summary: {
+        Row: {
+          address_line: string | null
+          average_order_amount_minor: number | null
+          cancelled_order_count: number | null
+          city: string | null
+          completed_order_count: number | null
+          confirmed_order_count: number | null
+          created_at: string | null
+          delivered_order_count: number | null
+          draft_order_count: number | null
+          email: string | null
+          first_order_at: string | null
+          id: string | null
+          last_order_at: string | null
+          lifetime_spend_amount_minor: number | null
+          name: string | null
+          note_count: number | null
+          phone: string | null
+          returned_order_count: number | null
+          risk_note_count: number | null
+          seller_id: string | null
+          shipped_order_count: number | null
+          total_order_count: number | null
+          updated_at: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
       inventory: {
         Row: {
           available_quantity: number | null
@@ -849,6 +1008,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_phone: { Args: { raw: string }; Returns: string }
       order_lifecycle_change_allowed: { Args: never; Returns: boolean }
       run_guarded_mutation: { Args: { p_sql: string }; Returns: Json }
       run_readonly_query: { Args: { p_sql: string }; Returns: Json }
@@ -863,6 +1023,7 @@ export type Database = {
       }
     }
     Enums: {
+      customer_note_kind: "note" | "risk"
       inventory_state: "in_stock" | "low_stock" | "out_of_stock" | "untracked"
       order_channel:
         | "whatsapp"
@@ -1024,6 +1185,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      customer_note_kind: ["note", "risk"],
       inventory_state: ["in_stock", "low_stock", "out_of_stock", "untracked"],
       order_channel: [
         "whatsapp",

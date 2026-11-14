@@ -98,6 +98,7 @@ orders (a purchase; drafts do not touch stock — confirmation is the stock even
   payment_method enum(cod|prepaid) default 'cod',
   customer_name text, customer_phone text, customer_city text,
   customer_email text, customer_address_line text (required once confirmed),
+  customer_id uuid (the customer this order belongs to; set automatically from the phone),
   subtotal_amount_minor integer (= sum of line totals), shipping_fee_amount_minor integer,
   total_amount_minor integer (= subtotal + shipping), currency text (= 'PKR' only),
   note text, confirmed_at timestamptz, cancelled_at timestamptz,
@@ -127,6 +128,30 @@ order_status_history (append-only status changes; rows can never be edited)
   shipped→delivered|returned, delivered→returned. Terminal: cancelled, returned.
   Transition rows are written only by transition_order_status — do not INSERT them.
 
+customers (one row per person per workspace, identified by normalised phone; created automatically from orders)
+  id uuid (PK), workspace_id uuid, seller_id uuid, name text,
+  phone text (normalised, e.g. +923001234567; unique per workspace), email text (lower-case),
+  city text, address_line text, created_at timestamptz, updated_at timestamptz
+  Note: name/city/address/email are the latest values seen on their orders. Spend and
+  order counts are NOT stored here: use customer_summary. Customers are created by
+  placing orders; do not invent them with INSERT.
+
+customer_notes (seller notes on a customer)
+  id uuid (PK), customer_id uuid, workspace_id uuid, seller_id uuid,
+  kind enum(note|risk) (risk flags the customer), body text, created_by uuid,
+  created_at timestamptz, updated_at timestamptz
+
+customer_summary (a view, read-only, one row per customer with spend and order counts)
+  id, workspace_id, seller_id, name, phone, email, city, address_line, created_at, updated_at,
+  total_order_count integer, completed_order_count integer (confirmed|shipped|delivered),
+  lifetime_spend_amount_minor bigint (paisa; sum over confirmed|shipped|delivered orders only -
+  drafts, cancelled and returned are excluded), average_order_amount_minor bigint,
+  draft_order_count, confirmed_order_count, shipped_order_count, delivered_order_count,
+  cancelled_order_count, returned_order_count (all integer),
+  first_order_at timestamptz, last_order_at timestamptz,
+  note_count integer, risk_note_count integer
+  Use this view for customer questions (top spenders, repeat buyers, who returns orders).
+
 product_list_view (a view, read-only, one row per product with rolled-up variant facts)
   id, workspace_id, seller_id, title, slug, description, status, tags, category_ids,
   search_text, created_at, updated_at, archived_at,
@@ -140,6 +165,7 @@ Common queries:
 - Aggregated catalogue (price range, stock, variant count): SELECT * FROM product_list_view
 - Out-of-stock: SELECT p.title FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.inventory_state = 'out_of_stock'
 - Recent drafts: SELECT id, customer_name, total_amount_minor, channel, created_at FROM orders WHERE status = 'draft' ORDER BY created_at DESC
+- Top customers by spend: SELECT name, phone, city, lifetime_spend_amount_minor FROM customer_summary ORDER BY lifetime_spend_amount_minor DESC LIMIT 10
 - Order with lines: SELECT o.id, oi.title, oi.quantity, oi.line_total_amount_minor FROM orders o JOIN order_items oi ON oi.order_id = o.id`;
 
 /**
@@ -160,4 +186,7 @@ export const QUERYABLE_TABLES = [
   "orders",
   "order_items",
   "order_status_history",
+  "customers",
+  "customer_notes",
+  "customer_summary",
 ] as const;

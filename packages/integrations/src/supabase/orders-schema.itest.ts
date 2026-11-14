@@ -75,6 +75,7 @@ describe("table shape", () => {
         "customer_address_line",
         "customer_city",
         "customer_email",
+        "customer_id",
         "customer_name",
         "customer_phone",
         "id",
