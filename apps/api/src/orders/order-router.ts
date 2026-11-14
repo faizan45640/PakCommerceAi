@@ -9,7 +9,7 @@ import { parseOrThrow } from "../lib/parse-or-throw.js";
 import { sellerContext } from "../middleware/seller-context.js";
 import {
   createDraftOrder,
-  getOrder,
+  getOrderDetail,
   listOrders,
   transitionOrderStatus,
 } from "./order-service.js";
@@ -91,7 +91,7 @@ orderRouter.get("/:orderId", async (request, response, next) => {
     }
 
     response.json({
-      data: await getOrder(auth, workspaceId, request.params.orderId),
+      data: await getOrderDetail(auth, workspaceId, request.params.orderId),
     });
   } catch (error) {
     next(error);
