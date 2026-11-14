@@ -63,15 +63,28 @@ export function CustomersTable({ initialSearch = "" }: { initialSearch?: string 
 
   React.useEffect(() => {
     let ignore = false;
+    fetchCurrentWorkspace()
+      .then((workspace) => {
+        if (!ignore) setWorkspaceId(workspace.id);
+      })
+      .catch((err: unknown) => {
+        if (ignore) return;
+        setErrorMessage(err instanceof Error ? err.message : "Failed to load customers.");
+        setIsLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [reloadKey]);
 
-    async function load() {
+  React.useEffect(() => {
+    if (!workspaceId) return;
+    let ignore = false;
+
+    async function load(id: string) {
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const id = workspaceId ?? (await fetchCurrentWorkspace()).id;
-        if (ignore) return;
-        if (!workspaceId) setWorkspaceId(id);
-
         const data = await fetchCustomers({
           workspaceId: id,
           query: debouncedSearch,
@@ -88,7 +101,7 @@ export function CustomersTable({ initialSearch = "" }: { initialSearch?: string 
       }
     }
 
-    void load();
+    void load(workspaceId);
     return () => {
       ignore = true;
     };
@@ -107,7 +120,7 @@ export function CustomersTable({ initialSearch = "" }: { initialSearch?: string 
 
   const total = result?.meta.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilters = Boolean(debouncedSearch) || tags.length > 0;
+  const hasFilters = Boolean(debouncedSearch.trim()) || tags.length > 0;
 
   function toggleTag(tag: CustomerTag, checked: boolean) {
     setTags((current) => (checked ? [...current, tag] : current.filter((value) => value !== tag)));
@@ -124,6 +137,7 @@ export function CustomersTable({ initialSearch = "" }: { initialSearch?: string 
               className="h-7 rounded-[min(var(--radius-md),12px)] pl-8"
               placeholder="Search by name, phone, city or email..."
               value={search}
+              maxLength={120}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>

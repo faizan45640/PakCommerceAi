@@ -16,7 +16,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
         title="Customers"
         description="Everyone who has ordered from you, with spend, order history, and risk tags."
       />
-      <CustomersView phone={phoneParam?.trim() || undefined} />
+      <CustomersView key={phoneParam ?? ""} phone={phoneParam?.trim() || undefined} />
     </div>
   );
 }
