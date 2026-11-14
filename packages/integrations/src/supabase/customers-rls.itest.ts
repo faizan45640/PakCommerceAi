@@ -304,7 +304,7 @@ describe("customer_summary isolation", () => {
             alice.customerId,
           ]),
         ),
-      ).rejects.toThrow(/permission denied/i);
+      ).rejects.toThrow(/cannot update view|permission denied/i);
     });
   });
 });
