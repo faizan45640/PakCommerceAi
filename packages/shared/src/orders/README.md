@@ -91,18 +91,21 @@ Additional marketplaces (for example Daraz) are out of scope until a later contr
 - Each row records `fromStatus`, `toStatus`, actor, optional note, and timestamp.
 - `fromStatus` / `toStatus` must be a legal pair from the transition table.
 
-## Schema (T-035)
+## Schema (T-035) and draft API (T-036)
 
-Landed in `supabase/migrations/202611140558*_*.sql`:
+Landed in `supabase/migrations/202611140558*_*.sql` and
+`20261114063511_create_draft_order_function.sql`:
 
 - Enums: `order_status`, `order_channel`, `order_payment_method`
 - Tables: `orders`, `order_items`, `order_status_history` (append-only)
 - RLS: seller-scoped on all three; history is insert/select only
 - Helper: `is_allowed_order_status_transition` mirrors `ORDER_STATUS_TRANSITIONS`
+- RPC: `create_draft_order(jsonb)` — atomic draft + items + history; no stock mutation
+- Express: `POST/GET /api/v1/orders`, `GET /api/v1/orders/:orderId`
 
 ## Out of Scope
 
-- Express CRUD and stock deduction services (T-036, T-037)
+- Confirm / cancel / ship and stock deduction (T-037+)
 - Dashboard UI wiring (T-038–T-040 already use mocks; connect later)
 - Customer entity and `customerId` foreign key (T-043+)
 - Courier assignment, COD risk, payments

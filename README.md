@@ -16,8 +16,8 @@ This repository is **early-stage**. The target system describes the **complete o
 |---|---|
 | **Proposal** | The 20-week target. Aspirational. |
 | **This codebase** | Phase 3 is done. The catalogue API and seller copilot are in. Store sync, WhatsApp, RAG, and the COD model are not. |
-| **Built so far** | Supabase Auth, workspace and product schema, product CRUD, a streaming Business Copilot with guarded writes, and the dashboard shell. |
-| **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, orders, audit logs. |
+| **Built so far** | Supabase Auth, workspace/product/inventory/order schema, product CRUD, inventory adjustments, draft/manual orders, a streaming Business Copilot with guarded writes, and the dashboard shell. |
+| **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, order confirmation/stock deduction, audit logs. |
 
 When a document describes a feature, check the status table below before assuming it exists.
 
@@ -29,8 +29,8 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot page and the products page call the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
-| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD at `/api/v1/products` and streaming copilot chat at `/api/v1/copilot/chat`, both behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot and products pages call the API. Orders, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
+| `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD, inventory adjustments, draft/manual orders (`/api/v1/orders`), and streaming copilot chat — all behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
 | `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, orders, categories, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
 | `packages/integrations` | `@pakcommerce/integrations` | 🟢 **Working** | Supabase client/admin factories + generated DB types. Used by both web and api. |
@@ -52,8 +52,9 @@ view over it, and `stock_movements` is the append-only history of every change.
 transaction through the `adjust_stock` function. The product API and the copilot's stock
 tools do not go through it yet, so they still change quantities without a movement.
 
-Orders have a schema (T-035) but no draft/confirm API yet. Customers, conversations, and
-couriers **do not exist yet**.
+Draft/manual orders land through `POST /api/v1/orders` (`create_draft_order`); confirmation
+and stock reservation are still open (T-037). Customers, conversations, and couriers **do
+not exist yet**.
 
 ✅ The schema is reproducible from source. `supabase/migrations/` holds every change and
 `npx supabase db reset` rebuilds the whole database on an empty Postgres. Migrations are
@@ -135,13 +136,13 @@ npm run dev
 |---|---|---|
 | `packages/shared` | 109 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
-| `apps/api` | 119 | Auth middleware, health, product mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
+| `apps/api` | 129 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
 | `apps/web` | 15 | `getInitials`, `formatCurrency`, preference parsing, and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**259 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**269 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
-**154 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
+**164 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -154,9 +155,10 @@ npm run dev
 | `packages/integrations` identity isolation | 14 | A seller cannot read another's profile, business details, or workspaces; workspaces cannot be reassigned or hard-deleted |
 | `apps/api` product API | 24 | Product CRUD against a real database, with RLS scoping |
 | `apps/api` inventory API | 23 | Stock adjustments and movement history against a real database: every refusal, nothing written on refusal, filters, paging, isolation |
+| `apps/api` orders API | 10 | Draft create/list/get against a real database: price snapshot, no stock mutation, validation, RLS isolation |
 | `apps/api` copilot tools | 13 | Read and guarded-write tools against a real database |
 
-**366 tests total.** Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
+**435 tests total** (269 Node unit + 2 Python + 164 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot page is the one screen that calls the API, and it has no component test yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 
