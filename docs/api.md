@@ -356,6 +356,8 @@ Returns `CustomerListItem`s (`customer` fields + `summary` + `tags`) in the list
 uses the same `getCustomerContext` service function. Bearer auth and RLS as everywhere else.
 
 Provide exactly one of `phone` (any format, normalised first, exact match) or `customerId`.
+**URL-encode the phone**: `+` must be sent as `%2B` (`phone=%2B14155552671`), otherwise the `+` arrives as a
+space and a foreign number will not match.
 `400` if the phone has no digits, if neither or both are given, or if `workspaceId` is missing.
 An unknown customer, or another seller's, is **`200` with `{ "data": { "found": false } }`**: the
 agent treats the phone as a new customer.

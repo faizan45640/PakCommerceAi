@@ -87,22 +87,27 @@ describe("getCustomerProfileTool", () => {
 
     const result = await getCustomerProfileTool(auth).execute({ phone: "03009999999" });
 
-    expect(result.found).toBe(false);
+    expect("found" in result && result.found).toBe(false);
     expect(result).toHaveProperty("message");
+    expect(result).not.toHaveProperty("status");
   });
 
   it("does not call the service when the input is invalid", async () => {
     const result = await getCustomerProfileTool(auth).execute({});
 
-    expect(result.found).toBe(false);
+    expect(result).toEqual({
+      status: "error",
+      message: "Provide exactly one of customerId or phone.",
+    });
     expect(getCustomerContextMock).not.toHaveBeenCalled();
   });
 
-  it("turns a service error (such as a no-digit phone) into found: false", async () => {
+  it("reports a service error (such as a no-digit phone) as an error, not found: false", async () => {
     getCustomerContextMock.mockRejectedValueOnce(new Error("Invalid customer query."));
 
     const result = await getCustomerProfileTool(auth).execute({ phone: "n/a" });
 
-    expect(result).toEqual({ found: false, message: "Invalid customer query." });
+    expect(result).toEqual({ status: "error", message: "Invalid customer query." });
+    expect(result).not.toHaveProperty("found");
   });
 });

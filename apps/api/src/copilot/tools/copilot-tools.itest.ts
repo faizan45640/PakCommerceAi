@@ -375,8 +375,7 @@ describe("getCustomerProfile tool", () => {
 
     const result = await toolsFor(alice).getCustomerProfile.execute({ phone: "+92 300-1234567" });
 
-    expect(result.found).toBe(true);
-    if (!result.found) return;
+    if (!("found" in result) || !result.found) throw new Error("expected a found customer");
     expect(result.customer).toMatchObject({ name: "Ayesha Khan", phone: "+923001234567" });
     expect(result.summary.totalOrderCount).toBe(1);
     expect(result.recentOrders).toHaveLength(1);
@@ -387,6 +386,6 @@ describe("getCustomerProfile tool", () => {
 
     const result = await toolsFor(alice).getCustomerProfile.execute({ phone: "03001234567" });
 
-    expect(result.found).toBe(false);
+    expect(result).toEqual({ found: false, message: expect.any(String) });
   });
 });

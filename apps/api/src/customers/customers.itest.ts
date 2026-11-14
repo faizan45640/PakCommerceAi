@@ -625,6 +625,23 @@ describe("GET /api/v1/customers/context", () => {
     expect(data.tags).toContain("flagged");
   });
 
+  it("finds a foreign customer when the + is URL-encoded as %2B", async () => {
+    const placed = await placeOrder(alice, { phone: "+14155552671" });
+
+    const response = await as(
+      alice,
+      "get",
+      `${CUSTOMERS}/context?workspaceId=${alice.workspaceId}&phone=%2B14155552671`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.found).toBe(true);
+    expect(response.body.data.customer).toMatchObject({
+      id: placed.customerId,
+      phone: "+14155552671",
+    });
+  });
+
   it("finds a customer by id", async () => {
     const placed = await placeOrder(alice, { phone: "03001234567" });
 
