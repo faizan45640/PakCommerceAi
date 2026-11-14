@@ -862,6 +862,8 @@ describe("backfill of legacy orders", () => {
         migration.indexOf("-- BACKFILL END"),
       );
       expect(block).toContain("insert into public.customers");
+      // The block ALTERs orders, which Postgres refuses while deferred checks are pending.
+      await client.query(`set constraints all immediate`);
       await client.query(block);
 
       const link = async (id: string) =>
