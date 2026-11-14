@@ -29,7 +29,7 @@ When a document describes a feature, check the status table below before assumin
 
 | Workspace | Package | State | What is actually there |
 |---|---|---|---|
-| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot, products, and orders (list and detail, with confirm/cancel) pages call the API. Orders overview widgets, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
+| `apps/web` | `@pakcommerce/web` | 🟡 **Partial** | Next.js 16 App Router. Login and register use Supabase Auth. The copilot, products, and orders (list, detail with confirm/cancel, and a manual order form with product picker) pages call the API. Orders overview widgets, inventory, logistics, conversations, approvals, and analytics still render **mock data**. Customers is an empty placeholder. |
 | `apps/api` | `@pakcommerce/api` | 🟡 **Partial** | Express 5. Product CRUD, inventory adjustments, orders (draft + confirm/cancel), and streaming copilot chat — all behind bearer-token auth. Seller scoping is enforced by RLS. See [`docs/api.md`](docs/api.md). |
 | `apps/ml` | `@pakcommerce/ml` | ⚪ **Not scaffolded** | Config only (ruff, pytest, Python pin). No FastAPI app, no model. Runtime deps are commented out. |
 | `packages/shared` | `@pakcommerce/shared` | 🟢 **In use** | Zod contracts for products, workspaces, inventory, orders, categories, and API envelopes. `apps/api` validates requests with them. `apps/web` uses the error envelope in its API client. |
@@ -137,10 +137,10 @@ npm run dev
 | `packages/shared` | 116 | Product, workspace, inventory, order, category, and API-envelope Zod contracts — money in PKR minor units, single-primary-image, variant/option limits, archive invariant, search defaults, order state machine |
 | `packages/integrations` | 16 | Supabase env resolution, the `SUPABASE_ANON_KEY` fallback, service-role handling, client factory options |
 | `apps/api` | 136 | Auth middleware, health, product/order mapping, and copilot tools (SQL preflight, schema document, provider selection, guarded mutations) |
-| `apps/web` | 19 | `getInitials`, `formatCurrency`, preference parsing, order confirm/cancel gating, and the API-centric architecture guard |
+| `apps/web` | 35 | `getInitials`, `formatCurrency`, preference parsing, order confirm/cancel gating, manual order form logic (cart, rupee conversion, estimate, error mapping), and the API-centric architecture guard |
 | `apps/ml` | 2 | Package import and Python version pin consistency |
 
-**287 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
+**303 Node unit tests** run under `npm run test`. The 2 Python tests run under `npm run ci:ml`.
 
 **210 database tests** need Postgres. Run them with `npx supabase start` then `npm run test:integration`. They stay out of `npm run test` so the unit suite runs without Docker.
 
@@ -161,7 +161,7 @@ npm run dev
 | `apps/api` orders API | 16 | Draft create/list/get, order detail (status history, stock checks), confirm with stock deduction, short-stock refusal and cancel against a real database, with RLS isolation |
 | `apps/api` copilot tools | 13 | Read and guarded-write tools against a real database |
 
-**499 tests total** (287 Node unit + 2 Python + 210 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
+**515 tests total** (303 Node unit + 2 Python + 210 database). Mock dashboard components are deliberately untested — a render test would assert that a constant equals itself. The copilot, products and orders pages call the API and have no component tests yet. Add component tests when a page reads real data.
 
 - **CD** builds artifacts on `main`. Web deploys run through Netlify's Git integration and the API through a Render Blueprint (`render.yaml`) after CI checks pass. See [`docs/ci-cd.md`](docs/ci-cd.md).
 

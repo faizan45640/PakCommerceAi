@@ -1,5 +1,9 @@
 // page.tsx
+import Link from "next/link";
+import { Plus } from "lucide-react";
+
 import { PageHeader } from "@/components/dashboard/page-header";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { OrderStatusBreakdown } from "./_components/order-status-breakdown";
@@ -14,6 +18,14 @@ export default function OrdersPage() {
       <PageHeader
         title="Orders"
         description="Track orders, pending work, and fulfillment status across connected channels."
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/orders/new">
+              <Plus className="size-4" />
+              New order
+            </Link>
+          </Button>
+        }
       />
 
       <SalesKpiStrip />
