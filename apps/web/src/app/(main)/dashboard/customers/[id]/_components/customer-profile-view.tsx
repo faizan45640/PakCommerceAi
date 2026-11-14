@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, Mail, MapPin, Phone } from "lucide-react";
 import type { CustomerDetail } from "@pakcommerce/shared";
 
 import { Button } from "@/components/ui/button";
+import { ApiRequestError } from "@/lib/api/api-client";
 import { fetchCustomerById } from "@/lib/api/customers";
 import { fetchCurrentWorkspace } from "@/lib/api/products";
 import { createClient } from "@/lib/supabase/client";
@@ -22,11 +23,16 @@ export function CustomerProfileView({ id }: { id: string }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let ignore = false;
 
     async function load() {
+      setIsLoading(true);
+      setErrorMessage(null);
+      setNotFound(false);
       try {
         const workspace = await fetchCurrentWorkspace();
         const data = await fetchCustomerById(workspace.id, id);
@@ -37,7 +43,9 @@ export function CustomerProfileView({ id }: { id: string }) {
           setCustomer(data);
         }
       } catch (err: unknown) {
-        if (!ignore) setErrorMessage(err instanceof Error ? err.message : "Failed to load customer.");
+        if (ignore) return;
+        if (err instanceof ApiRequestError && err.status === 404) setNotFound(true);
+        else setErrorMessage(err instanceof Error ? err.message : "Failed to load customer.");
       } finally {
         if (!ignore) setIsLoading(false);
       }
@@ -47,7 +55,7 @@ export function CustomerProfileView({ id }: { id: string }) {
     return () => {
       ignore = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   // Re-reads the profile after a note changes so summary, tags and timeline stay true.
   const refresh = useCallback(async () => {
@@ -77,13 +85,22 @@ export function CustomerProfileView({ id }: { id: string }) {
         </Link>
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-12 text-center">
           <AlertCircle className="size-10 text-destructive" />
-          <h2 className="font-semibold text-lg">Customer Not Found</h2>
+          <h2 className="font-semibold text-lg">{notFound ? "Customer Not Found" : "Could not load customer"}</h2>
           <p className="max-w-md text-muted-foreground text-sm">
-            {errorMessage ?? "The requested customer does not exist in this workspace."}
+            {notFound
+              ? "The requested customer does not exist in this workspace."
+              : (errorMessage ?? "Something went wrong.")}
           </p>
-          <Button asChild className="mt-2">
-            <Link href="/dashboard/customers">Return to Customers</Link>
-          </Button>
+          <div className="mt-2 flex gap-2">
+            {notFound ? null : (
+              <Button variant="outline" onClick={() => setReloadKey((key) => key + 1)}>
+                Retry
+              </Button>
+            )}
+            <Button asChild>
+              <Link href="/dashboard/customers">Return to Customers</Link>
+            </Button>
+          </div>
         </div>
       </div>
     );

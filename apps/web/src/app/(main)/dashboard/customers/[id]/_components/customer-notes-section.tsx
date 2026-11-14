@@ -48,6 +48,17 @@ export function CustomerNotes({
   const [pendingDelete, setPendingDelete] = useState<CustomerNote | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
+
+  // The change is already saved when this runs; a failed re-read is only a warning.
+  async function refreshAfterChange() {
+    try {
+      await onChanged();
+      setRefreshWarning(null);
+    } catch {
+      setRefreshWarning("Saved, but couldn't refresh. Reload the page to see the latest.");
+    }
+  }
 
   const cap = notesCapMessage(customer.notes.length, customer.summary.noteCount);
 
@@ -63,14 +74,15 @@ export function CustomerNotes({
     setErrorMessage(null);
     try {
       await createCustomerNote(customer.id, { workspaceId, kind: draft.kind, body: draft.body });
-      setBody("");
-      setKind("note");
-      await onChanged();
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : "Could not save the note.");
-    } finally {
       setIsSaving(false);
+      return;
     }
+    setBody("");
+    setKind("note");
+    await refreshAfterChange();
+    setIsSaving(false);
   }
 
   async function handleDelete() {
@@ -79,13 +91,14 @@ export function CustomerNotes({
     setDeleteError(null);
     try {
       await deleteCustomerNote(workspaceId, customer.id, pendingDelete.id);
-      setPendingDelete(null);
-      await onChanged();
     } catch (err: unknown) {
       setDeleteError(err instanceof Error ? err.message : "Could not delete the note.");
-    } finally {
       setIsDeleting(false);
+      return;
     }
+    setPendingDelete(null);
+    await refreshAfterChange();
+    setIsDeleting(false);
   }
 
   return (
@@ -175,6 +188,11 @@ export function CustomerNotes({
             ))}
           </ul>
         )}
+        {refreshWarning ? (
+          <p role="status" className="text-amber-700 text-sm dark:text-amber-300">
+            {refreshWarning}
+          </p>
+        ) : null}
         {cap ? <p className="text-muted-foreground text-xs">{cap}</p> : null}
       </CardContent>
 
