@@ -6,7 +6,7 @@ fetches their specs from `GET {API_URL}/api/v1/agent/tools` and calls them over
 HTTP, so tools are defined once, in Node. Intents: see `docs/agent-intents.md`.
 
 ```
-classify -> handoff | policy | respond -> finalize
+load_pending -> classify -> handoff | policy | respond -> finalize
 ```
 
 ## Run locally
@@ -34,10 +34,16 @@ Checks: `ruff check . && ruff format --check . && pytest tests/` (no network, no
 `history [{role, content}]` and `policyText` (seller policy; without it policy questions
 hand off, and any model reply mentioning delivery/returns/payment/discount terms is replaced by a handoff).
 Unknown fields (for example a phone number) are rejected. Response:
-`{ reply | null, intent, confidence, handoff {required, reason}, toolCalls [{name, ok}] }`.
+`{ reply | null, intent, confidence, handoff {required, reason}, toolCalls [{name, ok}], orderEvents [{type, orderId}] }`.
+`orderEvents` (optional for Node) lists order changes made this turn: `type` is `draft_created`,
+`confirmed`, `awaiting_seller` or `cancelled`. For `awaiting_seller` the conversation is already in
+`waiting_approval`; no extra handoff is set.
 `reply: null` with `handoff.required: true` means a human must take over. Any LLM, timeout
-or tool failure fails closed: `reply: null`, `handoff.reason: "agent_error"`. `order_interest`
-replies and also sets `handoff.required` (reason `order_interest`) until S11 draft orders exist.
+or tool failure fails closed: `reply: null`, `handoff.reason: "agent_error"`.
+Orders (S11): the agent collects details, shows a summary, calls `createOrderDraft` after a yes,
+sends the ref and asks for HAAN, then calls `confirmOrder` on a new yes (`cancelOrderDraft` on no).
+Needs Node tools `getPendingOrder`, `createOrderDraft`, `confirmOrder`, `cancelOrderDraft`;
+without `createOrderDraft` order intents hand off (`order_tools_unavailable`). See `docs/agent-intents.md`.
 `GET /health`.
 
 ## Environment

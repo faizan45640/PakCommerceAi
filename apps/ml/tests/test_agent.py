@@ -184,16 +184,15 @@ def test_llm_timeout_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out["handoff"]["reason"] == "agent_error"
 
 
-def test_order_interest_replies_and_notifies_seller() -> None:
-    model = make_model("order_interest", script=[AIMessage("Theek hai, seller confirm karega.")])
-    with_tools = ToolsClient(API_URL, TOKEN, client=httpx.AsyncClient())
+def test_order_intent_without_order_tools_hands_off() -> None:
+    model = make_model("order_interest", script=[AIMessage("Theek hai.")])
     with respx.mock:
         respx.get(f"{API_URL}/api/v1/agent/tools").mock(
             return_value=httpx.Response(200, json={"data": TOOL_SPECS})
         )
-        out = run(model, tools=with_tools)
-    assert out["reply"] == "Theek hai, seller confirm karega."
-    assert out["handoff"] == {"required": True, "reason": "order_interest"}
+        out = run(model, tools=mocked_tools())
+    assert out["reply"] is None
+    assert out["handoff"] == {"required": True, "reason": "order_tools_unavailable"}
 
 
 @pytest.mark.parametrize(

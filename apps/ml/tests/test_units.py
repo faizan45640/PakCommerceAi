@@ -49,6 +49,8 @@ def test_every_intent_has_multilingual_examples() -> None:
         "stock_check",
         "policy",
         "order_interest",
+        "order_confirm",
+        "order_cancel",
         "handoff",
         "other",
     }
@@ -139,7 +141,7 @@ def test_deepseek_thinking_off_by_default_and_configurable():
 
 
 def test_policy_guard_ignores_free_size_but_catches_free_delivery() -> None:
-    from app.graph import POLICY_TERMS
+    from app.orders import POLICY_TERMS
 
     assert not POLICY_TERMS.search("Shawl free size 2.5m mein hai, price 8500 PKR")
     assert not POLICY_TERMS.search("Free-Size kurta available hai")
