@@ -3,13 +3,14 @@
 import * as React from "react";
 
 import { AlertCircle, Bot, Mic, Paperclip } from "lucide-react";
-import type { Conversation, Message } from "@pakcommerce/shared/conversations";
+import type { Conversation, ConversationState, Message } from "@pakcommerce/shared/conversations";
 
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiRequestError } from "@/lib/api/api-client";
 import {
+  changeConversationState,
   fetchConversationById,
   fetchMessages,
   markConversationRead,
@@ -26,6 +27,7 @@ import {
 } from "./conversation-display";
 import {
   MESSAGE_STATUS_LABELS,
+  availableStateActions,
   bubbleSide,
   groupByDay,
   mediaChip,
@@ -63,6 +65,8 @@ export function ConversationThread({
   });
   const [notFound, setNotFound] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [pendingState, setPendingState] = React.useState<ConversationState | null>(null);
+  const [stateError, setStateError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!conversationId) return;
@@ -109,6 +113,21 @@ export function ConversationThread({
       ignore = true;
     };
   }, [conversationId, reloadKey]);
+
+  async function changeState(to: ConversationState) {
+    if (!conversationId || !workspaceId || pendingState) return;
+    setPendingState(to);
+    setStateError(null);
+    try {
+      const updated = await changeConversationState(workspaceId, conversationId, to);
+      setConversation(updated);
+      onUpdatedRef.current?.(updated);
+    } catch (err: unknown) {
+      setStateError(err instanceof Error ? err.message : "Could not change the conversation state.");
+    } finally {
+      setPendingState(null);
+    }
+  }
 
   async function loadOlder() {
     if (!conversationId || !workspaceId || !olderCursor) return;
@@ -202,6 +221,24 @@ export function ConversationThread({
             className="normal-case"
           />
         </CardTitle>
+        <div className="flex flex-wrap items-center gap-2" aria-label="Conversation controls">
+          {availableStateActions(conversation.state).map((action) => (
+            <Button
+              key={action.to}
+              size="sm"
+              variant={action.to === "human_takeover" ? "default" : "outline"}
+              disabled={pendingState !== null}
+              onClick={() => void changeState(action.to)}
+            >
+              {pendingState === action.to ? "Saving..." : action.label}
+            </Button>
+          ))}
+        </div>
+        {stateError ? (
+          <p role="alert" className="text-destructive text-xs">
+            {stateError}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div ref={scrollRef} className="flex max-h-[32rem] flex-col gap-3 overflow-y-auto pr-2">

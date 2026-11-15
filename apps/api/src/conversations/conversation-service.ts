@@ -7,7 +7,14 @@ import {
   type ParsedMessageListQuery,
 } from "@pakcommerce/shared";
 
-import { NotFoundError } from "../lib/http-errors.js";
+import {
+  assertConversationTransition,
+  conversationStateSchema,
+  type ConversationState,
+} from "@pakcommerce/shared/conversations";
+import { z } from "zod";
+
+import { ConflictError, NotFoundError } from "../lib/http-errors.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import { escapePostgrestFilterValue } from "../lib/postgrest.js";
 import type { SellerContext } from "../middleware/seller-context.js";
@@ -137,6 +144,68 @@ export async function markConversationRead(
 
   if (error) throw new Error(error.message, { cause: error });
   if (!data) throw new NotFoundError("Conversation not found.");
+
+  return toConversation(data as ConversationRow);
+}
+
+export const transitionConversationInputSchema = z.object({
+  workspaceId: z.uuid(),
+  to: conversationStateSchema,
+  /** Why the seller took over. Stored only when `to` is `human_takeover`. */
+  reason: z.string().trim().max(500).optional(),
+});
+
+export type TransitionConversationInput = z.output<typeof transitionConversationInputSchema>;
+
+/**
+ * Moves a conversation between states as the seller (take over, hand back to
+ * the AI, turn AI off, close).
+ *
+ * The actor is always `seller` here, so the shared actor rules apply. The update
+ * is conditional on the state we just read: if another tab changed it first, no
+ * row matches and the caller gets a 409 instead of skipping the guard. The
+ * database trigger remains the backstop for the edge list.
+ */
+export async function transitionConversationState(
+  auth: SellerContext,
+  conversationId: string,
+  input: TransitionConversationInput,
+): Promise<Conversation> {
+  const current = await getConversation(auth, input.workspaceId, conversationId);
+  const from: ConversationState = current.state;
+
+  try {
+    assertConversationTransition(from, input.to, "seller");
+  } catch {
+    throw new ConflictError(`A conversation cannot move from ${from} to ${input.to}.`, {
+      to: [`Not allowed from ${from}.`],
+    });
+  }
+
+  const { data, error } = await auth.db
+    .from("conversations")
+    .update({
+      state: input.to,
+      handoff_reason: input.to === "human_takeover" ? (input.reason ?? null) : null,
+    })
+    .eq("id", conversationId)
+    .eq("workspace_id", input.workspaceId)
+    .eq("state", from)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    // 23514: the trigger refused the edge. Treat like an illegal move.
+    if (error.code === "23514") {
+      throw new ConflictError(`A conversation cannot move from ${from} to ${input.to}.`);
+    }
+    throw new Error(error.message, { cause: error });
+  }
+
+  // The row exists (we just read it), so no match means someone else moved it first.
+  if (!data) {
+    throw new ConflictError("This conversation was just updated elsewhere. Reload and try again.");
+  }
 
   return toConversation(data as ConversationRow);
 }
