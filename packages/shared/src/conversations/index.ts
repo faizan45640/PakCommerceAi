@@ -242,3 +242,28 @@ export type ConversationSearchQuery = z.input<typeof conversationSearchQuerySche
 export type ParsedConversationSearchQuery = z.output<typeof conversationSearchQuerySchema>;
 export type MessageListQuery = z.input<typeof messageListQuerySchema>;
 export type ParsedMessageListQuery = z.output<typeof messageListQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Sales agent settings (T-079). One row per workspace.
+// ---------------------------------------------------------------------------
+
+export const MAX_POLICY_TEXT_LENGTH = 4000;
+
+/** What `GET /api/v1/sales-agent/settings` returns. `policyText` is "" when none is set. */
+export const salesAgentSettingsSchema = z.object({
+  workspaceId: z.uuid(),
+  /** New and reopened conversations start with the AI answering. */
+  aiEnabled: z.boolean(),
+  /** Delivery times, returns, payment/COD. The agent may only quote this. */
+  policyText: z.string().max(MAX_POLICY_TEXT_LENGTH),
+});
+
+/** Body of `PUT /api/v1/sales-agent/settings`. */
+export const salesAgentSettingsInputSchema = z.object({
+  workspaceId: z.uuid(),
+  aiEnabled: z.boolean(),
+  policyText: z.string().max(MAX_POLICY_TEXT_LENGTH).default(""),
+});
+
+export type SalesAgentSettings = z.infer<typeof salesAgentSettingsSchema>;
+export type SalesAgentSettingsInput = z.input<typeof salesAgentSettingsInputSchema>;

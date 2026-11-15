@@ -10,6 +10,7 @@ import { conversationRouter } from "./conversations/conversation-router.js";
 import { inventoryRouter } from "./inventory/inventory-router.js";
 import { orderRouter } from "./orders/order-router.js";
 import { productRouter } from "./products/product-router.js";
+import { salesAgentRouter } from "./sales-agent/settings-router.js";
 import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
 import { createTwilioWebhookRouter } from "./whatsapp/twilio-router.js";
@@ -67,6 +68,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/v1/inventory", requireAuth(supabaseTokenVerifier), inventoryRouter);
   app.use("/api/v1/customers", requireAuth(supabaseTokenVerifier), customerRouter);
   app.use("/api/v1/conversations", requireAuth(supabaseTokenVerifier), conversationRouter);
+  app.use("/api/v1/sales-agent", requireAuth(supabaseTokenVerifier), salesAgentRouter);
   app.use("/api/v1/orders", requireAuth(supabaseTokenVerifier), orderRouter);
   app.use("/api/v1/workspaces", requireAuth(supabaseTokenVerifier), workspaceRouter);
 

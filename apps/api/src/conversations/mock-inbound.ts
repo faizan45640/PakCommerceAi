@@ -9,6 +9,10 @@ import {
   ingestInboundMessageInputSchema,
   type IngestInboundMessageResult,
 } from "./ingest.js";
+import { ConflictError } from "../lib/http-errors.js";
+import { getActiveWhatsApp } from "../whatsapp/factory.js";
+import { onInboundStored } from "../sales-agent/pipeline.js";
+import { loadSalesAgentSettings } from "../sales-agent/settings-service.js";
 import { assertWorkspaceOwned } from "./conversation-service.js";
 import type { SellerContext } from "../middleware/seller-context.js";
 
@@ -31,7 +35,8 @@ export const mockInboundBodySchema = z
     Body: z.string().max(4096).optional(),
     MessageSid: z.string().trim().min(1).max(100).optional(),
     NumMedia: z.coerce.number().int().min(0).max(MAX_MOCK_MEDIA).optional(),
-    aiEnabled: z.boolean().default(false),
+    /** Omit to use the workspace's Sales Agent setting. */
+    aiEnabled: z.boolean().optional(),
   })
   .catchall(z.unknown());
 
@@ -77,7 +82,6 @@ export async function ingestMockInbound(
       messageSid: body.MessageSid ?? `SMmock${randomUUID().replace(/-/g, "")}`,
       body: body.Body,
       media: mediaFromTwilioFields(body),
-      aiEnabled: body.aiEnabled,
     },
     "mock inbound message",
   );
@@ -86,5 +90,15 @@ export async function ingestMockInbound(
   // seller's own token (RLS). Nothing reaches the RPC for another seller's workspace.
   await assertWorkspaceOwned(auth, input.workspaceId);
 
-  return ingestInboundMessage(input);
+  // With a real provider connected the AI would message arbitrary real numbers.
+  const active = getActiveWhatsApp();
+  if (active && active.name !== "simulator") {
+    throw new ConflictError("Mock inbound only works with the simulator provider.");
+  }
+
+  const aiEnabled = body.aiEnabled ?? (await loadSalesAgentSettings(input.workspaceId)).aiEnabled;
+  const result = await ingestInboundMessage({ ...input, aiEnabled });
+  // After the message is stored; the turn runs in the background.
+  onInboundStored(result, input.workspaceId);
+  return result;
 }

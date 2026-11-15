@@ -3,6 +3,8 @@ import { ZodError } from "zod";
 
 import { ingestInboundMessage } from "../conversations/ingest.js";
 import { createApiSupabaseAdminClient } from "../lib/supabase.js";
+import { onInboundStored } from "../sales-agent/pipeline.js";
+import { loadSalesAgentSettings } from "../sales-agent/settings-service.js";
 import type { DeliveryStatus, ParsedInbound, StatusUpdate } from "./provider.js";
 
 /** Provider-neutral inbound handling shared by every WhatsApp webhook. */
@@ -63,9 +65,13 @@ export async function processInbound(
     }
   };
 
+  // Read once per webhook; the seller's setting only matters for new/reopened threads.
+  const { aiEnabled } =
+    parsed.messages.length > 0 ? await loadSalesAgentSettings(workspaceId, db) : { aiEnabled: false };
+
   for (const message of parsed.messages) {
-    await run("inbound ingest", () =>
-      ingestInboundMessage(
+    await run("inbound ingest", async () => {
+      const result = await ingestInboundMessage(
         {
           workspaceId,
           from: message.from,
@@ -73,11 +79,13 @@ export async function processInbound(
           messageSid: message.providerMessageId,
           body: message.body,
           media: message.media,
-          aiEnabled: false,
+          aiEnabled,
         },
         db,
-      ),
-    );
+      );
+      // After the message is stored; the turn runs in the background.
+      onInboundStored(result, workspaceId);
+    });
   }
   for (const status of parsed.statuses) {
     await run("status update", () => applyStatus(db, status));

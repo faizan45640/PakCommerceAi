@@ -88,12 +88,15 @@ function migrationTables(): Set<string> {
  * (a buyer can write instructions aimed at the model), so Rafiq is not told
  * about them. The inbox reads them through its own API.
  * `ai_tool_calls` is the tool audit log: written by the server, not shop data.
+ * `sales_agent_settings` holds the buyer-facing agent's switch and policy text:
+ * the copilot must not rewrite what the agent may promise buyers.
  */
 const NOT_EXPOSED_TABLES = new Set([
   "ai_tool_calls",
   "copilot_chats",
   "conversations",
   "messages",
+  "sales_agent_settings",
 ]);
 
 describe("SCHEMA_DOCUMENT", () => {

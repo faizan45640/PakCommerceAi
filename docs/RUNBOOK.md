@@ -117,6 +117,7 @@ Get both from the Supabase dashboard → **Project Settings → API**.
 | `API_PORT` | api | No — defaults to `4000` | |
 | `APP_URL` | api | No — defaults to `http://localhost:3000` | Sets the CORS origin |
 | `ENABLE_MOCK_INBOUND` | api | No | Enables `POST /api/v1/conversations/mock-inbound` (fake Twilio inbound for the inbox). Defaults to on when `NODE_ENV` is `development` or `test`, off otherwise; `true`/`false` overrides. Keep it off in real production: any signed-in seller could inject messages into their own inbox. |
+| `ML_URL`, `AGENT_SERVICE_TOKEN` | api | For AI replies | Sales agent pipeline target (`apps/ml`, `http://localhost:8000`) and shared bearer token. Missing = AI turns hand off as "AI unavailable". `SALES_AGENT_PIPELINE=off` disables AI turns. |
 | `NEXT_PUBLIC_SUPABASE_URL` | web | Only for auth | Exposed to the browser |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | web | Only for auth | Exposed to the browser — **publishable key only** |
 | `SUPABASE_URL` | api | Only for Supabase calls | |
@@ -417,11 +418,12 @@ The temporary token expires in about 24 hours; regenerate it or create a System 
 
 ### Switching the WhatsApp provider
 
-`WHATSAPP_PROVIDER=meta|twilio` (default `meta`). `WHATSAPP_WORKSPACE_ID` is shared; the rest is per provider. The inactive provider's webhook returns 404, and so does the active one if its env is incomplete.
+`WHATSAPP_PROVIDER=meta|twilio|simulator` (default `meta`). `WHATSAPP_WORKSPACE_ID` is shared; the rest is per provider. The inactive provider's webhook returns 404, and so does the active one if its env is incomplete.
 
 | Provider | Required env |
 |---|---|
 | `meta` | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` (optional `WHATSAPP_GRAPH_VERSION`) |
+| `simulator` | none (optional `WHATSAPP_WORKSPACE_ID`); no network, both webhooks answer 404. See "Run the sales agent locally without WhatsApp" |
 | `twilio` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (e.g. `whatsapp:+14155238886`), `TWILIO_WEBHOOK_PUBLIC_URL` |
 
 Twilio sandbox setup:
@@ -432,6 +434,34 @@ Twilio sandbox setup:
 4. Message the sandbox number from your phone: it appears in the inbox; take over and reply as with Meta.
 
 Notes: the sandbox membership expires after 72 hours (send the join code again). Free-form replies only work within 24 hours of the buyer's last message (Twilio error 63016 shows as a clear 422). Media URLs need Twilio basic auth, so the same known gap as Meta applies: only the URL and content type are stored.
+
+## Run the sales agent locally without WhatsApp
+
+The AI reply pipeline works end to end with no WhatsApp account: the **simulator** provider fakes sending, and the mock inbound endpoint plays the buyer.
+
+1. `.env` (API):
+   ```bash
+   WHATSAPP_PROVIDER=simulator          # replies "send" instantly (id sim-<uuid>), no network, no webhook
+   # WHATSAPP_WORKSPACE_ID=<workspace>  # optional with the simulator; unset = any workspace
+   ENABLE_MOCK_INBOUND=true             # default in development
+   ML_URL=http://localhost:8000
+   AGENT_SERVICE_TOKEN=<openssl rand -hex 32>   # same value for the API and apps/ml
+   AI_PROVIDER=deepseek                 # plus its key (e.g. DEEPSEEK_API_KEY), read by apps/ml
+   API_URL=http://localhost:4000        # apps/ml calls the API's /api/v1/agent tools here
+   ```
+2. Start the ML service once its venv exists (`cd apps/ml && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt`), then run `npm run dev:ml`, `npm run dev:api` and `npm run dev:web` (three terminals).
+3. Dashboard > Conversations > **Agent Settings**: turn **AI replies** on and fill in the **store policy** (delivery, returns, COD). Without a policy the agent hands policy questions to you.
+4. Play the buyer (new threads start `ai_active` because of the setting; an existing thread keeps its state, so use a new phone number or hand the thread back to the AI):
+   ```bash
+   curl -X POST http://localhost:4000/api/v1/conversations/mock-inbound \
+     -H "Authorization: Bearer <seller access token>" -H "Content-Type: application/json" \
+     -d '{"workspaceId":"<id>","From":"whatsapp:+923001234567","Body":"Lahore delivery kitne din?"}'
+   ```
+   `aiEnabled` in the body overrides the setting. The call returns at once; the AI message appears in the thread a few seconds later, and the conversation moves to `human_takeover` (with a short reason) when the agent hands off, is unreachable, or is not configured.
+
+The simulator is refused when `NODE_ENV=production` unless `ALLOW_SIMULATOR_IN_PRODUCTION=true` (demo opt-in). Mock inbound answers `409` while a real provider (Meta/Twilio) is configured. Turning **AI replies** off moves the workspace's `ai_active` conversations to `open`. A sweep every minute hands off `ai_active` threads whose buyer message went unanswered for 2 minutes (for example after an API restart) with the reason "AI didn't answer in time".
+
+Switches: `SALES_AGENT_PIPELINE=off` disables AI turns entirely. Turns for one conversation run one after another inside the API process; running several API instances needs a database lock first.
 
 ---
 
