@@ -37,9 +37,11 @@ interface ConversationInboxProps {
   selectedId?: string;
   /** A conversation changed elsewhere (e.g. marked read by the thread); its row is replaced. */
   updatedConversation?: Conversation | null;
+  /** Bumped by the parent (for example the buyer simulator) to reload the first page quietly. */
+  refreshTick?: number;
 }
 
-export function ConversationInbox({ selectedId, updatedConversation }: ConversationInboxProps) {
+export function ConversationInbox({ selectedId, updatedConversation, refreshTick = 0 }: ConversationInboxProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
@@ -112,6 +114,26 @@ export function ConversationInbox({ selectedId, updatedConversation }: Conversat
       ignore = true;
     };
   }, [workspaceId, debouncedSearch, states, unreadOnly, reloadKey]);
+
+  // Quiet reload of the first page (no spinner) when the parent asks.
+  React.useEffect(() => {
+    if (refreshTick === 0 || !workspaceId) return;
+    let ignore = false;
+    fetchConversations({ workspaceId, query: debouncedSearch, states, unreadOnly, limit: PAGE_SIZE })
+      .then((data) => {
+        if (ignore) return;
+        setItems(data.items);
+        setNextCursor(data.nextCursor ?? null);
+      })
+      .catch(() => {
+        // Best effort; the next tick tries again.
+      });
+    return () => {
+      ignore = true;
+    };
+    // Only a new tick should trigger this; filters have their own load above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   async function loadMore() {
     if (!workspaceId || !nextCursor) return;

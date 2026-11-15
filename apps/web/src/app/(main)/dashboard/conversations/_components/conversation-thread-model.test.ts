@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Message } from "@pakcommerce/shared/conversations";
 
 import {
+  appendNewer,
   bubbleSide,
   dayLabel,
   groupByDay,
@@ -22,6 +23,20 @@ function msg(id: string, createdAt: string): Message {
     createdAt,
   };
 }
+
+describe("appendNewer", () => {
+  it("appends only unseen messages in chronological order", () => {
+    const m1 = msg("m1", "2026-11-14T09:00:00+05:00");
+    const m2 = msg("m2", "2026-11-14T10:00:00+05:00");
+    const m3 = msg("m3", "2026-11-15T10:00:00+05:00");
+    expect(appendNewer([m1], [m3, m2, m1]).map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
+  });
+
+  it("returns the same array when nothing is new", () => {
+    const current = [msg("m1", "2026-11-14T09:00:00+05:00")];
+    expect(appendNewer(current, [...current])).toBe(current);
+  });
+});
 
 describe("thread model", () => {
   const newest = msg("m3", "2026-11-15T10:00:00+05:00");
