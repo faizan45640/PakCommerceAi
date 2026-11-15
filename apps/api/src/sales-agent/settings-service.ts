@@ -1,6 +1,8 @@
 import type { AppSupabaseClient } from "@pakcommerce/integrations/supabase";
 import type { SalesAgentSettings, SalesAgentSettingsInput } from "@pakcommerce/shared/conversations";
 
+import { assertConversationTransition } from "@pakcommerce/shared/conversations";
+
 import { assertWorkspaceOwned } from "../conversations/conversation-service.js";
 import { createApiSupabaseAdminClient } from "../lib/supabase.js";
 import type { SellerContext } from "../middleware/seller-context.js";
@@ -47,6 +49,9 @@ export async function saveSalesAgentSettings(
   await assertWorkspaceOwned(auth, input.workspaceId);
 
   const policyText = input.policyText.trim();
+  // Turning the AI off must stop it on live threads too: hand them back as the seller.
+  if (!input.aiEnabled) await stopAiOnLiveConversations(auth, input.workspaceId);
+
   const values = { ai_enabled: input.aiEnabled, policy_text: policyText === "" ? null : policyText };
 
   // Sellers may only update ai_enabled/policy_text (column grants), so this is
@@ -96,4 +101,15 @@ export async function loadSalesAgentSettings(
     console.error("sales agent settings unavailable");
     return { ...DEFAULT_SETTINGS };
   }
+}
+
+/** `ai_active -> open` as the seller for every AI conversation of the workspace (conditional update). */
+async function stopAiOnLiveConversations(auth: SellerContext, workspaceId: string): Promise<void> {
+  assertConversationTransition("ai_active", "open", "seller");
+  const { error } = await auth.db
+    .from("conversations")
+    .update({ state: "open", handoff_reason: null })
+    .eq("workspace_id", workspaceId)
+    .eq("state", "ai_active");
+  if (error) throw new Error(error.message, { cause: error });
 }

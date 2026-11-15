@@ -238,6 +238,46 @@ describe("AI reply pipeline", () => {
     expect(agentCalls).toHaveLength(1);
   });
 
+  it("turning the AI off moves live AI conversations to open and stops new turns", async () => {
+    const on = { workspaceId: alice.workspaceId, aiEnabled: true, policyText: "" };
+    await as(alice, "put", SETTINGS).send(on);
+    const response = await inbound(alice);
+    await whenAgentIdle();
+    expect(agentCalls).toHaveLength(1);
+
+    await as(alice, "put", SETTINGS).send({ ...on, aiEnabled: false });
+    const { conversation } = await thread(alice, response.body.data.conversationId);
+    expect(conversation.state).toBe("open");
+
+    await inbound(alice, { body: "Hello?" });
+    await whenAgentIdle();
+    expect(agentCalls).toHaveLength(1);
+  });
+
+  it("refuses mock inbound while a real provider is connected", async () => {
+    const keys = ["WHATSAPP_PROVIDER", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_WORKSPACE_ID"];
+    const before = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    Object.assign(process.env, {
+      WHATSAPP_PROVIDER: "meta",
+      WHATSAPP_ACCESS_TOKEN: "t",
+      WHATSAPP_PHONE_NUMBER_ID: "1",
+      WHATSAPP_APP_SECRET: "s",
+      WHATSAPP_VERIFY_TOKEN: "v",
+      WHATSAPP_WORKSPACE_ID: alice.workspaceId,
+    });
+    try {
+      const response = await inbound(alice, { aiEnabled: true });
+      expect(response.status).toBe(409);
+      await whenAgentIdle();
+      expect(agentCalls).toHaveLength(0);
+    } finally {
+      for (const k of keys) {
+        if (before[k] === undefined) delete process.env[k];
+        else process.env[k] = before[k];
+      }
+    }
+  });
+
   it("hands off with the agent's reason, after sending its reply", async () => {
     agentAnswer.body = {
       reply: "Great, I will pass this to the seller.",

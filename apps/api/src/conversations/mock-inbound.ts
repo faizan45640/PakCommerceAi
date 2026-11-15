@@ -9,6 +9,8 @@ import {
   ingestInboundMessageInputSchema,
   type IngestInboundMessageResult,
 } from "./ingest.js";
+import { ConflictError } from "../lib/http-errors.js";
+import { getActiveWhatsApp } from "../whatsapp/factory.js";
 import { onInboundStored } from "../sales-agent/pipeline.js";
 import { loadSalesAgentSettings } from "../sales-agent/settings-service.js";
 import { assertWorkspaceOwned } from "./conversation-service.js";
@@ -87,6 +89,12 @@ export async function ingestMockInbound(
   // The ingest runs as the service role, so ownership is proven first with the
   // seller's own token (RLS). Nothing reaches the RPC for another seller's workspace.
   await assertWorkspaceOwned(auth, input.workspaceId);
+
+  // With a real provider connected the AI would message arbitrary real numbers.
+  const active = getActiveWhatsApp();
+  if (active && active.name !== "simulator") {
+    throw new ConflictError("Mock inbound only works with the simulator provider.");
+  }
 
   const aiEnabled = body.aiEnabled ?? (await loadSalesAgentSettings(input.workspaceId)).aiEnabled;
   const result = await ingestInboundMessage({ ...input, aiEnabled });

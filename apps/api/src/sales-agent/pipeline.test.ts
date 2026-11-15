@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SimulatorProvider } from "../whatsapp/simulator.js";
 import {
+  SWEEP_HANDOFF_REASON,
+  sweepStaleConversations,
   describeHandoffReason,
   onInboundStored,
   scheduleAgentTurn,
@@ -20,6 +22,10 @@ interface FakeState {
   /** Stored messages, oldest first. */
   messages: Array<Record<string, unknown>>;
   settings: { ai_enabled: boolean; policy_text: string | null } | null;
+  /** Rows the stale-conversation sweep query returns. */
+  stale?: Array<{ id: string; workspace_id: string }>;
+  /** First insert reports an error although the row landed. */
+  insertFailsOnce?: boolean;
 }
 
 /** Stateful stand-in for the admin client; understands just the queries the pipeline makes. */
@@ -41,6 +47,7 @@ function fakeDb(state: FakeState) {
           buyer_phone: PHONE,
           state: state.conversation.state,
         };
+        if (mode === "select" && !single) return { data: state.stale ?? [], error: null };
         if (mode === "update") {
           if (filters.state === state.conversation.state) Object.assign(state.conversation, patch);
           return { data: null, error: null };
@@ -49,9 +56,19 @@ function fakeDb(state: FakeState) {
       }
       if (table === "sales_agent_settings") return { data: state.settings, error: null };
       if (table === "messages") {
-        if (mode === "insert") return { data: null, error: null };
+        if (mode === "insert") {
+          if (state.insertFailsOnce) {
+            state.insertFailsOnce = false;
+            state.messages.push({ ...inserted[inserted.length - 1]! });
+            return { data: null, error: { message: "timeout" } };
+          }
+          return { data: null, error: null };
+        }
         if (single) {
-          const found = state.messages.find((m) => m.id === filters.id);
+          const found =
+            filters.provider_message_id !== undefined
+              ? state.messages.find((m) => m.provider_message_id === filters.provider_message_id)
+              : state.messages.find((m) => m.id === filters.id);
           return { data: found ?? null, error: null };
         }
         const before = String(filters.created_at_lt);
@@ -274,6 +291,27 @@ describe("agent turn", () => {
     expect(state.conversation.state).toBe("human_takeover");
   });
 
+  it("skips the turn silently when the seller turned the AI off", async () => {
+    state.settings = { ai_enabled: false, policy_text: null };
+    const fetchImpl = vi.fn();
+    scheduleAgentTurn(turn(), deps(fetchImpl as unknown as typeof fetch));
+    await whenAgentIdle();
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(provider.sent).toHaveLength(0);
+    expect(state.conversation).toEqual({ state: "ai_active", handoff_reason: null });
+  });
+
+  it("does not insert the ai message twice when the first insert landed despite an error", async () => {
+    state.insertFailsOnce = true;
+    const fetchImpl = vi.fn(async () => jsonResponse(agentOk()));
+    scheduleAgentTurn(turn(), deps(fetchImpl as unknown as typeof fetch));
+    await whenAgentIdle();
+
+    expect(db.inserted).toHaveLength(1);
+    expect(state.conversation.state).toBe("ai_active");
+  });
+
   it("does nothing when the conversation is no longer ai_active at turn start", async () => {
     state.conversation.state = "human_takeover";
     const fetchImpl = vi.fn();
@@ -363,5 +401,40 @@ describe("describeHandoffReason", () => {
     expect(describeHandoffReason("low_confidence:0.31")).toBe("AI was not confident");
     expect(describeHandoffReason("something_new")).toBe("AI handed off");
     expect(describeHandoffReason(null)).toBe("AI handed off");
+  });
+});
+
+describe("sweepStaleConversations", () => {
+  it("hands off stale unanswered conversations without calling the agent", async () => {
+    state.stale = [{ id: CONVERSATION, workspace_id: WORKSPACE }];
+    const fetchImpl = vi.fn();
+    const count = await sweepStaleConversations(deps(fetchImpl as unknown as typeof fetch));
+
+    expect(count).toBe(1);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(state.conversation).toEqual({ state: "human_takeover", handoff_reason: SWEEP_HANDOFF_REASON });
+  });
+
+  it("skips conversations with a queued turn", async () => {
+    state.stale = [{ id: CONVERSATION, workspace_id: WORKSPACE }];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow = vi.fn(async () => {
+      await gate;
+      return jsonResponse(agentOk());
+    });
+    scheduleAgentTurn(turn(), deps(slow as unknown as typeof fetch));
+    await vi.waitFor(() => expect(slow).toHaveBeenCalled());
+
+    expect(await sweepStaleConversations(deps(slow as unknown as typeof fetch))).toBe(0);
+    release();
+    await whenAgentIdle();
+    expect(state.conversation.state).toBe("ai_active");
+  });
+
+  it("is off with SALES_AGENT_PIPELINE=off", async () => {
+    state.stale = [{ id: CONVERSATION, workspace_id: WORKSPACE }];
+    expect(await sweepStaleConversations({ db: db.db, env: { SALES_AGENT_PIPELINE: "off" } })).toBe(0);
+    expect(state.conversation.state).toBe("ai_active");
   });
 });

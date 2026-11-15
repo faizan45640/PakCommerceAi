@@ -172,7 +172,10 @@ async function runTurn(db: AppSupabaseClient, input: AgentTurnInput, deps: Pipel
   if (triggerError) throw new Error(triggerError.message, { cause: triggerError });
   if (!trigger) return;
 
+  // Kill switch: the seller turned the AI off after this message was queued.
   const settings = await loadSalesAgentSettings(input.workspaceId, db);
+  if (!settings.aiEnabled) return;
+
   const history = await loadHistory(db, input.conversationId, trigger.created_at);
 
   const response = await callAgent(
@@ -327,9 +330,23 @@ async function sendAndStore(
   // Append-only table: insert after the send so the provider id is known. Retry once.
   let saved = false;
   for (let attempt = 0; attempt < 2 && !saved; attempt += 1) {
+    if (attempt > 0 && providerMessageId) {
+      // The first insert may have landed even though it reported an error.
+      const existing = await db
+        .from("messages")
+        .select("id")
+        .eq("conversation_id", conversation.id)
+        .eq("provider_message_id", providerMessageId)
+        .maybeSingle();
+      if (existing.data) {
+        saved = true;
+        break;
+      }
+    }
     const { error } = await db.from("messages").insert(row);
     saved = !error;
   }
+
   if (!saved) console.error("agent reply sent but not recorded", conversation.id);
 
   return providerMessageId !== null;
@@ -347,4 +364,51 @@ async function handOff(db: AppSupabaseClient, input: AgentTurnInput, reason: str
     .eq("state", "ai_active");
   // No matching row means the state already moved (seller took over): nothing to do.
   if (error) throw new Error(error.message, { cause: error });
+}
+
+// --- restart recovery --------------------------------------------------------
+
+export const SWEEP_INTERVAL_MS = 60_000;
+export const STALE_AFTER_MS = 2 * 60_000;
+export const SWEEP_HANDOFF_REASON = "AI didn't answer in time";
+
+/**
+ * Hands off `ai_active` conversations whose newest message is an unanswered
+ * buyer message older than two minutes and that have no queued turn (for
+ * example the API restarted mid-turn). The agent is not re-run: a seller picks
+ * it up. Returns how many conversations were handed off. Never throws.
+ */
+export async function sweepStaleConversations(deps: PipelineDeps = {}, now = Date.now()): Promise<number> {
+  if (pipelineDisabled(deps.env ?? process.env)) return 0;
+  try {
+    const db = deps.db ?? createApiSupabaseAdminClient();
+    const { data, error } = await db
+      .from("conversations")
+      .select("id, workspace_id")
+      .eq("state", "ai_active")
+      .eq("last_message_sender", "buyer")
+      .lt("last_message_at", new Date(now - STALE_AFTER_MS).toISOString())
+      .limit(100);
+    if (error) throw new Error(error.message, { cause: error });
+
+    let handedOff = 0;
+    for (const row of data ?? []) {
+      if (tails.has(row.id)) continue;
+      await handOff(db, { workspaceId: row.workspace_id, conversationId: row.id, messageId: "" }, SWEEP_HANDOFF_REASON);
+      handedOff += 1;
+    }
+    return handedOff;
+  } catch (error) {
+    console.error("agent sweep failed", error instanceof Error ? error.name : "error");
+    return 0;
+  }
+}
+
+/** Sweeps now and every minute. The timer does not keep the process alive. */
+export function startAgentSweep(deps: PipelineDeps = {}): NodeJS.Timeout | null {
+  if (pipelineDisabled(deps.env ?? process.env)) return null;
+  void sweepStaleConversations(deps);
+  const timer = setInterval(() => void sweepStaleConversations(deps), SWEEP_INTERVAL_MS);
+  timer.unref();
+  return timer;
 }

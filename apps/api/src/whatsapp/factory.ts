@@ -21,6 +21,10 @@ let simulator: SimulatorProvider | null = null;
 export function getActiveWhatsApp(env: NodeJS.ProcessEnv = process.env): ActiveWhatsApp | null {
   const name = getWhatsAppProviderName(env);
   if (name === "simulator") {
+    // Fakes every send, so it must not run in production by accident.
+    if (env.NODE_ENV === "production" && env.ALLOW_SIMULATOR_IN_PRODUCTION?.trim().toLowerCase() !== "true") {
+      return null;
+    }
     simulator ??= new SimulatorProvider();
     return { name, provider: simulator, workspaceId: env.WHATSAPP_WORKSPACE_ID?.trim() || null };
   }

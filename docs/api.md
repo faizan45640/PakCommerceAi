@@ -452,7 +452,7 @@ was read); `404` when not found or not yours.
 ### `POST /api/v1/conversations/mock-inbound`
 
 Fakes a Twilio inbound WhatsApp message so the inbox can be demoed before Twilio is connected.
-Returns `404` unless `ENABLE_MOCK_INBOUND` is on (default in development/test; explicit in production, see RUNBOOK).
+Returns `409` while a real WhatsApp provider (Meta/Twilio) is connected (simulator only). Returns `404` unless `ENABLE_MOCK_INBOUND` is on (default in development/test; explicit in production, see RUNBOOK).
 
 ```json
 {
@@ -498,7 +498,7 @@ as an outbound `ai` message (`sent`, or `failed`); it is dropped if the state is
 ### `PUT /api/v1/sales-agent/settings`
 
 Body `{ "workspaceId": "uuid", "aiEnabled": true, "policyText": "up to 4000 chars" }`. Returns the saved
-settings. `aiEnabled` decides whether new and reopened conversations start `ai_active`; `policyText`
+settings. Saving `aiEnabled: false` also moves every `ai_active` conversation of the workspace to `open` (as the seller). `aiEnabled` decides whether new and reopened conversations start `ai_active`; `policyText`
 (delivery, returns, payment/COD) is the only policy text the agent may quote. `400` on invalid input, `404` for
 a foreign workspace.
 

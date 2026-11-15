@@ -69,7 +69,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/v1/customers", requireAuth(supabaseTokenVerifier), customerRouter);
   app.use("/api/v1/conversations", requireAuth(supabaseTokenVerifier), conversationRouter);
   app.use("/api/v1/sales-agent", requireAuth(supabaseTokenVerifier), salesAgentRouter);
-  app.use("/api/v1/orders",requireAuth(supabaseTokenVerifier), orderRouter);
+  app.use("/api/v1/orders", requireAuth(supabaseTokenVerifier), orderRouter);
   app.use("/api/v1/workspaces", requireAuth(supabaseTokenVerifier), workspaceRouter);
 
   app.use(

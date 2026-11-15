@@ -38,6 +38,12 @@ describe("simulator provider", () => {
     ).toBe("ws");
   });
 
+  it("is refused in production unless explicitly allowed", () => {
+    const base = { WHATSAPP_PROVIDER: "simulator", NODE_ENV: "production" };
+    expect(getActiveWhatsApp(base)).toBeNull();
+    expect(getActiveWhatsApp({ ...base, ALLOW_SIMULATOR_IN_PRODUCTION: "true" })?.name).toBe("simulator");
+  });
+
   it("makes the Meta and Twilio webhooks answer 404", async () => {
     const previous = process.env.WHATSAPP_PROVIDER;
     process.env.WHATSAPP_PROVIDER = "simulator";

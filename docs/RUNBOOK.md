@@ -459,6 +459,8 @@ The AI reply pipeline works end to end with no WhatsApp account: the **simulator
    ```
    `aiEnabled` in the body overrides the setting. The call returns at once; the AI message appears in the thread a few seconds later, and the conversation moves to `human_takeover` (with a short reason) when the agent hands off, is unreachable, or is not configured.
 
+The simulator is refused when `NODE_ENV=production` unless `ALLOW_SIMULATOR_IN_PRODUCTION=true` (demo opt-in). Mock inbound answers `409` while a real provider (Meta/Twilio) is configured. Turning **AI replies** off moves the workspace's `ai_active` conversations to `open`. A sweep every minute hands off `ai_active` threads whose buyer message went unanswered for 2 minutes (for example after an API restart) with the reason "AI didn't answer in time".
+
 Switches: `SALES_AGENT_PIPELINE=off` disables AI turns entirely. Turns for one conversation run one after another inside the API process; running several API instances needs a database lock first.
 
 ---
