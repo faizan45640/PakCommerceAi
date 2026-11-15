@@ -264,7 +264,7 @@ $$;
 --   ai_not_allowed            conversation is not ai_active
 --   not_found                 order is not this conversation's whatsapp_ai order
 --   not_draft                 order already left draft
---   needs_buyer_confirmation  no inbound buyer message after the order was created
+--   needs_buyer_confirmation  buyer has not answered a delivered AI message sent after the draft
 -- then either confirms it (p_auto_confirm: transition_order_status, which
 -- deducts stock) or hands the conversation to the seller (waiting_approval).
 -- Returns 'confirmed' or 'awaiting_seller'.
@@ -287,6 +287,7 @@ declare
   v_state public.conversation_state;
   v_status public.order_status;
   v_created timestamptz;
+  v_ai_reply timestamptz;
 begin
   select c.workspace_id, c.seller_id, c.state
   into v_workspace, v_seller, v_state
@@ -315,12 +316,24 @@ begin
     raise exception 'not_draft' using errcode = 'check_violation';
   end if;
 
-  if not exists (
+  -- The buyer must have SEEN the order and answered it: a delivered AI message
+  -- after the draft, then a buyer message after that. A message sent while the
+  -- draft was still being made (double-send) does not count.
+  select min(m.created_at) into v_ai_reply
+  from public.messages m
+  where m.conversation_id = p_conversation_id
+    and m.workspace_id = v_workspace
+    and m.direction = 'outbound'
+    and m.sender = 'ai'
+    and m.status <> 'failed'
+    and m.created_at > v_created;
+
+  if v_ai_reply is null or not exists (
     select 1 from public.messages m
     where m.conversation_id = p_conversation_id
       and m.workspace_id = v_workspace
       and m.direction = 'inbound'
-      and m.created_at > v_created
+      and m.created_at > v_ai_reply
   ) then
     raise exception 'needs_buyer_confirmation' using errcode = 'check_violation';
   end if;
@@ -394,6 +407,6 @@ revoke execute on function public.ai_cancel_order_draft(uuid, uuid, text)
 grant execute on function public.ai_cancel_order_draft(uuid, uuid, text) to service_role;
 
 comment on function public.ai_confirm_order(uuid, uuid, boolean, text) is
-  'Service role only. Locks the ai_active conversation, requires an inbound buyer message after the order was created, then confirms the draft or moves the conversation to waiting_approval.';
+  'Service role only. Locks the ai_active conversation, requires a delivered AI message after the draft and a buyer message after that, then confirms the draft or moves the conversation to waiting_approval.';
 comment on function public.ai_cancel_order_draft(uuid, uuid, text) is
   'Service role only. Cancels the conversation''s own whatsapp_ai draft while the AI still holds the conversation.';

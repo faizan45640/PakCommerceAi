@@ -268,6 +268,22 @@ describe("agent turn", () => {
     expect(state.conversation.state).toBe("waiting_approval");
   });
 
+  it("keeps waiting_approval when the agent also asks for a handoff in the same turn", async () => {
+    const fetchImpl = vi.fn(async () => {
+      state.conversation.state = "waiting_approval";
+      state.conversation.handoff_reason = "Order A1B2C3D4 needs your approval";
+      return jsonResponse(agentOk({ handoff: { required: true, reason: "order_interest" } }));
+    });
+    scheduleAgentTurn(turn(), deps(fetchImpl as unknown as typeof fetch));
+    await whenAgentIdle();
+
+    expect(provider.sent).toHaveLength(1);
+    expect(state.conversation).toEqual({
+      state: "waiting_approval",
+      handoff_reason: "Order A1B2C3D4 needs your approval",
+    });
+  });
+
   it.each([
     ["a 500", async () => jsonResponse({ error: "boom" }, 500)],
     ["a network error", async () => Promise.reject(new TypeError("fetch failed"))],

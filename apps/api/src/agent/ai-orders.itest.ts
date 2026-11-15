@@ -87,6 +87,26 @@ async function inbound(seller: TestSeller, body: string): Promise<string> {
   return response.body.data.conversationId;
 }
 
+/** The AI's reply (order number + "HAAN?") is stored, then the buyer answers it. */
+async function aiReply(seller: TestSeller, conversationId: string, status: "sent" | "failed" = "sent") {
+  const { error } = await admin().from("messages").insert({
+    workspace_id: seller.workspaceId,
+    seller_id: seller.sellerId,
+    conversation_id: conversationId,
+    direction: "outbound",
+    sender: "ai",
+    body: "Order A1B2C3D4, total Rs 5000. Confirm karne ke liye HAAN likhein.",
+    media: [],
+    status,
+  });
+  expect(error).toBeNull();
+}
+
+async function buyerConfirms(seller: TestSeller, conversationId: string) {
+  await aiReply(seller, conversationId);
+  await inbound(seller, "HAAN");
+}
+
 async function settings(seller: TestSeller, values: { auto_confirm_orders?: boolean; shipping_fee_minor?: number }) {
   const { error } = await admin()
     .from("sales_agent_settings")
@@ -287,7 +307,7 @@ describe("confirmOrder: the buyer must confirm twice", () => {
     expect((await orderRow(orderId))?.status).toBe("draft");
     expect(await stock(variantId)).toBe(10);
 
-    await inbound(alice, "HAAN");
+    await buyerConfirms(alice, conversation);
     const confirmed = await agent("confirmOrder", conversation, { orderId });
     expect(confirmed.status).toBe(200);
     expect(confirmed.body.output).toEqual({ status: "confirmed", orderRef: created.body.output.orderRef });
@@ -299,6 +319,28 @@ describe("confirmOrder: the buyer must confirm twice", () => {
     // Done: confirming again, or cancelling, is a not_draft.
     expect((await agent("confirmOrder", conversation, { orderId })).body.error.code).toBe("not_draft");
     expect((await agent("cancelOrderDraft", conversation, { orderId })).body.error.code).toBe("not_draft");
+  });
+
+  it("a double-sent buyer message that landed before the AI's reply does not count", async () => {
+    const { variantId } = await shop(alice);
+    const conversation = await inbound(alice, "haan");
+    const created = await draft(conversation, variantId);
+    const orderId = created.body.output.orderId;
+
+    // Buyer double-sends while the first turn is still running: after the draft, before any reply.
+    await inbound(alice, "haan");
+    const early = await agent("confirmOrder", conversation, { orderId });
+    expect(early.status).toBe(409);
+    expect(early.body.error.code).toBe("needs_buyer_confirmation");
+
+    // A failed send was never seen by the buyer either.
+    await aiReply(alice, conversation, "failed");
+    await inbound(alice, "HAAN");
+    expect((await agent("confirmOrder", conversation, { orderId })).body.error.code).toBe("needs_buyer_confirmation");
+
+    // The reply that was delivered, then the buyer answers it.
+    await buyerConfirms(alice, conversation);
+    expect((await agent("confirmOrder", conversation, { orderId })).body.output.status).toBe("confirmed");
   });
 
   it("the database enforces it even if the tool did not", async () => {
@@ -319,7 +361,7 @@ describe("confirmOrder: the buyer must confirm twice", () => {
     await settings(alice, { auto_confirm_orders: false });
     const conversation = await inbound(alice, "ok");
     const created = await draft(conversation, variantId);
-    await inbound(alice, "HAAN");
+    await buyerConfirms(alice, conversation);
 
     const response = await agent("confirmOrder", conversation, { orderId: created.body.output.orderId });
     expect(response.body.output).toEqual({ status: "awaiting_seller", orderRef: created.body.output.orderRef });
@@ -338,7 +380,7 @@ describe("confirmOrder: the buyer must confirm twice", () => {
     const { variantId } = await shop(alice, 3);
     const conversation = await inbound(alice, "ok");
     const created = await draft(conversation, variantId, 3);
-    await inbound(alice, "HAAN");
+    await buyerConfirms(alice, conversation);
     await admin().from("product_variants").update({ quantity_on_hand: 1 }).eq("id", variantId);
 
     const response = await agent("confirmOrder", conversation, { orderId: created.body.output.orderId });
@@ -371,7 +413,7 @@ describe("confirmOrder: the buyer must confirm twice", () => {
     });
     expect(manual.status).toBe(201);
     expect(manual.body.data).toMatchObject({ createdVia: "manual", conversationId: null });
-    await inbound(alice, "HAAN");
+    await buyerConfirms(alice, aliceConversation);
     expect((await agent("confirmOrder", aliceConversation, { orderId: manual.body.data.id })).body.error.code).toBe(
       "not_found",
     );
@@ -401,7 +443,7 @@ describe("seller approval", () => {
     await settings(alice, { auto_confirm_orders: false });
     const conversation = await inbound(alice, "ok");
     const created = await draft(conversation, variant.variantId, 2);
-    await inbound(alice, "HAAN");
+    await buyerConfirms(alice, conversation);
     await agent("confirmOrder", conversation, { orderId: created.body.output.orderId });
     return { ...variant, conversation, orderId: created.body.output.orderId as string, ref: created.body.output.orderRef as string };
   }
