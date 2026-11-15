@@ -12,6 +12,7 @@ import { orderRouter } from "./orders/order-router.js";
 import { productRouter } from "./products/product-router.js";
 import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
+import { createWhatsAppWebhookRouter } from "./whatsapp/webhook-router.js";
 import { healthRouter } from "./routes/health.js";
 
 export interface CreateAppOptions {
@@ -38,6 +39,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
 
   app.use(cors({ origin: allowedOrigins }));
+  // Meta signs the exact bytes, so the webhook sits before express.json() and
+  // reads its own raw body. Public: authenticated by signature, not a token.
+  app.use("/api/v1/webhooks/whatsapp", createWhatsAppWebhookRouter());
+
   app.use(express.json());
 
   app.use("/health", healthRouter);

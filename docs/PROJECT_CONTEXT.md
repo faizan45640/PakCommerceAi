@@ -145,6 +145,8 @@ The WhatsApp Sales Agent represents the seller but never replaces them. It shoul
 
 **Planned runtime:** LangGraph, chosen for stateful workflow management, conversation memory, and built-in human handoff. Inbound messages arrive via a Twilio webhook. **Sellers own their own Twilio account, number, and billing** — the platform connects to it and never resells numbers.
 
+**Provider status (T-075 spike):** inbound now has a Meta WhatsApp Cloud API adapter (`apps/api/src/whatsapp/`, webhook at `/api/v1/webhooks/whatsapp`, seller replies and delivery statuses) behind a provider interface, configured for one number and one workspace from env. Twilio remains planned behind the same interface.
+
 ---
 
 ## Seller-Facing AI (Rafiq)
