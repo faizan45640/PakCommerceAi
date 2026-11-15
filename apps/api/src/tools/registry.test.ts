@@ -105,6 +105,43 @@ describe("the shipped registry", () => {
   });
 });
 
+describe("audit never stores SQL or buyer text", () => {
+  const sql = "update customers set name = 'Ayesha Khan' where phone = '+923001234567'";
+
+  it("hashes SQL fields to kind, sha256 and length", () => {
+    for (const name of ["queryDatabase", "mutateDatabase"]) {
+      const def = getTools().find((t) => t.name === name)!;
+      const stored = redactInput(def, {
+        sql,
+        summary: "Call Ayesha Khan 0300",
+        queryDescription: "orders of +923001234567",
+        reason: "she asked",
+      });
+      const text = JSON.stringify(stored);
+      expect(text).not.toContain("Ayesha");
+      expect(text).not.toContain("923001234567");
+      expect(text).not.toContain("0300");
+      expect(stored).toMatchObject({
+        sql: { kind: "update", sha256: expect.stringMatching(/^[0-9a-f]{64}$/), length: sql.length },
+      });
+    }
+  });
+
+  it("redacts draft order customer details and notes", () => {
+    const def = getTools().find((t) => t.name === "createDraftOrder")!;
+    const text = JSON.stringify(
+      redactInput(def, {
+        customer: { name: "Ayesha Khan", phone: "+923001234567", addressLine: "12 Mall Rd" },
+        notes: "deliver to Ayesha after 5",
+        items: [{ quantity: 1 }],
+      }),
+    );
+    for (const secret of ["Ayesha", "923001234567", "Mall Rd"]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+});
+
 describe("runTool", () => {
   it("audits a successful call with redacted input", async () => {
     const entries: ToolAuditEntry[] = [];

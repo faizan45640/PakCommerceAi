@@ -46,12 +46,14 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/v1/webhooks/whatsapp", createWhatsAppWebhookRouter());
   app.use("/api/v1/webhooks/twilio", createTwilioWebhookRouter());
 
+  // Before express.json(): the agent router checks its token first, then parses its
+  // own body, so a disabled or unauthenticated surface never reveals a parse error.
+  app.use("/api/v1/agent", createAgentRouter());
+
   app.use(express.json());
 
   app.use("/health", healthRouter);
   app.use("/api/v1", healthRouter);
-  // Service-to-service (Python sales agent): its own bearer token, not seller auth.
-  app.use("/api/v1/agent", createAgentRouter());
 
   // Everything mounted below requires a valid Supabase access token.
   // Keep public routes above this line; add protected routers below it.

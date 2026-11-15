@@ -51,7 +51,7 @@ function sellerAuth(ctx: ToolContext): SellerContext {
 function fromFactory(
   name: string,
   factory: (auth: SellerContext) => FactoryTool,
-  meta: { permission: ToolPermission; owner: ToolOwner; redact?: string[] },
+  meta: { permission: ToolPermission; owner: ToolOwner; redact?: string[]; sqlFields?: string[] },
 ): ToolDefinition {
   const probe = factory(NO_CALLER);
   return {
@@ -62,7 +62,7 @@ function fromFactory(
     owner: meta.owner,
     audiences: ["copilot"],
     needsApproval: probe.needsApproval === true,
-    audit: { redact: meta.redact ?? [] },
+    audit: { redact: meta.redact ?? [], sqlFields: meta.sqlFields ?? [] },
     execute: (ctx, input) => factory(sellerAuth(ctx)).execute(input),
   };
 }
@@ -111,7 +111,12 @@ registerTool(
   fromFactory("getSchema", getSchemaTool, { permission: "read", owner: "platform" }),
 );
 registerTool(
-  fromFactory("queryDatabase", queryDatabaseTool, { permission: "read", owner: "analytics" }),
+  fromFactory("queryDatabase", queryDatabaseTool, {
+    permission: "read",
+    owner: "analytics",
+    sqlFields: ["sql"],
+    redact: ["queryDescription", "summary", "reason"],
+  }),
 );
 registerTool({
   name: "getCourierPerformance",
@@ -126,7 +131,12 @@ registerTool({
 });
 
 registerTool(
-  fromFactory("mutateDatabase", mutateDatabaseTool, { permission: "write", owner: "platform" }),
+  fromFactory("mutateDatabase", mutateDatabaseTool, {
+    permission: "write",
+    owner: "platform",
+    sqlFields: ["sql"],
+    redact: ["queryDescription", "summary", "reason"],
+  }),
 );
 registerTool(
   fromFactory("updateProductStock", updateProductStockTool, {
@@ -150,6 +160,6 @@ registerTool(
   fromFactory("createDraftOrder", createDraftOrderTool, {
     permission: "write",
     owner: "orders",
-    redact: ["customer.name", "customer.phone", "customer.addressLine", "customer.email"],
+    redact: ["customer.name", "customer.phone", "customer.addressLine", "customer.email", "notes"],
   }),
 );

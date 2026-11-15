@@ -65,7 +65,7 @@ function build(entries: ToolAuditEntry[]) {
   );
 
   const app = express();
-  app.use(express.json());
+  // No global body parser, like app.ts: the agent router parses its own.
   app.use(
     "/api/v1/agent",
     createAgentRouter({
@@ -120,6 +120,24 @@ describe("agent surface auth", () => {
   });
 });
 
+describe("agent surface and malformed bodies", () => {
+  const malformed = (app: express.Express, headers: Record<string, string>) =>
+    request(app)
+      .post("/api/v1/agent/tools/lookup")
+      .set(headers)
+      .set("Content-Type", "application/json")
+      .send("{not json");
+
+  it("is 404 when the surface is off, whatever the body", async () => {
+    vi.stubEnv("AGENT_SERVICE_TOKEN", "");
+    expect((await malformed(build(entries), auth)).status).toBe(404);
+  });
+
+  it("is 401 with a wrong token, whatever the body", async () => {
+    expect((await malformed(build(entries), { Authorization: "Bearer nope" })).status).toBe(401);
+  });
+});
+
 describe("GET /tools", () => {
   it("lists sales-agent tools only, with JSON Schema", async () => {
     const response = await request(build(entries)).get("/api/v1/agent/tools").set(auth);
@@ -167,6 +185,10 @@ describe("POST /tools/:name", () => {
       expect(response.status).toBe(404);
       expect(response.body).toMatchObject({ ok: false, error: { code: "unknown_tool" } });
     }
+    expect(entries.map((e) => [e.toolName, e.errorCode, e.input])).toEqual([
+      ["nothing", "unknown_tool", {}],
+      ["copilotOnly", "unknown_tool", {}],
+    ]);
   });
 
   it("answers 404 for an unknown conversation", async () => {
@@ -203,6 +225,9 @@ describe("POST /tools/:name", () => {
       expect(response.body.error.code).toBe("ai_not_allowed");
     }
     expect(seen).toHaveLength(0);
+    expect(entries.map((e) => [e.toolName, e.ok, e.errorCode])).toEqual(
+      Array(4).fill(["saveNote", false, "ai_not_allowed"]),
+    );
 
     conversationRow = { ...conversationRow, state: "ai_active" };
     const allowed = await call(app, "saveNote", { conversationId: CONVERSATION, input: { q: "x" } });
@@ -226,6 +251,13 @@ describe("POST /tools/:name", () => {
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe("approval_required");
     expect(seen).toHaveLength(0);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      toolName: "refund",
+      ok: false,
+      errorCode: "approval_required",
+      workspaceId: "ws-A",
+    });
   });
 
   it("returns a tool's own error code and writes an audit entry", async () => {

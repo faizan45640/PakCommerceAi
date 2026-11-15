@@ -1,4 +1,6 @@
 import type { AppSupabaseClient } from "@pakcommerce/integrations/supabase";
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 /**
@@ -77,6 +79,11 @@ export interface ToolDefinition<TInput = any, TOutput = unknown> {
   audit: {
     /** Dotted input paths replaced with "[redacted]" in the audit row. */
     redact?: string[];
+    /**
+     * Input fields holding SQL. Never stored verbatim (it can embed buyer data):
+     * replaced by `{ kind, sha256, length }`.
+     */
+    sqlFields?: string[];
   };
   execute(ctx: ToolContext, input: TInput): Promise<TOutput>;
 }
@@ -199,6 +206,17 @@ export function redactInput(def: ToolDefinition, input: unknown): unknown {
   } catch {
     return {};
   }
+  for (const field of def.audit.sqlFields ?? []) {
+    const record = copy as Record<string, unknown>;
+    if (record && typeof record === "object" && typeof record[field] === "string") {
+      const sql = record[field] as string;
+      record[field] = {
+        kind: /^\s*([a-z]+)/i.exec(sql)?.[1]?.toLowerCase() ?? "unknown",
+        sha256: createHash("sha256").update(sql).digest("hex"),
+        length: sql.length,
+      };
+    }
+  }
   for (const path of def.audit.redact ?? []) redactPath(copy, path.split("."));
   return truncate(copy);
 }
@@ -279,23 +297,39 @@ export async function runTool(
     }
   }
 
+  await recordToolAudit(def.name, def, ctx, rawInput, auditCode, Date.now() - started);
+
+  return result;
+}
+
+/**
+ * Writes one audit row, never throwing. Also used for calls refused before the
+ * tool ran (approval, conversation state); `def` is null for an unknown tool,
+ * whose input is not stored.
+ */
+export async function recordToolAudit(
+  toolName: string,
+  def: ToolDefinition | null,
+  ctx: ToolContext,
+  rawInput: unknown,
+  errorCode: string | null,
+  durationMs: number,
+): Promise<void> {
   try {
     await ctx.audit.record({
-      toolName: def.name,
+      toolName: toolName.slice(0, 100),
       audience: ctx.audience,
       actor: ctx.actor,
       sellerId: ctx.sellerId ?? null,
       workspaceId: ctx.workspaceId,
       conversationId: ctx.conversationId ?? null,
-      ok: auditCode === null,
-      errorCode: auditCode,
-      durationMs: Date.now() - started,
-      input: redactInput(def, rawInput),
+      ok: errorCode === null,
+      errorCode,
+      durationMs,
+      input: def ? redactInput(def, rawInput) : {},
     });
   } catch (error) {
     // An audit outage must not break the shop assistant.
     console.error("Tool audit failed:", error);
   }
-
-  return result;
 }
