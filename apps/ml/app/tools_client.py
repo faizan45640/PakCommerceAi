@@ -9,6 +9,17 @@ from typing import Any
 import httpx
 from langchain_core.tools import StructuredTool, ToolException
 
+_DROP_KEYS = {"$schema", "$id", "additionalProperties", "default", "examples"}
+
+
+def sanitize_schema(node: Any) -> Any:
+    """Strip JSON Schema keywords that Gemini/OpenAI tool converters reject."""
+    if isinstance(node, dict):
+        return {k: sanitize_schema(v) for k, v in node.items() if k not in _DROP_KEYS}
+    if isinstance(node, list):
+        return [sanitize_schema(v) for v in node]
+    return node
+
 
 class ToolsClient:
     """Fetches tool specs (cached) and executes tools over HTTP.
@@ -77,7 +88,9 @@ class ToolsClient:
         return StructuredTool(
             name=name,
             description=spec.get("description") or name,
-            args_schema=spec.get("inputSchema") or {"type": "object", "properties": {}},
+            args_schema=sanitize_schema(
+                spec.get("inputSchema") or {"type": "object", "properties": {}}
+            ),
             coroutine=run,
             handle_tool_error=False,
         )

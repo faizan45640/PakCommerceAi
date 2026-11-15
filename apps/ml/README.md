@@ -30,11 +30,14 @@ Checks: `ruff check . && ruff format --check . && pytest tests/` (no network, no
 
 `POST /agent/respond` (auth: `X-Agent-Token` or `Authorization: Bearer`; 503 if
 `AGENT_SERVICE_TOKEN` is unset). Body: `conversationId`, `message {body, media?[{contentType, transcript}]}`,
-optional `history [{role, content}]`, `policyText` (seller policy; without it
-policy questions hand off), `conversationState` (anything but `ai_active` returns no reply).
+`conversationState` (required; anything but `ai_active` returns no reply), optional
+`history [{role, content}]` and `policyText` (seller policy; without it policy questions
+hand off, and any model reply mentioning delivery/returns/payment/discount terms is replaced by a handoff).
 Unknown fields (for example a phone number) are rejected. Response:
 `{ reply | null, intent, confidence, handoff {required, reason}, toolCalls [{name, ok}] }`.
-`reply: null` with `handoff.required: true` means a human must take over.
+`reply: null` with `handoff.required: true` means a human must take over. Any LLM, timeout
+or tool failure fails closed: `reply: null`, `handoff.reason: "agent_error"`. `order_interest`
+replies and also sets `handoff.required` (reason `order_interest`) until S11 draft orders exist.
 `GET /health`.
 
 ## Environment
@@ -51,3 +54,8 @@ Unknown fields (for example a phone number) are rejected. Response:
 Switching vendor is env-only, for example `AI_PROVIDER=google AI_MODEL=gemini-2.5-flash`.
 
 Logs never contain message bodies or phone numbers; the agent only ever sees a `conversationId`.
+
+## Retention
+
+The checkpointer keeps the last 30 transcript turns per conversation, but old checkpoint rows
+accumulate in Postgres. Run a periodic cleanup of `checkpoints*` rows for closed or old threads.

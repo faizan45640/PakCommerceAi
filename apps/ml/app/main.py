@@ -48,8 +48,8 @@ class RespondRequest(BaseModel):
     history: list[Turn] | None = None
     # Seller-provided delivery/return/payment text. Without it, policy questions hand off.
     policyText: str | None = None  # noqa: N815
-    # The agent only replies in ai_active; Node may pass the state as a second guard.
-    conversationState: str | None = None  # noqa: N815
+    # Required: the agent only replies in ai_active, anything else fails closed.
+    conversationState: str  # noqa: N815
 
 
 class Handoff(BaseModel):
@@ -106,7 +106,7 @@ def create_app(
         if not hmac.compare_digest(supplied.encode(), expected.encode()):
             raise HTTPException(401, "Unauthorized")
 
-        if body.conversationState not in (None, "ai_active"):
+        if body.conversationState != "ai_active":
             return RespondResponse(
                 reply=None,
                 intent=None,
@@ -127,7 +127,17 @@ def create_app(
             "policy_text": body.policyText,
         }
         config = {"configurable": {"thread_id": body.conversationId}}
-        out = await request.app.state.graph.ainvoke(state, config)
+        try:
+            out = await request.app.state.graph.ainvoke(state, config)
+        except Exception as exc:  # noqa: BLE001 - fail closed, log the type only
+            log.warning("agent graph failed: %s", type(exc).__name__)
+            return RespondResponse(
+                reply=None,
+                intent=None,
+                confidence=0.0,
+                handoff=Handoff(required=True, reason="agent_error"),
+                toolCalls=[],
+            )
         log.info(
             "agent turn conversation=%s intent=%s handoff=%s",
             body.conversationId,

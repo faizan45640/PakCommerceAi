@@ -22,3 +22,6 @@ The agent only replies when the conversation is `ai_active`.
   `tools_unavailable`, `tool_loop_limit`, `empty_reply`). Node then moves the conversation to `human_takeover`.
 - Prices, stock, delivery times and policies are never invented: only tool output or seller policy text.
 - Replies are short and in the buyer's language and script (Roman Urdu stays Roman Urdu).
+- `order_interest` replies with a holding message and also hands off (`order_interest`) so a seller is notified.
+- Any LLM, timeout or tool error fails closed with reason `agent_error`.
+- Buyer text and tool output are treated as data; replies touching delivery, returns, payment or discounts without seller policy text are never sent.

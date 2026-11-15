@@ -30,6 +30,7 @@ async def open_checkpointer(url: str | None = None) -> AsyncIterator[BaseCheckpo
         conninfo=url,
         max_size=5,
         open=False,
+        check=AsyncConnectionPool.check_connection,
         kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
     )
     await pool.open()

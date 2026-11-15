@@ -8,7 +8,7 @@ import respx
 from app.checkpoint import open_checkpointer
 from app.intents import INTENTS, classifier_system_prompt
 from app.llm import LLMConfigError, get_chat_model
-from app.tools_client import ToolsClient
+from app.tools_client import ToolsClient, sanitize_schema
 from langchain_core.tools import StructuredTool, ToolException
 from langchain_deepseek import ChatDeepSeek
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -99,3 +99,27 @@ def test_checkpointer_defaults_to_memory() -> None:
             return type(saver).__name__
 
     assert "InMemory" in asyncio.run(go())
+
+
+def test_schema_is_sanitized_for_provider_converters() -> None:
+    raw = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"query": {"type": "string", "default": "x"}},
+        "required": ["query"],
+    }
+    clean = sanitize_schema(raw)
+    assert clean == {
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+        "required": ["query"],
+    }
+    spec = {**TOOL_SPECS[0], "inputSchema": raw}
+    tool = ToolsClient(API_URL, TOKEN, client=httpx.AsyncClient()).build_tools([spec], "c")[0]
+    from langchain_core.utils.function_calling import convert_to_openai_tool
+
+    assert "$schema" not in str(convert_to_openai_tool(tool))
+    from langchain_google_genai._function_utils import convert_to_genai_function_declarations
+
+    convert_to_genai_function_declarations([tool])

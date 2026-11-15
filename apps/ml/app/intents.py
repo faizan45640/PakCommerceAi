@@ -112,4 +112,6 @@ async def classify(
     result = await model.with_structured_output(IntentResult).ainvoke(messages)
     if isinstance(result, dict):
         result = IntentResult.model_validate(result)
-    return result  # type: ignore[return-value]
+    if not isinstance(result, IntentResult):
+        raise ValueError("classifier returned no structured output")
+    return result
