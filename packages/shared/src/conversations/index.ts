@@ -181,8 +181,8 @@ const conversationIdSchema = z.uuid();
 const conversationTimestampSchema = z.iso.datetime({ offset: true });
 
 export const messageMediaSchema = z.object({
-  /** Provider URL. Fetching it needs the seller's provider credentials. */
-  url: z.url(),
+  /** Provider URL, https only. Fetching it needs the seller's provider credentials. */
+  url: z.url({ protocol: /^https$/ }),
   contentType: z.string().trim().min(1).max(100),
 });
 

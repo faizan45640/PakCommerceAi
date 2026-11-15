@@ -85,11 +85,96 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "categories_workspace_id_fkey"
-            columns: ["workspace_id"]
+            foreignKeyName: "categories_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          buyer_name: string | null
+          buyer_phone: string
+          channel: string
+          created_at: string
+          customer_id: string | null
+          handoff_reason: string | null
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_sender:
+            | Database["public"]["Enums"]["message_sender"]
+            | null
+          seller_id: string
+          state: Database["public"]["Enums"]["conversation_state"]
+          state_changed_at: string
+          unread_count: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          buyer_name?: string | null
+          buyer_phone: string
+          channel?: string
+          created_at?: string
+          customer_id?: string | null
+          handoff_reason?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_sender?:
+            | Database["public"]["Enums"]["message_sender"]
+            | null
+          seller_id: string
+          state?: Database["public"]["Enums"]["conversation_state"]
+          state_changed_at?: string
+          unread_count?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          buyer_name?: string | null
+          buyer_phone?: string
+          channel?: string
+          created_at?: string
+          customer_id?: string | null
+          handoff_reason?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_sender?:
+            | Database["public"]["Enums"]["message_sender"]
+            | null
+          seller_id?: string
+          state?: Database["public"]["Enums"]["conversation_state"]
+          state_changed_at?: string
+          unread_count?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_customer_workspace_fkey"
+            columns: ["customer_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "customer_summary"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "conversations_customer_workspace_fkey"
+            columns: ["customer_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "conversations_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
           },
         ]
       }
@@ -232,6 +317,63 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "customers_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          body: string | null
+          conversation_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          id: string
+          media: Json
+          provider_message_id: string | null
+          seller_id: string
+          sender: Database["public"]["Enums"]["message_sender"]
+          status: Database["public"]["Enums"]["message_status"]
+          workspace_id: string
+        }
+        Insert: {
+          body?: string | null
+          conversation_id: string
+          created_at?: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          id?: string
+          media?: Json
+          provider_message_id?: string | null
+          seller_id: string
+          sender: Database["public"]["Enums"]["message_sender"]
+          status: Database["public"]["Enums"]["message_status"]
+          workspace_id: string
+        }
+        Update: {
+          body?: string | null
+          conversation_id?: string
+          created_at?: string
+          direction?: Database["public"]["Enums"]["message_direction"]
+          id?: string
+          media?: Json
+          provider_message_id?: string | null
+          seller_id?: string
+          sender?: Database["public"]["Enums"]["message_sender"]
+          status?: Database["public"]["Enums"]["message_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "messages_workspace_seller_fkey"
             columns: ["workspace_id", "seller_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -516,25 +658,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "product_images_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "product_images_product_workspace_fkey"
+            columns: ["product_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "product_list_view"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "workspace_id"]
           },
           {
-            foreignKeyName: "product_images_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "product_images_product_workspace_fkey"
+            columns: ["product_id", "workspace_id"]
             isOneToOne: false
             referencedRelation: "products"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "workspace_id"]
           },
           {
-            foreignKeyName: "product_images_workspace_id_fkey"
-            columns: ["workspace_id"]
+            foreignKeyName: "product_images_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "seller_id"]
           },
         ]
       }
@@ -1001,6 +1143,23 @@ export type Database = {
       }
       create_draft_order: { Args: { payload: Json }; Returns: string }
       create_product: { Args: { payload: Json }; Returns: string }
+      ingest_inbound_message: {
+        Args: {
+          p_ai_enabled: boolean
+          p_body: string
+          p_buyer_name: string
+          p_buyer_phone: string
+          p_media: Json
+          p_provider_message_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          conversation_id: string
+          duplicate: boolean
+          message_id: string
+          state: Database["public"]["Enums"]["conversation_state"]
+        }[]
+      }
       is_allowed_order_status_transition: {
         Args: {
           from_status: Database["public"]["Enums"]["order_status"]
@@ -1023,8 +1182,23 @@ export type Database = {
       }
     }
     Enums: {
+      conversation_state:
+        | "open"
+        | "ai_active"
+        | "waiting_approval"
+        | "human_takeover"
+        | "closed"
       customer_note_kind: "note" | "risk"
       inventory_state: "in_stock" | "low_stock" | "out_of_stock" | "untracked"
+      message_direction: "inbound" | "outbound"
+      message_sender: "buyer" | "ai" | "seller" | "system"
+      message_status:
+        | "received"
+        | "queued"
+        | "sent"
+        | "delivered"
+        | "read"
+        | "failed"
       order_channel:
         | "whatsapp"
         | "shopify"
@@ -1070,12 +1244,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1099,11 +1273,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1124,11 +1298,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1149,11 +1323,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1166,11 +1340,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1185,8 +1359,25 @@ export const Constants = {
   },
   public: {
     Enums: {
+      conversation_state: [
+        "open",
+        "ai_active",
+        "waiting_approval",
+        "human_takeover",
+        "closed",
+      ],
       customer_note_kind: ["note", "risk"],
       inventory_state: ["in_stock", "low_stock", "out_of_stock", "untracked"],
+      message_direction: ["inbound", "outbound"],
+      message_sender: ["buyer", "ai", "seller", "system"],
+      message_status: [
+        "received",
+        "queued",
+        "sent",
+        "delivered",
+        "read",
+        "failed",
+      ],
       order_channel: [
         "whatsapp",
         "shopify",
@@ -1224,3 +1415,4 @@ export const Constants = {
     },
   },
 } as const
+
