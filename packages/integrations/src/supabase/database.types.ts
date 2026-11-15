@@ -907,6 +907,38 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_agent_settings: {
+        Row: {
+          ai_enabled: boolean
+          policy_text: string | null
+          seller_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          ai_enabled?: boolean
+          policy_text?: string | null
+          seller_id: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          ai_enabled?: boolean
+          policy_text?: string | null
+          seller_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_agent_settings_workspace_seller_fkey"
+            columns: ["workspace_id", "seller_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id", "seller_id"]
+          },
+        ]
+      }
       seller_profiles: {
         Row: {
           business_email: string | null

@@ -17,5 +17,7 @@ export default defineConfig({
     fileParallelism: false,
     testTimeout: 30000,
     hookTimeout: 30000,
+    // Turned on explicitly by the sales-agent itest; other suites must not start agent turns.
+    env: { SALES_AGENT_PIPELINE: "off" },
   },
 });
