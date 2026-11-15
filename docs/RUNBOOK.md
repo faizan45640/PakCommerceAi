@@ -415,6 +415,24 @@ Known gap: media links (images, voice notes) are short-lived Meta URLs and expir
 
 The temporary token expires in about 24 hours; regenerate it or create a System User token for longer tests.
 
+### Switching the WhatsApp provider
+
+`WHATSAPP_PROVIDER=meta|twilio` (default `meta`). `WHATSAPP_WORKSPACE_ID` is shared; the rest is per provider. The inactive provider's webhook returns 404, and so does the active one if its env is incomplete.
+
+| Provider | Required env |
+|---|---|
+| `meta` | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` (optional `WHATSAPP_GRAPH_VERSION`) |
+| `twilio` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (e.g. `whatsapp:+14155238886`), `TWILIO_WEBHOOK_PUBLIC_URL` |
+
+Twilio sandbox setup:
+
+1. Twilio Console > Messaging > Try it out > Send a WhatsApp message. Note the sandbox number and your **join code**; from your phone send `join <code>` to the sandbox number.
+2. Expose the API (`ngrok http 4000`). Set `TWILIO_WEBHOOK_PUBLIC_URL=https://<public-host>/api/v1/webhooks/twilio`. It must match exactly what you paste in Twilio, because the signature covers it (a proxy-derived URL would not match).
+3. Sandbox settings: "When a message comes in" = that URL, method POST. "Status callback URL" = the same URL. Replies set it per message too.
+4. Message the sandbox number from your phone: it appears in the inbox; take over and reply as with Meta.
+
+Notes: the sandbox membership expires after 72 hours (send the join code again). Free-form replies only work within 24 hours of the buyer's last message (Twilio error 63016 shows as a clear 422). Media URLs need Twilio basic auth, so the same known gap as Meta applies: only the URL and content type are stored.
+
 ---
 
 ## 10. Daily workflow
