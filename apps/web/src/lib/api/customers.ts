@@ -7,6 +7,7 @@ import type {
   CustomerTag,
 } from "@pakcommerce/shared";
 import type { ApiDataResponse, ApiListResponse } from "@pakcommerce/shared/api";
+import type { CustomerContext } from "@pakcommerce/shared/customers";
 
 import { apiFetch } from "./api-client";
 
@@ -95,4 +96,15 @@ export async function deleteCustomerNote(
     `/api/v1/customers/${customerId}/notes/${noteId}?${new URLSearchParams({ workspaceId }).toString()}`,
     { method: "DELETE" },
   );
+}
+
+/** Compact context by customer id or phone; `{ found: false }` when there is no such customer. */
+export async function fetchCustomerContext(
+  workspaceId: string,
+  target: { customerId: string } | { phone: string },
+): Promise<CustomerContext> {
+  const response = await apiFetch<ApiDataResponse<CustomerContext>>(
+    `/api/v1/customers/context?${new URLSearchParams({ workspaceId, ...target }).toString()}`,
+  );
+  return response.data;
 }
