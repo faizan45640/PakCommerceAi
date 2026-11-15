@@ -6,6 +6,7 @@ import {
   fetchConversationById,
   fetchConversations,
   fetchMessages,
+  decideOrderApproval,
   markConversationRead,
 } from "./conversations";
 
@@ -80,5 +81,19 @@ describe("thread endpoints", () => {
     const conversation = await markConversationRead("w1", "c1");
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/c1/read?workspaceId=w1", { method: "POST" });
     expect(conversation.unreadCount).toBe(0);
+  });
+});
+
+describe("decideOrderApproval", () => {
+  beforeEach(() => vi.mocked(apiFetch).mockReset());
+
+  it("posts the decision and unwraps the conversation", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ data: { id: "c1", state: "ai_active" } });
+    const conversation = await decideOrderApproval("w1", "c1", "o1", "approve");
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/c1/order-approval", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: "w1", orderId: "o1", decision: "approve" }),
+    });
+    expect(conversation.state).toBe("ai_active");
   });
 });

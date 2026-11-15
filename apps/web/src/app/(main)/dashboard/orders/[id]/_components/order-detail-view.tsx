@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft } from "lucide-react";
-import type { OrderDetail } from "@pakcommerce/shared";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,10 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchOrderById } from "@/lib/api/orders";
+import { fetchOrderById, type OrderDetailWithAi as OrderDetail } from "@/lib/api/orders";
 import { fetchCurrentWorkspace } from "@/lib/api/products";
 import { formatPkr } from "@/lib/currency";
 
+import { OrderConversationLink, OrderCreatedViaBadge } from "../../_components/order-ai-badge";
 import { OrderChannelBadge, OrderStatusBadge, shortOrderId } from "../../_components/order-badges";
 import { OrderActions } from "./order-actions-panel";
 import { OrderCustomerPanel } from "./order-customer-panel";
@@ -70,7 +70,16 @@ export function OrderDetailView({ id }: { id: string }) {
     };
   }, [id]);
 
-  const handleUpdated = useCallback((updated: OrderDetail) => setOrder(updated), []);
+  // A transition returns the order again; keep the AI fields we already loaded.
+  const handleUpdated = useCallback(
+    (updated: Omit<OrderDetail, "createdVia" | "conversationId"> & Partial<OrderDetail>) =>
+      setOrder((prev) => ({
+        ...updated,
+        createdVia: updated.createdVia ?? prev?.createdVia ?? "manual",
+        conversationId: updated.conversationId !== undefined ? updated.conversationId : (prev?.conversationId ?? null),
+      })),
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -122,6 +131,8 @@ export function OrderDetailView({ id }: { id: string }) {
             <h1 className="font-semibold text-2xl tracking-tight">Order {shortOrderId(order.id)}</h1>
             <OrderStatusBadge status={order.status} />
             <OrderChannelBadge channel={order.channel} />
+            <OrderCreatedViaBadge createdVia={order.createdVia} />
+            <OrderConversationLink conversationId={order.conversationId} />
           </div>
           <div className="flex flex-wrap gap-x-8 gap-y-2">
             <Meta label="Payment" value={order.paymentMethod === "cod" ? "Cash on delivery" : "Prepaid"} />

@@ -9,11 +9,25 @@ import type { ApiDataResponse, ApiListResponse } from "@pakcommerce/shared/api";
 
 import { apiFetch } from "./api-client";
 
+// TODO(shared): replace with @pakcommerce/shared once T-086 lands.
+export type OrderCreatedVia = "manual" | "copilot" | "whatsapp_ai";
+
+/** AI-order fields the API adds to list items and detail. */
+export interface OrderAiFields {
+  createdVia: OrderCreatedVia;
+  conversationId: string | null;
+}
+
+export type OrderListItemWithAi = OrderListItem & OrderAiFields;
+export type OrderDetailWithAi = OrderDetail & OrderAiFields;
+
 export interface OrderListParams {
   workspaceId: string;
   query?: string;
   /** Only this customer's orders. */
   customerId?: string;
+  /** Only orders created from this conversation. */
+  conversationId?: string;
   statuses?: string[];
   channels?: string[];
   sort?: string;
@@ -22,7 +36,7 @@ export interface OrderListParams {
 }
 
 export interface OrderListResult {
-  items: OrderListItem[];
+  items: OrderListItemWithAi[];
   meta: {
     page: number;
     pageSize: number;
@@ -37,13 +51,14 @@ export async function fetchOrders(params: OrderListParams): Promise<OrderListRes
 
   if (params.query?.trim()) searchParams.set("query", params.query.trim());
   if (params.customerId) searchParams.set("customerId", params.customerId);
+  if (params.conversationId) searchParams.set("conversationId", params.conversationId);
   if (params.statuses?.length) searchParams.set("statuses", params.statuses.join(","));
   if (params.channels?.length) searchParams.set("channels", params.channels.join(","));
   if (params.sort) searchParams.set("sort", params.sort);
   if (params.limit) searchParams.set("limit", String(params.limit));
   if (params.cursor) searchParams.set("cursor", params.cursor);
 
-  const response = await apiFetch<ApiListResponse<OrderListItem> & { nextCursor?: string | null }>(
+  const response = await apiFetch<ApiListResponse<OrderListItemWithAi> & { nextCursor?: string | null }>(
     `/api/v1/orders?${searchParams.toString()}`,
   );
 
@@ -54,8 +69,8 @@ export async function fetchOrders(params: OrderListParams): Promise<OrderListRes
   };
 }
 
-export async function fetchOrderById(workspaceId: string, id: string): Promise<OrderDetail> {
-  const response = await apiFetch<ApiDataResponse<OrderDetail>>(
+export async function fetchOrderById(workspaceId: string, id: string): Promise<OrderDetailWithAi> {
+  const response = await apiFetch<ApiDataResponse<OrderDetailWithAi>>(
     `/api/v1/orders/${id}?${new URLSearchParams({ workspaceId }).toString()}`,
   );
   return response.data;

@@ -143,3 +143,23 @@ export async function markConversationRead(workspaceId: string, id: string): Pro
   );
   return response.data;
 }
+
+export type OrderApprovalDecision = "approve" | "reject";
+
+/**
+ * Seller decision on the AI draft order of a conversation waiting for approval.
+ * Approve confirms the order (conversation back to `ai_active`); reject cancels it (`human_takeover`).
+ * Rejects with a 409 `ApiRequestError` when the conversation is not waiting approval or the order is not the pending one.
+ */
+export async function decideOrderApproval(
+  workspaceId: string,
+  id: string,
+  orderId: string,
+  decision: OrderApprovalDecision,
+): Promise<Conversation> {
+  const response = await apiFetch<ApiDataResponse<Conversation>>(
+    `/api/v1/conversations/${encodeURIComponent(id)}/order-approval`,
+    { method: "POST", body: JSON.stringify({ workspaceId, orderId, decision }) },
+  );
+  return response.data;
+}
