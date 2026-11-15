@@ -19,12 +19,7 @@ export const conversationStateValues = [
 ] as const;
 
 /** Who caused a state change. `buyer` means a new inbound message. */
-export const conversationActorValues = [
-  "buyer",
-  "ai",
-  "seller",
-  "system",
-] as const;
+export const conversationActorValues = ["buyer", "ai", "seller", "system"] as const;
 
 export const conversationStateSchema = z.enum(conversationStateValues);
 export const conversationActorSchema = z.enum(conversationActorValues);
@@ -107,9 +102,7 @@ export function canTransitionConversation(
     return false;
   }
 
-  const rules = CONVERSATION_STATE_TRANSITIONS[
-    from
-  ] as TransitionRules[ConversationState];
+  const rules = CONVERSATION_STATE_TRANSITIONS[from] as TransitionRules[ConversationState];
   const actors = rules[to];
   return actors !== undefined && actors.includes(actor);
 }
@@ -120,9 +113,7 @@ export function assertConversationTransition(
   actor: ConversationActor,
 ): void {
   if (!canTransitionConversation(from, to, actor)) {
-    throw new Error(
-      `Illegal conversation transition by ${actor}: ${from} → ${to}`,
-    );
+    throw new Error(`Illegal conversation transition by ${actor}: ${from} → ${to}`);
   }
 }
 
@@ -231,10 +222,7 @@ export const conversationSearchQuerySchema = z.object({
   workspaceId: conversationIdSchema,
   /** Matches buyer name or phone. */
   query: z.string().trim().min(1).max(120).optional(),
-  states: z
-    .array(conversationStateSchema)
-    .max(conversationStateValues.length)
-    .optional(),
+  states: z.array(conversationStateSchema).max(conversationStateValues.length).optional(),
   unreadOnly: z.boolean().default(false),
   limit: z.int().min(1).max(100).default(25),
   cursor: z.string().trim().min(1).max(500).optional(),
@@ -250,11 +238,7 @@ export const messageListQuerySchema = z.object({
 export type MessageMedia = z.infer<typeof messageMediaSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
-export type ConversationSearchQuery = z.input<
-  typeof conversationSearchQuerySchema
->;
-export type ParsedConversationSearchQuery = z.output<
-  typeof conversationSearchQuerySchema
->;
+export type ConversationSearchQuery = z.input<typeof conversationSearchQuerySchema>;
+export type ParsedConversationSearchQuery = z.output<typeof conversationSearchQuerySchema>;
 export type MessageListQuery = z.input<typeof messageListQuerySchema>;
 export type ParsedMessageListQuery = z.output<typeof messageListQuerySchema>;

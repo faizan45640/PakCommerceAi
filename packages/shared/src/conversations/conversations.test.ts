@@ -73,26 +73,19 @@ describe("AI safety rules", () => {
   });
 
   it("never lets the AI take a conversation back from a seller", () => {
-    expect(canTransitionConversation("human_takeover", "ai_active", "ai")).toBe(
-      false,
-    );
-    expect(
-      canTransitionConversation("waiting_approval", "ai_active", "ai"),
-    ).toBe(false);
+    expect(canTransitionConversation("human_takeover", "ai_active", "ai")).toBe(false);
+    expect(canTransitionConversation("waiting_approval", "ai_active", "ai")).toBe(false);
   });
 
   it("only lets a buyer message reopen a closed conversation", () => {
-    expect(allowedMoves("buyer").sort()).toEqual([
-      "closed->ai_active",
-      "closed->open",
-    ]);
+    expect(allowedMoves("buyer").sort()).toEqual(["closed->ai_active", "closed->open"]);
   });
 
   it("only lets a seller hand a conversation back to the AI", () => {
     for (const actor of conversationActorValues) {
-      expect(
-        canTransitionConversation("human_takeover", "ai_active", actor),
-      ).toBe(actor === "seller");
+      expect(canTransitionConversation("human_takeover", "ai_active", actor)).toBe(
+        actor === "seller",
+      );
     }
   });
 
@@ -106,16 +99,9 @@ describe("AI safety rules", () => {
 describe("seller and system moves", () => {
   it("lets a seller take over or close from any live state", () => {
     for (const from of ["open", "ai_active", "waiting_approval"] as const) {
-      expect(canTransitionConversation(from, "human_takeover", "seller")).toBe(
-        true,
-      );
+      expect(canTransitionConversation(from, "human_takeover", "seller")).toBe(true);
     }
-    for (const from of [
-      "open",
-      "ai_active",
-      "waiting_approval",
-      "human_takeover",
-    ] as const) {
+    for (const from of ["open", "ai_active", "waiting_approval", "human_takeover"] as const) {
       expect(canTransitionConversation(from, "closed", "seller")).toBe(true);
     }
   });
@@ -131,12 +117,8 @@ describe("seller and system moves", () => {
   });
 
   it("lets a seller release a conversation to open without handing it to the AI", () => {
-    expect(canTransitionConversation("human_takeover", "open", "seller")).toBe(
-      true,
-    );
-    expect(
-      canTransitionConversation("waiting_approval", "open", "seller"),
-    ).toBe(true);
+    expect(canTransitionConversation("human_takeover", "open", "seller")).toBe(true);
+    expect(canTransitionConversation("waiting_approval", "open", "seller")).toBe(true);
   });
 
   it("lets only the AI enter waiting_approval", () => {
@@ -152,23 +134,15 @@ describe("seller and system moves", () => {
   it("reopens into the AI only when the seller has it enabled", () => {
     expect(reopenStateFor(true)).toBe("ai_active");
     expect(reopenStateFor(false)).toBe("open");
-    expect(
-      canTransitionConversation("closed", reopenStateFor(true), "buyer"),
-    ).toBe(true);
-    expect(
-      canTransitionConversation("closed", reopenStateFor(false), "buyer"),
-    ).toBe(true);
+    expect(canTransitionConversation("closed", reopenStateFor(true), "buyer")).toBe(true);
+    expect(canTransitionConversation("closed", reopenStateFor(false), "buyer")).toBe(true);
   });
 
   it("throws a readable error on an illegal move", () => {
-    expect(() =>
-      assertConversationTransition("human_takeover", "ai_active", "ai"),
-    ).toThrow(
+    expect(() => assertConversationTransition("human_takeover", "ai_active", "ai")).toThrow(
       "Illegal conversation transition by ai: human_takeover → ai_active",
     );
-    expect(() =>
-      assertConversationTransition("ai_active", "human_takeover", "ai"),
-    ).not.toThrow();
+    expect(() => assertConversationTransition("ai_active", "human_takeover", "ai")).not.toThrow();
   });
 });
 
@@ -189,9 +163,7 @@ describe("reachability and buyer messages", () => {
   }
 
   it("reaches every state from open, and every state can reach closed", () => {
-    expect([...reachable("open")].sort()).toEqual(
-      [...conversationStateValues].sort(),
-    );
+    expect([...reachable("open")].sort()).toEqual([...conversationStateValues].sort());
     for (const state of conversationStateValues) {
       expect(reachable(state).has("closed")).toBe(true);
     }
@@ -200,25 +172,16 @@ describe("reachability and buyer messages", () => {
   it("flattens the map into from -> to edges, one per allowed pair", () => {
     const expected = conversationStateValues.flatMap((from) =>
       conversationStateValues
-        .filter((to) =>
-          conversationActorValues.some((a) =>
-            canTransitionConversation(from, to, a),
-          ),
-        )
+        .filter((to) => conversationActorValues.some((a) => canTransitionConversation(from, to, a)))
         .map((to) => `${from}->${to}`),
     );
-    expect(
-      CONVERSATION_TRANSITION_EDGES.map(([f, t]) => `${f}->${t}`).sort(),
-    ).toEqual(expected.sort());
+    expect(CONVERSATION_TRANSITION_EDGES.map(([f, t]) => `${f}->${t}`).sort()).toEqual(
+      expected.sort(),
+    );
   });
 
   it("keeps a live state on a buyer message and reopens a closed one", () => {
-    for (const state of [
-      "open",
-      "ai_active",
-      "waiting_approval",
-      "human_takeover",
-    ] as const) {
+    for (const state of ["open", "ai_active", "waiting_approval", "human_takeover"] as const) {
       expect(stateAfterBuyerMessage(state, true)).toBe(state);
       expect(stateAfterBuyerMessage(state, false)).toBe(state);
     }
@@ -229,12 +192,8 @@ describe("reachability and buyer messages", () => {
 
 describe("message media", () => {
   it("accepts https URLs", () => {
-    expect(
-      messageMediaSchema.safeParse({
-        url: "https://api.twilio.com/m/1",
-        contentType: "image/jpeg",
-      }).success,
-    ).toBe(true);
+    const media = { url: "https://api.twilio.com/m/1", contentType: "image/jpeg" };
+    expect(messageMediaSchema.safeParse(media).success).toBe(true);
   });
 
   it.each([
@@ -243,8 +202,6 @@ describe("message media", () => {
     "http://example.com/a.jpg",
     "ftp://x.test/a",
   ])("rejects %s", (url) => {
-    expect(
-      messageMediaSchema.safeParse({ url, contentType: "image/jpeg" }).success,
-    ).toBe(false);
+    expect(messageMediaSchema.safeParse({ url, contentType: "image/jpeg" }).success).toBe(false);
   });
 });
