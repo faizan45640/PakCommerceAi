@@ -88,7 +88,9 @@ describe("decideOrderApproval", () => {
   beforeEach(() => vi.mocked(apiFetch).mockReset());
 
   it("posts the decision and unwraps the conversation", async () => {
-    vi.mocked(apiFetch).mockResolvedValue({ data: { id: "c1", state: "ai_active" } });
+    vi.mocked(apiFetch).mockResolvedValue({
+      data: { conversation: { id: "c1", state: "ai_active" }, order: { id: "o1" }, message: null },
+    });
     const conversation = await decideOrderApproval("w1", "c1", "o1", "approve");
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/c1/order-approval", {
       method: "POST",
