@@ -143,6 +143,7 @@ def test_policy_guard_ignores_free_size_but_catches_free_delivery() -> None:
 
     assert not POLICY_TERMS.search("Shawl free size 2.5m mein hai, price 8500 PKR")
     assert not POLICY_TERMS.search("Free-Size kurta available hai")
+    assert POLICY_TERMS.search("free sizegift voucher")
     assert POLICY_TERMS.search("delivery free hai")
     assert POLICY_TERMS.search("Lahore mein free shipping")
     assert POLICY_TERMS.search("aapko 10% off milega")
