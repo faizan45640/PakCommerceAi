@@ -87,8 +87,14 @@ function migrationTables(): Set<string> {
  * `conversations` and `messages` hold WhatsApp buyer text: untrusted input
  * (a buyer can write instructions aimed at the model), so Rafiq is not told
  * about them. The inbox reads them through its own API.
+ * `ai_tool_calls` is the tool audit log: written by the server, not shop data.
  */
-const NOT_EXPOSED_TABLES = new Set(["copilot_chats", "conversations", "messages"]);
+const NOT_EXPOSED_TABLES = new Set([
+  "ai_tool_calls",
+  "copilot_chats",
+  "conversations",
+  "messages",
+]);
 
 describe("SCHEMA_DOCUMENT", () => {
   it("mentions every queryable table", () => {

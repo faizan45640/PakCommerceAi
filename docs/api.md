@@ -595,6 +595,50 @@ Seller-facing name is **Rafiq**. Routes and tables stay `copilot`. Auth required
 
 Persistence is the Vercel AI SDK `UIMessage[]` in `public.copilot_chats.messages` (jsonb). The first save that has a user message asks the model for a short sidebar title once. RLS scopes every row to `seller_id = auth.uid()`.
 
+## Tool registry and the sales-agent API
+
+Business tools are defined once in `apps/api/src/tools/` and shared by two callers: Rafiq (in-process) and the WhatsApp sales agent (`apps/ml`, over HTTP). A definition is provider-neutral (no Vercel AI SDK, no LLM vendor):
+
+```ts
+{ name, description, inputSchema /* zod */, outputSchema?,
+  permission: "read" | "write", owner: "catalog" | "inventory" | "orders" | "customers" | ...,
+  audiences: ("copilot" | "sales_agent")[], needsApproval: boolean,
+  audit: { redact?: string[] },            // dotted input paths masked in the audit row
+  execute(ctx, input) }                    // ctx: { db, workspaceId, sellerId, actor, audience, conversationId, audit }
+```
+
+- `registerTool`, `getTools({ audience })`, `getTool(name)`: names are unique (a duplicate throws). `toolInputJsonSchema` exports the input as JSON Schema via zod's `z.toJSONSchema`.
+- Add a tool in `tools/definitions.ts`. Existing copilot tools wrap their original `*Tool(auth)` factories, so their behaviour is unchanged.
+- The copilot builds its Vercel AI SDK tools and the `"user-approval"` map from the registry in `copilot/ai-sdk-adapter.ts`. That file is the only place the SDK meets the registry.
+- `runTool` is the single entry point for both callers: it validates, executes and writes the audit row.
+
+### Audit
+
+Every call writes one row to `ai_tool_calls` (service role; a seller may `select` only their own rows, and cannot insert, update or delete): tool name, audience, actor (`seller` for the copilot, `ai` for the sales agent), seller, workspace (null for copilot), conversation, ok, error code, duration, and the input with the tool's `audit.redact` paths masked. An audit failure never fails the tool call.
+
+### Sales-agent HTTP contract
+
+Service-to-service, not seller auth. Header `Authorization: Bearer ${AGENT_SERVICE_TOKEN}` (constant-time compare). With `AGENT_SERVICE_TOKEN` unset every route below answers `404`. Missing or wrong token: `401`. All errors on this surface are `{ "ok": false, "error": { "code", "message" } }`.
+
+`GET /api/v1/agent/tools` returns `{ "data": [{ name, description, permission, owner, needsApproval, inputSchema }] }` (`inputSchema` is JSON Schema), only for tools with audience `sales_agent`. Today: `searchProducts` and `checkInventory`.
+
+`POST /api/v1/agent/tools/:name` with body `{ "conversationId": "<uuid>", "input": { ... } }` returns `200 { "ok": true, "output": ... }` or `{ "ok": false, "error": { "code", "message" } }`:
+
+| Status | code | When |
+| --- | --- | --- |
+| 400 | `invalid_request` / `invalid_input` | Body is not `{ conversationId, input }`, or `input` fails the tool's schema |
+| 401 | `unauthorized` | Missing or wrong token |
+| 403 | `ai_not_allowed` | A `write` tool while the conversation is not `ai_active` (`aiMayReply`) |
+| 403 | `approval_required` | The tool has `needsApproval` (not available to the agent yet; draft orders arrive in S11) |
+| 404 | `unknown_tool` / `conversation_not_found` / tool-specific (e.g. `product_not_found`) | Unknown or copilot-only tool, no such conversation |
+| 422 | tool-specific | The tool refused (e.g. `search_failed`) |
+| 500 | `internal_error` | Unexpected failure (details are logged, not returned) |
+
+The workspace and seller are read from the conversation row; the caller cannot supply or override them. The agent's tools read the live catalogue only (active products and variants) and return no buyer data.
+
+- `searchProducts` input: `{ query?, statuses?, inventoryStates?, categoryIds?, tags?, sort?, limit? }` (same as the copilot, but `statuses` is forced to `active`). Output: `{ total, products: [{ productId, name, priceFromPkr, priceToPkr, inStock, variants: [{ variantId, label, pricePkr, inStock, quantity }] }] }`.
+- `checkInventory` input: `{ productId, size?, colour? }`. Output: `{ productId, name, availableSizes, availableColours, anyInStock, variants: [...] }`. `quantity` is a bucket: `none`, `1-3`, `4-10`, `10+` or `untracked`; exact counts are not exposed.
+
 ## Copilot tools
 
 The chat turn at `POST /api/v1/copilot/chat` (auth required, streams via the Vercel AI SDK) exposes tools the model can call to ground answers in the seller's real data and execute guarded business mutations:

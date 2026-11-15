@@ -17,7 +17,7 @@ import { HttpError, NotFoundError, ValidationError } from "../lib/http-errors.js
 import { getAiConfig, getLanguageModel } from "./provider.js";
 import { SCHEMA_DOCUMENT } from "./schema-document.js";
 import { sellerContext } from "../middleware/seller-context.js";
-import { createCopilotTools } from "./tools/index.js";
+import { createCopilotToolSet } from "./ai-sdk-adapter.js";
 import {
   applyIncomingMessage,
   archiveChat,
@@ -202,7 +202,7 @@ copilotRouter.post("/chat", async (req: Request, res: Response, next: NextFuncti
     // request-scoped seller context and hand it to the tool factory - every
     // read tool queries as this seller, RLS scoped, no seller filters in code.
     const auth = sellerContext(req);
-    const tools = createCopilotTools(auth);
+    const { tools, toolApproval } = createCopilotToolSet(auth);
     const stored = await loadChat(auth, id);
     const messages = applyIncomingMessage(stored, message as UIMessage);
 
@@ -230,13 +230,7 @@ copilotRouter.post("/chat", async (req: Request, res: Response, next: NextFuncti
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(validated),
       tools,
-      toolApproval: {
-        mutateDatabase: "user-approval",
-        updateProductStock: "user-approval",
-        updateProductPrice: "user-approval",
-        updateProductDetails: "user-approval",
-        createDraftOrder: "user-approval",
-      },
+      toolApproval,
       // Multi-step tool calling: let the model fix its own SQL after a failed
       // queryDatabase call, bounded so a looping model cannot run away.
       stopWhen: isStepCount(MAX_TOOL_STEPS),

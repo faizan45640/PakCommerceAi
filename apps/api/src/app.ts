@@ -13,6 +13,7 @@ import { productRouter } from "./products/product-router.js";
 import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
 import { createWhatsAppWebhookRouter } from "./whatsapp/webhook-router.js";
+import { createAgentRouter } from "./agent/agent-router.js";
 import { healthRouter } from "./routes/health.js";
 
 export interface CreateAppOptions {
@@ -47,6 +48,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   app.use("/health", healthRouter);
   app.use("/api/v1", healthRouter);
+  // Service-to-service (Python sales agent): its own bearer token, not seller auth.
+  app.use("/api/v1/agent", createAgentRouter());
 
   // Everything mounted below requires a valid Supabase access token.
   // Keep public routes above this line; add protected routers below it.
