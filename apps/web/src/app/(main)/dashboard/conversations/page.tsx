@@ -5,11 +5,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentConfidenceIndicator } from "./_components/agent-confidence-indicator";
 import { AgentKpiStrip } from "./_components/agent-kpi-strip";
 import { AgentSettings } from "./_components/agent-settings";
-import { ConversationList } from "./_components/conversation-list";
+import { ConversationsSplitView } from "./_components/conversations-split-view";
 import { ConversationTranscript } from "./_components/conversation-transcript";
 import { TopCustomerQuestions } from "./_components/top-customer-questions";
 
-export default function ConversationsPage() {
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface ConversationsPageProps {
+  searchParams: Promise<{ c?: string | string[] }>;
+}
+
+export default async function ConversationsPage({ searchParams }: ConversationsPageProps) {
+  const { c } = await searchParams;
+  const candidate = (Array.isArray(c) ? c[0] : c)?.trim();
+  const selectedId = candidate && UUID_PATTERN.test(candidate) ? candidate : undefined;
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -18,6 +28,9 @@ export default function ConversationsPage() {
         actions={<StatusBadge label="Buyer AI" tone="info" />}
       />
 
+      <p className="text-muted-foreground text-xs">
+        Sample figures: the metrics below are placeholders until live agent analytics ship.
+      </p>
       <AgentKpiStrip />
 
       <Tabs defaultValue="conversations" className="flex flex-col gap-4">
@@ -28,14 +41,9 @@ export default function ConversationsPage() {
         </TabsList>
 
         <TabsContent value="conversations" className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-            <div className="xl:col-span-5">
-              <ConversationList />
-            </div>
-            <div className="xl:col-span-7">
-              <ConversationTranscript />
-            </div>
-          </div>
+          <ConversationsSplitView selectedId={selectedId}>
+            <ConversationTranscript />
+          </ConversationsSplitView>
         </TabsContent>
 
         <TabsContent value="performance" className="flex flex-col gap-4">

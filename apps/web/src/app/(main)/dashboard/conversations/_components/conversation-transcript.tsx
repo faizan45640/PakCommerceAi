@@ -99,7 +99,7 @@ export function ConversationTranscript() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <Bot className="size-4 text-muted-foreground" />
-          Conversation Transcript
+          Conversation Transcript (sample, not live)
         </CardTitle>
         <CardAction className="flex items-center gap-1 text-muted-foreground text-xs">
           <Button
