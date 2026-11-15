@@ -6,7 +6,6 @@ import { AgentConfidenceIndicator } from "./_components/agent-confidence-indicat
 import { AgentKpiStrip } from "./_components/agent-kpi-strip";
 import { AgentSettings } from "./_components/agent-settings";
 import { ConversationsSplitView } from "./_components/conversations-split-view";
-import { ConversationTranscript } from "./_components/conversation-transcript";
 import { TopCustomerQuestions } from "./_components/top-customer-questions";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,9 +40,7 @@ export default async function ConversationsPage({ searchParams }: ConversationsP
         </TabsList>
 
         <TabsContent value="conversations" className="flex flex-col gap-4">
-          <ConversationsSplitView selectedId={selectedId}>
-            <ConversationTranscript />
-          </ConversationsSplitView>
+          <ConversationsSplitView selectedId={selectedId} />
         </TabsContent>
 
         <TabsContent value="performance" className="flex flex-col gap-4">
