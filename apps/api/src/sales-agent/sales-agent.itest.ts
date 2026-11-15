@@ -286,6 +286,7 @@ describe("AI reply pipeline", () => {
       handoff: { required: true, reason: "order_interest" },
       toolCalls: [],
     };
+    await as(alice, "put", SETTINGS).send({ workspaceId: alice.workspaceId, aiEnabled: true, policyText: "" });
     const response = await inbound(alice, { aiEnabled: true });
     await whenAgentIdle();
 
@@ -296,6 +297,7 @@ describe("AI reply pipeline", () => {
 
   it("hands off with 'AI unavailable' when the agent fails", async () => {
     agentAnswer = { status: 503, body: { detail: "down" } };
+    await as(alice, "put", SETTINGS).send({ workspaceId: alice.workspaceId, aiEnabled: true, policyText: "" });
     const response = await inbound(alice, { aiEnabled: true });
     await whenAgentIdle();
 
@@ -305,6 +307,7 @@ describe("AI reply pipeline", () => {
   });
 
   it("orders two quick messages into two turns, the second seeing the first reply", async () => {
+    await as(alice, "put", SETTINGS).send({ workspaceId: alice.workspaceId, aiEnabled: true, policyText: "" });
     const one = await inbound(alice, { aiEnabled: true, body: "First question" });
     const id = one.body.data.conversationId as string;
     // Same buyer: second message joins the same thread while turn one is queued.
