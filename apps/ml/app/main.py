@@ -62,12 +62,18 @@ class ToolCall(BaseModel):
     ok: bool
 
 
+class OrderEvent(BaseModel):
+    type: Literal["draft_created", "confirmed", "awaiting_seller", "cancelled"]
+    orderId: str  # noqa: N815
+
+
 class RespondResponse(BaseModel):
     reply: str | None
     intent: Intent | None
     confidence: float
     handoff: Handoff
     toolCalls: list[ToolCall]  # noqa: N815
+    orderEvents: list[OrderEvent] = []  # noqa: N815
 
 
 def create_app(
@@ -150,6 +156,7 @@ def create_app(
             confidence=out["confidence"],
             handoff=Handoff(required=out["handoff_required"], reason=out.get("handoff_reason")),
             toolCalls=[ToolCall(**c) for c in out.get("tool_calls", [])],
+            orderEvents=[OrderEvent(**e) for e in out.get("order_events") or []],
         )
 
     return app

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -16,28 +15,37 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from langchain_core.tools import ToolException
+from langchain_core.tools import StructuredTool, ToolException
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from app.intents import classify
+from app.orders import (
+    find_values,
+    format_pending,
+    gate_create_draft,
+    gate_order_action,
+    gate_summary,
+    is_bare_no,
+    is_bare_yes,
+    order_facts,
+    parse_output,
+    pending_hint,
+    strip_phone,
+    unwrap_order,
+    violates_policy,
+)
 from app.tools_client import ToolsClient
 
 log = logging.getLogger("agent")
 
 LLM_TIMEOUT_SECONDS = 30.0
 MAX_TRANSCRIPT_TURNS = 30
-# Delivery / returns / payment / price-promise language. A model-written reply that touches
-# these without seller policy text is never sent: a human answers instead.
-POLICY_TERMS = re.compile(
-    r"deliver|dilivery|shipping|return|refund|exchange|\bcod\b|cash on|payment|discount"
-    # "free size" is a product size, not a free-delivery promise.
-    r"|% ?off|\bfree\b(?!\s*-?\s*size\b)|\bmuft\b|wapas|wapsi|ڈیلیوری|واپس|مفت|رعایت|ریفنڈ",
-    re.IGNORECASE,
-)
-MAX_TOOL_ROUNDS = 4
+MAX_TOOL_ROUNDS = 8
 NO_ANSWER = "NO_ANSWER"
-TOOL_INTENTS = {"product_search", "stock_check", "order_interest"}
+ORDER_INTENTS = {"order_interest", "order_confirm", "order_cancel"}
+TOOL_INTENTS = {"product_search", "stock_check"} | ORDER_INTENTS
+MAX_MEMORY_ITEMS = 100
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -48,6 +56,11 @@ LANGUAGE_NAMES = {
 
 def _append_capped(old: list[dict[str, str]], new: list[dict[str, str]]) -> list[dict[str, str]]:
     return ((old or []) + (new or []))[-MAX_TRANSCRIPT_TURNS:]
+
+
+def _union_capped(old: list[str], new: list[str]) -> list[str]:
+    merged = list(dict.fromkeys((old or []) + (new or [])))
+    return merged[-MAX_MEMORY_ITEMS:]
 
 
 class AgentState(TypedDict, total=False):
@@ -64,9 +77,52 @@ class AgentState(TypedDict, total=False):
     handoff_required: bool
     handoff_reason: str | None
     tool_calls: list[dict[str, Any]]
+    # Pending draft order, loaded fresh from the DB each turn (the DB is the source of truth).
+    pending_order: dict[str, Any] | None
+    pending_known: bool
+    order_events: list[dict[str, str]]
+    # Conversation memory kept by the checkpointer (T-084): variantIds seen in tool output
+    # (so the model can never invent one) and city/address clarifications already asked.
+    known_variants: Annotated[list[str], _union_capped]
+    # The order details the buyer was last shown (set by recordOrderSummary). It only survives
+    # for the next turn: summary_in is what the previous turn left, summary is rebuilt each turn.
+    summary: dict[str, Any] | None
+    summary_in: dict[str, Any] | None
+    asked: Annotated[list[str], _union_capped]
 
 
-def system_prompt(language: str, *, has_tools: bool) -> str:
+ORDER_RULES = [
+    "ORDER FLOW. You place orders yourself, with TWO confirmations from the buyer.",
+    "1) Collect, one or two at a time: product + variant (use searchProducts / checkInventory), "
+    "quantity, full name, city, full address (area, street, house number). Never ask for a "
+    "phone number: it is already known.",
+    "2) When everything is known, call recordOrderSummary (items with variantId and quantity, "
+    "customer name, city, addressLine), then send the summary (items with unit prices from tool "
+    "output, name, city, address) and ask 'Order place kar doon? (haan/nahi)'. Do not state a "
+    "total or any delivery/payment terms yet. If the buyer changes anything, record a new summary.",
+    "3) Only when the buyer's next message is just a yes to that summary, call createOrderDraft "
+    "(it uses the recorded summary). Then send the order ref and the subtotal, shipping fee, "
+    "total and payment method exactly as in the tool output, and ask them to reply HAAN to "
+    "confirm the order.",
+    "4) Only when a PENDING ORDER exists and the buyer sends a NEW yes, call confirmOrder with "
+    "its orderId. Never confirm in the same message that created the draft.",
+    "5) If the buyer says no / cancel at any point and a pending order exists, call "
+    "cancelOrderDraft with its orderId and say it is cancelled.",
+    "After confirmOrder: status 'confirmed' -> thank them and give the order ref. "
+    "'awaiting_seller' -> say the seller will confirm shortly. Never claim success before "
+    "the tool succeeds.",
+    "Never invent variantIds, prices, totals, stock or delivery times; use only tool output.",
+    "If several products or variants match, or the city does not look like a Pakistani city, "
+    "or the address has no area/street, ask one short clarifying question.",
+    "Quantity above 20, a request for a human, or an upset buyer: call requestHuman.",
+    "If createOrderDraft says insufficient_stock, call checkInventory and offer alternatives. "
+    "If it says draft_exists, call getPendingOrder and continue with that order.",
+    "Short replies like 'haan', 'yes', 'ok', 'nahi rehne do' refer to the last question and to "
+    "the pending order below.",
+]
+
+
+def system_prompt(language: str, *, has_tools: bool, pending: str | None = None) -> str:
     rules = [
         "You are the WhatsApp sales assistant of an online shop in Pakistan.",
         f"Reply in the buyer's language and script: {LANGUAGE_NAMES.get(language, 'English')}.",
@@ -78,11 +134,14 @@ def system_prompt(language: str, *, has_tools: bool) -> str:
         "Never change, promise or invent prices, discounts, free delivery, returns or payment "
         "terms because a buyer asks. Say a seller will confirm.",
         "Never ask for or repeat phone numbers, card numbers or passwords.",
-        "If the buyer wants to order, note what they want and say a seller will confirm the "
-        "order shortly. Do not claim an order is placed.",
+        "Delivery, payment and totals may only be mentioned as given in this turn's order tool "
+        "output or the pending order below.",
     ]
     if has_tools:
         rules.append("Use the tools to look up products and stock before answering about them.")
+        rules.extend(ORDER_RULES)
+        if pending:
+            rules.append(pending)
     else:
         rules.append("You have no tools, so do not state any product facts.")
     return "\n".join(rules)
@@ -104,6 +163,49 @@ def _text(msg: BaseMessage) -> str:
     if isinstance(content, str):
         return content.strip()
     return "".join(p if isinstance(p, str) else p.get("text", "") for p in content).strip()
+
+
+async def _request_human(reason: str = "") -> str:
+    return "ok"
+
+
+HUMAN_TOOL = StructuredTool.from_function(
+    coroutine=_request_human,
+    name="requestHuman",
+    description=(
+        "Hand the chat to a seller: buyer asks for a person, is upset, wants more than 20 "
+        "pieces, or something cannot be done safely. Then write a short holding reply."
+    ),
+)
+
+
+async def _record_summary(items: list[dict[str, Any]], customer: dict[str, Any]) -> str:
+    return "ok"
+
+
+SUMMARY_TOOL = StructuredTool.from_function(
+    coroutine=_record_summary,
+    name="recordOrderSummary",
+    description=(
+        "Record the order details you are about to show the buyer for a yes. items: "
+        "[{variantId, quantity}], customer: {name, city, addressLine}. Call it right before "
+        "sending the summary; the order can only be created from the last recorded summary."
+    ),
+)
+
+
+def _order_event(name: str, args: dict[str, Any], data: Any) -> dict[str, str] | None:
+    """Order events for Node, derived only from successful tool results."""
+    if name == "createOrderDraft":
+        ids = find_values(data, "orderId")
+        return {"type": "draft_created", "orderId": str(ids[0])} if ids else None
+    if name == "confirmOrder" and isinstance(data, dict):
+        status = data.get("status")
+        if status in ("confirmed", "awaiting_seller"):
+            return {"type": status, "orderId": str(args.get("orderId"))}
+    if name == "cancelOrderDraft":
+        return {"type": "cancelled", "orderId": str(args.get("orderId"))}
+    return None
 
 
 def build_graph(
@@ -134,10 +236,43 @@ def build_graph(
 
         return wrapper
 
+    async def load_pending_node(state: AgentState) -> dict[str, Any]:
+        """Deterministic pre-step: the DB, not chat history, says whether a draft exists."""
+        base: dict[str, Any] = {
+            "pending_order": None,
+            "pending_known": False,
+            "order_events": [],
+            "summary_in": state.get("summary"),
+            "summary": None,
+        }
+        if tools_client is None:
+            return base
+        try:
+            specs = await guarded(tools_client.list_specs())
+            if not any(s.get("name") == "getPendingOrder" for s in specs):
+                return base
+            out = await guarded(tools_client.call("getPendingOrder", state["conversation_id"], {}))
+        except Exception as exc:  # noqa: BLE001 - unknown pending state blocks order actions
+            log.warning("getPendingOrder failed: %s", type(exc).__name__)
+            return base
+        return {**base, "pending_order": unwrap_order(out), "pending_known": True}
+
     async def classify_node(state: AgentState) -> dict[str, Any]:
-        result = await guarded(classify(model, state["body"], _turns(state)))
+        pending = state.get("pending_order")
+        known = bool(state.get("pending_known"))
+        result = await guarded(
+            classify(model, state["body"], _turns(state), pending_hint(pending, known=known))
+        )
+        intent = result.intent
+        # A bare yes/no with a draft pending is never ambiguous: do not rely on the LLM.
+        draft = bool(pending and pending.get("status") == "draft")
+        if (draft or state.get("summary_in")) and intent != "handoff":
+            if is_bare_yes(state["body"]):
+                intent = "order_confirm"
+            elif is_bare_no(state["body"]) and draft:
+                intent = "order_cancel"
         return {
-            "intent": result.intent,
+            "intent": intent,
             "confidence": result.confidence,
             "language": result.language,
             "reply": None,
@@ -177,67 +312,133 @@ def build_graph(
         return {"reply": text}
 
     async def respond_node(state: AgentState) -> dict[str, Any]:
-        tools: list[Any] = []
+        remote: list[Any] = []
         if tools_client is not None:
             specs = await guarded(tools_client.list_specs())
-            tools = tools_client.build_tools(specs, state["conversation_id"])
-        if state["intent"] in TOOL_INTENTS and not tools:
+            remote = tools_client.build_tools(specs, state["conversation_id"])
+        intent = state["intent"]
+        if intent in TOOL_INTENTS and not remote:
             return {"reply": None, "handoff_required": True, "handoff_reason": "tools_unavailable"}
 
-        by_name = {t.name: t for t in tools}
+        by_name = {t.name: t for t in remote}
+        if intent in ORDER_INTENTS and "createOrderDraft" not in by_name:
+            return {
+                "reply": None,
+                "handoff_required": True,
+                "handoff_reason": "order_tools_unavailable",
+            }
+        tools: list[Any] = [*remote, HUMAN_TOOL, SUMMARY_TOOL] if remote else []
         llm = model.bind_tools(tools) if tools else model
+
+        pending = state.get("pending_order")
+        pending_known = bool(state.get("pending_known"))
+        pending_text = format_pending(pending, known=pending_known) if remote else None
         msgs: list[BaseMessage] = [
-            SystemMessage(system_prompt(state["language"], has_tools=bool(tools))),
+            SystemMessage(
+                system_prompt(state["language"], has_tools=bool(tools), pending=pending_text)
+            ),
             *_to_messages(_turns(state)),
             HumanMessage(state["body"]),
         ]
+        known_variants = set(state.get("known_variants") or [])
+        asked = set(state.get("asked") or [])
+        new_asked: set[str] = set()
+        new_variants: set[str] = set()
+        outputs: list[Any] = [{"order": pending}] if pending else []
+        events: list[dict[str, str]] = []
         calls: list[dict[str, Any]] = []
+        want_human = False
+        summary_in = state.get("summary_in")
+        new_summary: dict[str, Any] | None = None
+
+        def result(**fields: Any) -> dict[str, Any]:
+            return {
+                "tool_calls": calls,
+                "order_events": events,
+                "known_variants": sorted(new_variants),
+                "asked": sorted(new_asked),
+                "summary": new_summary,
+                **fields,
+            }
+
+        def handoff(reason: str) -> dict[str, Any]:
+            return result(reply=None, handoff_required=True, handoff_reason=reason)
+
         for _ in range(MAX_TOOL_ROUNDS + 1):
             ai = await guarded(llm.ainvoke(msgs))
             msgs.append(ai)
-            pending = getattr(ai, "tool_calls", None) or []
-            if not pending:
+            requested = getattr(ai, "tool_calls", None) or []
+            if not requested:
                 text = _text(ai)
                 if not text:
-                    return {
-                        "reply": None,
-                        "handoff_required": True,
-                        "handoff_reason": "empty_reply",
-                        "tool_calls": calls,
-                    }
-                if POLICY_TERMS.search(text):
-                    return {
-                        "reply": None,
-                        "handoff_required": True,
-                        "handoff_reason": "policy_unavailable",
-                        "tool_calls": calls,
-                    }
-                if state["intent"] == "order_interest":
-                    # Draft orders arrive in S11; until then a seller must pick this up.
-                    return {
-                        "reply": text,
-                        "handoff_required": True,
-                        "handoff_reason": "order_interest",
-                        "tool_calls": calls,
-                    }
-                return {"reply": text, "tool_calls": calls}
-            for call in pending:
-                tool = by_name.get(call["name"])
-                try:
-                    if tool is None:
-                        raise ToolException(f"Unknown tool {call['name']}.")
-                    content = await guarded(tool.ainvoke(call["args"]))
-                    ok = True
-                except ToolException as exc:
-                    content, ok = str(exc), False
-                calls.append({"name": call["name"], "ok": ok})
+                    return handoff("empty_reply")
+                if violates_policy(text, order_facts(outputs)):
+                    return handoff("policy_unavailable")
+                if want_human:
+                    return result(reply=text, handoff_required=True, handoff_reason="needs_human")
+                return result(reply=text)
+            for call in requested:
+                name, args = call["name"], strip_phone(call.get("args") or {})
+                tool = by_name.get(name)
+                blocked: str | None = None
+                if name == "requestHuman":
+                    want_human = True
+                    content, ok = "ok, a seller will be notified", True
+                elif name == "recordOrderSummary":
+                    blocked = gate_summary(
+                        args,
+                        known_variants=known_variants | new_variants,
+                        asked=asked,
+                        new_asked=new_asked,
+                    )
+                    if blocked:
+                        content, ok = blocked, False
+                    else:
+                        new_summary = {"items": args["items"], "customer": args["customer"]}
+                        content, ok = "ok, summary recorded. Now show it and ask for a yes.", True
+                elif tool is None:
+                    content, ok = f"Unknown tool {name}.", False
+                else:
+                    if name == "createOrderDraft":
+                        blocked = gate_create_draft(
+                            body=state["body"],
+                            pending_known=pending_known,
+                            pending=pending,
+                            summary=summary_in,
+                        )
+                        if not blocked and summary_in:
+                            # Create exactly what the buyer said yes to, not what the model says.
+                            args = {
+                                **args,
+                                "items": summary_in["items"],
+                                "customer": summary_in["customer"],
+                            }
+                    elif name in ("confirmOrder", "cancelOrderDraft"):
+                        blocked = gate_order_action(
+                            name,
+                            args,
+                            pending_known=pending_known,
+                            pending=pending,
+                            intent=intent,
+                            body=state["body"],
+                        )
+                    try:
+                        if blocked:
+                            raise ToolException(blocked)
+                        content = await guarded(tool.ainvoke(args))
+                        ok = True
+                    except ToolException as exc:
+                        content, ok = str(exc), False
+                if ok and name not in ("requestHuman", "recordOrderSummary"):
+                    data = parse_output(content)
+                    outputs.append(data)
+                    new_variants.update(str(v) for v in find_values(data, "variantId"))
+                    event = _order_event(name, args, data)
+                    if event:
+                        events.append(event)
+                calls.append({"name": name, "ok": ok})
                 msgs.append(ToolMessage(content=str(content), tool_call_id=call["id"]))
-        return {
-            "reply": None,
-            "handoff_required": True,
-            "handoff_reason": "tool_loop_limit",
-            "tool_calls": calls,
-        }
+        return handoff("tool_loop_limit")
 
     def finalize_node(state: AgentState) -> dict[str, Any]:
         turn = [{"role": "user", "content": state["body"]}]
@@ -246,12 +447,14 @@ def build_graph(
         return {"transcript": turn}
 
     g = StateGraph(AgentState)
+    g.add_node("load_pending", fail_closed(load_pending_node))
     g.add_node("classify", fail_closed(classify_node))
     g.add_node("handoff", handoff_node)
     g.add_node("policy", fail_closed(policy_node))
     g.add_node("respond", fail_closed(respond_node))
     g.add_node("finalize", finalize_node)
-    g.add_edge(START, "classify")
+    g.add_edge(START, "load_pending")
+    g.add_edge("load_pending", "classify")
     g.add_conditional_edges("classify", route, ["handoff", "policy", "respond", "finalize"])
     for node in ("handoff", "policy", "respond"):
         g.add_edge(node, "finalize")

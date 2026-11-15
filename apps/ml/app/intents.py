@@ -10,7 +10,15 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 Intent = Literal[
-    "greeting", "product_search", "stock_check", "policy", "order_interest", "handoff", "other"
+    "greeting",
+    "product_search",
+    "stock_check",
+    "policy",
+    "order_interest",
+    "order_confirm",
+    "order_cancel",
+    "handoff",
+    "other",
 ]
 Language = Literal["en", "ur", "roman_ur"]
 
@@ -59,6 +67,16 @@ INTENTS: dict[str, IntentSpec] = {
             "مجھے یہ لینا ہے",
         ),
     ),
+    "order_confirm": IntentSpec(
+        "A short yes / agreement to the assistant's last order question (the order summary or "
+        "the final confirmation), or yes while an order is pending. Only when the chat or the "
+        "pending order shows an order is being discussed.",
+        ("haan", "yes", "ok confirm kar do", "theek hai", "ji haan", "ہاں"),
+    ),
+    "order_cancel": IntentSpec(
+        "Says no or cancels the order being discussed or pending.",
+        ("nahi rehne do", "cancel kar do", "no don't order", "نہیں چاہیے"),
+    ),
     "handoff": IntentSpec(
         "Asks for a human, complains, is angry, disputes a payment, or anything risky "
         "(refund fights, legal threats, fraud, wrong or damaged parcel).",
@@ -104,11 +122,17 @@ def classifier_system_prompt() -> str:
 
 
 async def classify(
-    model: BaseChatModel, body: str, history: list[dict[str, str]] | None = None
+    model: BaseChatModel,
+    body: str,
+    history: list[dict[str, str]] | None = None,
+    pending_hint: str | None = None,
 ) -> IntentResult:
     recent = (history or [])[-6:]
     context = "\n".join(f"{t['role']}: {t['content']}" for t in recent)
-    human = (f"Recent chat:\n{context}\n\n" if context else "") + f"Message to classify:\n{body}"
+    human = (f"Recent chat:\n{context}\n\n" if context else "") + (
+        f"Order state: {pending_hint}\n\n" if pending_hint else ""
+    )
+    human += f"Message to classify:\n{body}"
     messages: list[BaseMessage] = [
         SystemMessage(classifier_system_prompt()),
         HumanMessage(human),
