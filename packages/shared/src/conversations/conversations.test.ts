@@ -9,6 +9,7 @@ import {
   conversationActorValues,
   conversationStateSchema,
   conversationStateValues,
+  messageMediaSchema,
   reopenStateFor,
   stateAfterBuyerMessage,
   type ConversationActor,
@@ -186,5 +187,21 @@ describe("reachability and buyer messages", () => {
     }
     expect(stateAfterBuyerMessage("closed", true)).toBe("ai_active");
     expect(stateAfterBuyerMessage("closed", false)).toBe("open");
+  });
+});
+
+describe("message media", () => {
+  it("accepts https URLs", () => {
+    const media = { url: "https://api.twilio.com/m/1", contentType: "image/jpeg" };
+    expect(messageMediaSchema.safeParse(media).success).toBe(true);
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html;base64,AAAA",
+    "http://example.com/a.jpg",
+    "ftp://x.test/a",
+  ])("rejects %s", (url) => {
+    expect(messageMediaSchema.safeParse({ url, contentType: "image/jpeg" }).success).toBe(false);
   });
 });
