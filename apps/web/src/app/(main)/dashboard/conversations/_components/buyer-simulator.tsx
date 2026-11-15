@@ -19,6 +19,7 @@ import {
   aiReplyArrived,
   buildMockInboundPayload,
   shouldStopPolling,
+  stateHint,
   validateSimulatorForm,
 } from "./buyer-simulator-model";
 
@@ -41,6 +42,8 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
   const [isWaiting, setIsWaiting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [disabled, setDisabled] = React.useState(false);
+  const [disabledReason, setDisabledReason] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
   const pollTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const runId = React.useRef(0);
   const onActivityRef = React.useRef(onActivity);
@@ -73,6 +76,10 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
         });
         if (done) {
           setIsWaiting(false);
+          // The AI reply and the handoff update land back to back; refresh once more so state is not stale.
+          pollTimer.current = setTimeout(() => {
+            if (run === runId.current) onActivityRef.current();
+          }, SIMULATOR_POLL_INTERVAL_MS);
           return;
         }
       } catch {
@@ -94,6 +101,7 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
     }
     setIsSending(true);
     setError(null);
+    setNotice(null);
     runId.current += 1;
     const run = runId.current;
     if (pollTimer.current) clearTimeout(pollTimer.current);
@@ -104,7 +112,10 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
       setMessage("");
       router.replace(`${pathname}?c=${encodeURIComponent(result.conversationId)}`, { scroll: false });
       onActivityRef.current();
-      if (result.state === "ai_active") {
+      const hint = stateHint(result.state);
+      if (hint) {
+        setNotice(hint);
+      } else {
         setIsWaiting(true);
         poll(workspace.id, result.conversationId, result.messageId, Date.now(), run);
       }
@@ -113,13 +124,24 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
         setDisabled(true);
         return;
       }
+      if (err instanceof ApiRequestError && err.status === 409) {
+        setDisabled(true);
+        setDisabledReason(err.message);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not send the test message.");
     } finally {
       setIsSending(false);
     }
   }
 
-  if (disabled) return null;
+  if (disabled) {
+    return disabledReason ? (
+      <p className="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-xs">
+        Test as a buyer is unavailable: {disabledReason}
+      </p>
+    ) : null;
+  }
 
   return (
     <Card className="border-dashed">
@@ -184,6 +206,8 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
                   <p role="alert" className="text-destructive text-xs">
                     {error}
                   </p>
+                ) : notice ? (
+                  <p className="text-muted-foreground text-xs">{notice}</p>
                 ) : isWaiting ? (
                   <p className="text-muted-foreground text-xs">Waiting for the AI to reply...</p>
                 ) : (

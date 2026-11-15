@@ -40,6 +40,22 @@ export function aiReplyArrived(newestFirst: Pick<Message, "id" | "sender">[], in
   return false;
 }
 
+/** Why the AI will not reply after a simulated message, or null when it will. */
+export function stateHint(state: string): string | null {
+  switch (state) {
+    case "ai_active":
+      return null;
+    case "human_takeover":
+      return "You're handling this conversation, so the AI won't reply.";
+    case "waiting_approval":
+      return "This conversation is waiting for your approval, so the AI won't reply.";
+    case "closed":
+      return "This conversation is closed, so the AI won't reply.";
+    default:
+      return "AI replies are off for this workspace — turn them on in Agent Settings.";
+  }
+}
+
 /** Polling ends on an AI reply, when the AI no longer holds the conversation, or at the time limit. */
 export function shouldStopPolling(input: { aiReplied: boolean; state: string; elapsedMs: number }): boolean {
   return input.aiReplied || input.state !== "ai_active" || input.elapsedMs >= SIMULATOR_POLL_WINDOW_MS;

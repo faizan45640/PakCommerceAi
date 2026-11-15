@@ -76,8 +76,8 @@ describe("GET /conversations/:id/ai-activity", () => {
     };
     results.ai_tool_calls = {
       data: [
-        { tool_name: "check_stock", ok: true, error_code: null, duration_ms: 42, created_at: "2026-11-15T09:29:00+00:00" },
-        { tool_name: "search_products", ok: false, error_code: "timeout", duration_ms: 900, created_at: "2026-11-15T09:28:00+00:00" },
+        { tool_name: "checkInventory", ok: true, error_code: null, duration_ms: 42, created_at: "2026-11-15T09:29:00+00:00" },
+        { tool_name: "searchProducts", ok: false, error_code: "timeout", duration_ms: 900, created_at: "2026-11-15T09:28:00+00:00" },
       ],
       error: null,
     };
@@ -93,7 +93,7 @@ describe("GET /conversations/:id/ai-activity", () => {
       lastAiMessagePreview: "Yes, it is in stock.",
     });
     expect(res.body.data.recentToolCalls).toHaveLength(2);
-    expect(res.body.data.recentToolCalls[1]).toMatchObject({ tool: "search_products", ok: false, errorCode: "timeout" });
+    expect(res.body.data.recentToolCalls[1]).toMatchObject({ tool: "searchProducts", ok: false, errorCode: "timeout" });
     expect(JSON.stringify(res.body)).not.toContain("input");
 
     const toolSelect = calls.find(([t, m]) => t === "ai_tool_calls" && m === "select");

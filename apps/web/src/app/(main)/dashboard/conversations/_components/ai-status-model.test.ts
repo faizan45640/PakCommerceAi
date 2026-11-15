@@ -27,7 +27,9 @@ describe("handoffLine", () => {
 
 describe("toolLabel", () => {
   it("humanises unknown tools", () => {
-    expect(toolLabel("check_stock")).toBe("Checked stock");
+    expect(toolLabel("checkInventory")).toBe("Checked stock");
+    expect(toolLabel("searchProducts")).toBe("Product search");
+    expect(toolLabel("lookUpOrder")).toBe("Look up order");
     expect(toolLabel("look_up_order")).toBe("Look up order");
   });
 });
@@ -49,7 +51,7 @@ describe("lastAiActionLine", () => {
     const line = lastAiActionLine(
       {
         lastAiMessageAt: "2026-11-15T09:58:00Z",
-        recentToolCalls: [call("check_stock", true, "2026-11-15T09:57:00Z")],
+        recentToolCalls: [call("checkInventory", true, "2026-11-15T09:57:00Z")],
       },
       now,
     );
@@ -61,14 +63,14 @@ describe("lastAiActionLine", () => {
       lastAiActionLine(
         {
           lastAiMessageAt: "2026-11-15T09:00:00Z",
-          recentToolCalls: [call("check_stock", true, "2026-11-15T09:59:00Z")],
+          recentToolCalls: [call("checkInventory", true, "2026-11-15T09:59:00Z")],
         },
         now,
       ),
     ).toBe("Checked stock: ok");
     expect(
       lastAiActionLine(
-        { lastAiMessageAt: null, recentToolCalls: [call("search_products", false, "2026-11-15T09:59:00Z")] },
+        { lastAiMessageAt: null, recentToolCalls: [call("searchProducts", false, "2026-11-15T09:59:00Z")] },
         now,
       ),
     ).toBe("Product search failed");

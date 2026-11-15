@@ -4,6 +4,7 @@ import {
   aiReplyArrived,
   buildMockInboundPayload,
   shouldStopPolling,
+  stateHint,
   validateSimulatorForm,
 } from "./buyer-simulator-model";
 
@@ -39,6 +40,14 @@ describe("aiReplyArrived", () => {
     expect(aiReplyArrived([{ id: "a", sender: "ai" }, { id: "in", sender: "buyer" }], "in")).toBe(true);
     expect(aiReplyArrived([{ id: "in", sender: "buyer" }, { id: "old", sender: "ai" }], "in")).toBe(false);
     expect(aiReplyArrived([], "in")).toBe(false);
+  });
+});
+
+describe("stateHint", () => {
+  it("explains why the AI will not reply", () => {
+    expect(stateHint("ai_active")).toBeNull();
+    expect(stateHint("open")).toContain("Agent Settings");
+    expect(stateHint("human_takeover")).toContain("handling");
   });
 });
 

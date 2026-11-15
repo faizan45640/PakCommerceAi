@@ -22,16 +22,27 @@ export const AI_STATE_TONES: Record<ConversationState, StatusTone> = {
 
 /** Plain-words names for known tools; others are humanised. */
 const TOOL_LABELS: Record<string, string> = {
-  search_products: "Product search",
-  check_stock: "Checked stock",
-  get_product: "Product lookup",
-  create_draft_order: "Draft order",
+  searchProducts: "Product search",
+  checkInventory: "Checked stock",
+  getCustomerProfile: "Customer lookup",
+  getSchema: "Schema lookup",
+  queryDatabase: "Data lookup",
+  getCourierPerformance: "Courier check",
+  createDraftOrder: "Draft order",
+  mutateDatabase: "Data change",
+  updateProductStock: "Stock update",
+  updateProductPrice: "Price update",
+  updateProductDetails: "Product update",
 };
 
 export function toolLabel(tool: string): string {
   const known = TOOL_LABELS[tool];
   if (known) return known;
-  const words = tool.replace(/[_-]+/g, " ").trim();
+  const words = tool
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : tool;
 }
 
