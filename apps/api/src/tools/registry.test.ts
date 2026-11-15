@@ -92,10 +92,46 @@ describe("tool registry", () => {
 });
 
 describe("the shipped registry", () => {
-  it("exposes only the two read tools to the sales agent, none needing approval", () => {
+  it("exposes the sales agent's lookup and order tools, none needing approval", () => {
     const agentTools = getTools({ audience: "sales_agent" });
-    expect(agentTools.map((t) => t.name).sort()).toEqual(["checkInventory", "searchProducts"]);
-    expect(agentTools.every((t) => t.permission === "read" && !t.needsApproval)).toBe(true);
+    expect(agentTools.map((t) => t.name).sort()).toEqual([
+      "cancelOrderDraft",
+      "checkInventory",
+      "confirmOrder",
+      "createOrderDraft",
+      "getPendingOrder",
+      "searchProducts",
+    ]);
+    expect(agentTools.every((t) => !t.needsApproval)).toBe(true);
+    const writes = agentTools.filter((t) => t.permission === "write").map((t) => t.name).sort();
+    expect(writes).toEqual(["cancelOrderDraft", "confirmOrder", "createOrderDraft"]);
+  });
+
+  it("never accepts a phone or workspace from the model for order tools", () => {
+    const def = getTools().find((t) => t.name === "createOrderDraft")!;
+    const parsed = def.inputSchema.parse({
+      items: [{ variantId: "11111111-1111-4111-8111-111111111111", quantity: 1 }],
+      customer: { name: "Ali", city: "Lahore", addressLine: "House 1, Street 2", phone: "0300" },
+      phone: "0300",
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(JSON.stringify(parsed)).not.toContain("0300");
+    expect(JSON.stringify(parsed)).not.toContain("workspaceId");
+    expect(parsed.paymentMethod).toBe("cod");
+  });
+
+  it("redacts buyer details in the createOrderDraft audit row", () => {
+    const def = getTools().find((t) => t.name === "createOrderDraft")!;
+    const stored = JSON.stringify(
+      redactInput(def, {
+        items: [{ variantId: "v", quantity: 1 }],
+        customer: { name: "Ayesha Khan", city: "Karachi", addressLine: "Flat 4, Gulshan" },
+        notes: "call at 5",
+      }),
+    );
+    for (const secret of ["Ayesha", "Karachi", "Gulshan", "call at 5"]) {
+      expect(stored).not.toContain(secret);
+    }
   });
 
   it("exports JSON Schema for every tool", () => {
@@ -200,6 +236,23 @@ describe("runTool", () => {
     });
     expect(result).toEqual({ ok: true, output });
     expect(entries[0]).toMatchObject({ ok: false, errorCode: "tool_reported_error" });
+  });
+
+  it("fixes the audit row id before the tool runs and hands it to the tool", async () => {
+    const entries: ToolAuditEntry[] = [];
+    let seen: string | undefined;
+    await runTool(
+      tool({
+        execute: async (ctx) => {
+          seen = ctx.toolCallId;
+          return {};
+        },
+      }),
+      context(entries),
+      { text: "x" },
+    );
+    expect(seen).toMatch(/^[0-9a-f-]{36}$/);
+    expect(entries[0]?.id).toBe(seen);
   });
 
   it("survives a failing audit sink", async () => {

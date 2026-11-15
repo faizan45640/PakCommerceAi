@@ -24,6 +24,9 @@ export const orderChannelValues = [
 
 export const orderPaymentMethodValues = ["cod", "prepaid"] as const;
 
+/** Where an order was created: dashboard/REST, the seller copilot, or the WhatsApp sales agent. */
+export const orderCreatedViaValues = ["manual", "copilot", "whatsapp_ai"] as const;
+
 export const orderSortValues = [
   "newest",
   "updated_desc",
@@ -58,10 +61,12 @@ export const orderStatusSchema = z.enum(orderStatusValues);
 export const orderChannelSchema = z.enum(orderChannelValues);
 export const orderPaymentMethodSchema = z.enum(orderPaymentMethodValues);
 export const orderSortSchema = z.enum(orderSortValues);
+export const orderCreatedViaSchema = z.enum(orderCreatedViaValues);
 
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export type OrderChannel = z.infer<typeof orderChannelSchema>;
 export type OrderPaymentMethod = z.infer<typeof orderPaymentMethodSchema>;
+export type OrderCreatedVia = z.infer<typeof orderCreatedViaSchema>;
 
 export function canTransition(
   from: OrderStatus,
@@ -197,6 +202,10 @@ const orderBaseSchema = z.object({
   status: orderStatusSchema,
   channel: orderChannelSchema,
   paymentMethod: orderPaymentMethodSchema.default("cod"),
+  /** manual, copilot, or whatsapp_ai (placed by the sales agent). */
+  createdVia: orderCreatedViaSchema.default("manual"),
+  /** The WhatsApp conversation an AI order came from, if it still exists. */
+  conversationId: idSchema.nullable().default(null),
   customer: orderCustomerSnapshotSchema,
   items: z.array(orderItemSchema).min(1).max(200),
   subtotal: moneySchema,
@@ -371,6 +380,8 @@ export const orderSearchQuerySchema = z.object({
   query: trimmedText.min(1).max(120).optional(),
   /** Only this customer's orders (the profile's full order history). */
   customerId: idSchema.optional(),
+  /** Only orders created from this WhatsApp conversation. */
+  conversationId: idSchema.optional(),
   statuses: z
     .array(orderStatusSchema)
     .max(orderStatusValues.length)
@@ -393,6 +404,8 @@ export const orderListItemSchema = orderBaseSchema
     status: true,
     channel: true,
     paymentMethod: true,
+    createdVia: true,
+    conversationId: true,
     total: true,
     currency: true,
     confirmedAt: true,

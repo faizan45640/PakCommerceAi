@@ -205,7 +205,10 @@ async function runTurn(db: AppSupabaseClient, input: AgentTurnInput, deps: Pipel
   if (reply) {
     // State may have changed while the model was thinking (seller took over).
     const fresh = await readConversation(db, input);
-    if (!fresh || !aiMayReply(parseState(fresh.state))) {
+    // `waiting_approval` can only be this turn's own confirmOrder (only the AI makes
+    // that move, and the turn started `ai_active`): the buyer still hears the answer.
+    const freshState = fresh ? parseState(fresh.state) : null;
+    if (!fresh || !freshState || !(aiMayReply(freshState) || freshState === "waiting_approval")) {
       console.info("agent reply dropped: state changed", input.conversationId);
       return;
     }

@@ -230,13 +230,14 @@ Validated against `orderSearchQuerySchema`.
 | `workspaceId` | **Required** |
 | `query` | Case-insensitive match on customer name, phone, or city |
 | `customerId` | Only this customer's orders (the profile's full order history). Another seller's id matches nothing |
+| `conversationId` | Only orders created from this WhatsApp conversation (the AI's orders) |
 | `statuses` | Comma-separated: `draft,confirmed,…` |
 | `channels` | Comma-separated: `manual,whatsapp,…` |
 | `sort` | `newest`, `updated_desc` (default), `total_asc`, `total_desc` |
 | `limit` | 1–100, default 25 |
 | `cursor` | From the previous response's `nextCursor` |
 
-Returns `OrderListItem`s (each with its `customerId`) in the list envelope (`data`, `meta`, `nextCursor`).
+Returns `OrderListItem`s (each with its `customerId`, `createdVia` and `conversationId`) in the list envelope (`data`, `meta`, `nextCursor`).
 
 ### `GET /api/v1/orders/:orderId`
 
@@ -485,22 +486,35 @@ an agent turn in the background (the webhook/mock response does not wait). Turns
 run one at a time, in order. A turn calls `POST ${ML_URL}/agent/respond` (Bearer `AGENT_SERVICE_TOKEN`,
 45 s timeout) with the message, the last 20 messages (role and text only, no phones) and the policy text.
 The reply is sent through the active WhatsApp provider (`WHATSAPP_PROVIDER=simulator` fakes it) and stored
-as an outbound `ai` message (`sent`, or `failed`); it is dropped if the state is no longer `ai_active`.
+as an outbound `ai` message (`sent`, or `failed`); it is dropped if the state is no longer `ai_active` (a move to `waiting_approval` made by the agent's own `confirmOrder` in the same turn does not drop it).
 `handoff.required`, an unreachable or invalid agent, or missing config moves the conversation
 `ai_active -> human_takeover` with a short `handoffReason` (for example "Buyer wants to order",
 "AI unavailable"); a reply that comes with a handoff is sent first.
 
 ### `GET /api/v1/sales-agent/settings?workspaceId=`
 
-`{ data: { workspaceId, aiEnabled, policyText } }`. Defaults (`false`, `""`) when never saved.
+`{ data: { workspaceId, aiEnabled, policyText, autoConfirmOrders, shippingFee } }`. Defaults (`false`, `""`, `true`, `{ amountMinor: 0, currency: "PKR" }`) when never saved.
 `404` for a workspace that is not yours.
 
 ### `PUT /api/v1/sales-agent/settings`
 
-Body `{ "workspaceId": "uuid", "aiEnabled": true, "policyText": "up to 4000 chars" }`. Returns the saved
+Body `{ "workspaceId": "uuid", "aiEnabled": true, "policyText": "up to 4000 chars", "autoConfirmOrders": true, "shippingFee": { "amountMinor": 20000, "currency": "PKR" } }` (`autoConfirmOrders` defaults to `true`, `shippingFee` to 0). `autoConfirmOrders`: on, the AI confirms an order itself after the buyer's second confirmation (stock is deducted); off, the conversation moves to `waiting_approval` and the seller decides (below). `shippingFee` is added to every order the AI drafts. Returns the saved
 settings. Saving `aiEnabled: false` also moves every `ai_active` conversation of the workspace to `open` (as the seller). `aiEnabled` decides whether new and reopened conversations start `ai_active`; `policyText`
 (delivery, returns, payment/COD) is the only policy text the agent may quote. `400` on invalid input, `404` for
 a foreign workspace.
+
+### `POST /api/v1/conversations/:id/order-approval`
+
+Seller decision on an AI order waiting for approval. Body `{ "workspaceId", "orderId", "decision": "approve" | "reject" }`.
+The conversation must be `waiting_approval` and `orderId` its open AI draft (`createdVia: "whatsapp_ai"`), otherwise `409`.
+
+- `approve`: order draft to `confirmed` (stock deducted; `400` if stock ran out, nothing changes), conversation
+  `waiting_approval -> ai_active` (as the seller), and the buyer gets "Aapka order <ref> confirm ho gaya. Shukriya!"
+  through the active provider, stored as an outbound `system` message (`failed` if WhatsApp could not deliver; the approval stands).
+- `reject`: order draft to `cancelled`, conversation `waiting_approval -> human_takeover` with `handoffReason`
+  "You rejected order <ref> — let the buyer know". Nothing is sent to the buyer.
+
+Returns `{ data: { conversation, order, message } }` (`message` is null for reject). `<ref>` is the first 8 characters of the order id, uppercased.
 
 ---
 
@@ -645,7 +659,7 @@ Every call writes one row to `ai_tool_calls` (service role; a seller may `select
 
 Service-to-service, not seller auth. Header `Authorization: Bearer ${AGENT_SERVICE_TOKEN}` (constant-time compare). With `AGENT_SERVICE_TOKEN` unset every route below answers `404`. Missing or wrong token: `401`. All errors on this surface are `{ "ok": false, "error": { "code", "message" } }`.
 
-`GET /api/v1/agent/tools` returns `{ "data": [{ name, description, permission, owner, needsApproval, inputSchema }] }` (`inputSchema` is JSON Schema), only for tools with audience `sales_agent`. Today: `searchProducts` and `checkInventory`.
+`GET /api/v1/agent/tools` returns `{ "data": [{ name, description, permission, owner, needsApproval, inputSchema }] }` (`inputSchema` is JSON Schema), only for tools with audience `sales_agent`. Today: `searchProducts`, `checkInventory`, and the order tools `createOrderDraft`, `getPendingOrder`, `confirmOrder`, `cancelOrderDraft`.
 
 `POST /api/v1/agent/tools/:name` with body `{ "conversationId": "<uuid>", "input": { ... } }` returns `200 { "ok": true, "output": ... }` or `{ "ok": false, "error": { "code", "message" } }`:
 
@@ -654,7 +668,7 @@ Service-to-service, not seller auth. Header `Authorization: Bearer ${AGENT_SERVI
 | 400 | `invalid_request` / `invalid_input` | Body is not `{ conversationId, input }`, or `input` fails the tool's schema |
 | 401 | `unauthorized` | Missing or wrong token |
 | 403 | `ai_not_allowed` | A `write` tool while the conversation is not `ai_active` (`aiMayReply`) |
-| 403 | `approval_required` | The tool has `needsApproval` (not available to the agent yet; draft orders arrive in S11) |
+| 403 | `approval_required` | The tool has `needsApproval` (not available to the agent) |
 | 404 | `unknown_tool` / `conversation_not_found` / tool-specific (e.g. `product_not_found`) | Unknown or copilot-only tool, no such conversation |
 | 422 | tool-specific | The tool refused (e.g. `search_failed`) |
 | 500 | `internal_error` | Unexpected failure (details are logged, not returned) |
@@ -662,7 +676,24 @@ Service-to-service, not seller auth. Header `Authorization: Bearer ${AGENT_SERVI
 The workspace and seller are read from the conversation row; the caller cannot supply or override them. The agent's tools read the live catalogue only (active products and variants) and return no buyer data.
 
 - `searchProducts` input: `{ query?, statuses?, inventoryStates?, categoryIds?, tags?, sort?, limit? }` (same as the copilot, but `statuses` is forced to `active`). Output: `{ total, products: [{ productId, name, priceFromPkr, priceToPkr, inStock, variants: [{ variantId, label, pricePkr, inStock, quantity }] }] }`.
-- `checkInventory` input: `{ productId, size?, colour? }`. Output: `{ productId, name, availableSizes, availableColours, anyInStock, variants: [...] }`. `quantity` is a bucket: `none`, `1-3`, `4-10`, `10+` or `untracked`; exact counts are not exposed.
+- `checkInventory` input: `{ productId, size?, colour? }` (every variant carries its `variantId`, which `createOrderDraft` needs). Output: `{ productId, name, availableSizes, availableColours, anyInStock, variants: [...] }`. `quantity` is a bucket: `none`, `1-3`, `4-10`, `10+` or `untracked`; exact counts are not exposed.
+
+### Sales-agent order tools (S11, T-085)
+
+The buyer confirms **twice**. (1) The buyer confirms a summary, the AI calls `createOrderDraft`, sends the order number and total and asks for a final "HAAN". (2) The buyer replies, the AI calls `confirmOrder`. The second confirmation is enforced in Postgres (`ai_confirm_order`): there must be an inbound buyer message created after the order. The `ai_active` check is repeated inside the write under a row lock on the conversation, so a seller taking over wins (`ai_not_allowed`, 403). Phone, workspace, prices and shipping fee never come from the model. Order tools only act on this conversation's own `whatsapp_ai` draft, so another conversation's order id is `not_found`.
+
+| Tool | Input | Output |
+| --- | --- | --- |
+| `createOrderDraft` (write) | `{ items: [{ variantId, quantity 1..20 }] (1..10), customer: { name 1..120, city 1..80, addressLine 5..300 }, paymentMethod?: "cod" or "prepaid" (default cod), notes?: max 300 }` | `{ orderId, orderRef, status: "draft", items: [{ product, variant, quantity, unitPricePkr, lineTotalPkr }], subtotalPkr, shippingFeePkr, totalPkr, paymentMethod, city, addressLine }` |
+| `getPendingOrder` (read) | `{}` | `{ order: <same shape> or null }` (latest open AI draft) |
+| `confirmOrder` (write) | `{ orderId }` | `{ status: "confirmed" or "awaiting_seller", orderRef }` |
+| `cancelOrderDraft` (write) | `{ orderId, reason?: max 200 }` | `{ status: "cancelled", orderRef }` |
+
+`orderRef` is the first 8 characters of the order id, uppercased. The order is stored with `channel = whatsapp`, `created_via = whatsapp_ai`, the `conversation_id`, and `created_by_tool_call_id` (the id of the `ai_tool_calls` row of that call). Customer name, city, address and notes are redacted in the audit row. `confirmOrder` with `autoConfirmOrders` on confirms the draft (stock deducted); off, it moves the conversation `ai_active -> waiting_approval` (`handoffReason` "Order <ref> needs your approval") and the seller decides with `order-approval`.
+
+Error codes (`error.code`): `ai_not_allowed` 403 (conversation not `ai_active`); `invalid_input` 400; `draft_exists` 409 (message holds the open order's id); `insufficient_stock` 409 (message names the item; also re-checked at confirm); `needs_buyer_confirmation` 409 (no buyer message since the draft); `not_draft` 409; `not_found` 404 (order is not this conversation's AI draft); `variant_not_found` 404 (not an active variant of this shop); `invalid_order` 422 (amount limits and similar).
+
+Orders also gain `createdVia` (`manual`, `copilot` or `whatsapp_ai`) and `conversationId` (null for manual and copilot orders, or once the conversation is deleted).
 
 ## Copilot tools
 

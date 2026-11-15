@@ -1,5 +1,5 @@
 import type { AppSupabaseClient } from "@pakcommerce/integrations/supabase";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
@@ -29,6 +29,8 @@ export type ToolOwner =
   | "platform";
 
 export interface ToolAuditEntry {
+  /** Id of the audit row, fixed before the tool runs so the tool can reference it. */
+  id?: string;
   toolName: string;
   audience: ToolAudience;
   actor: ToolActor;
@@ -60,6 +62,11 @@ export interface ToolContext {
   actor: ToolActor;
   audience: ToolAudience;
   conversationId?: string;
+  /**
+   * Id the audit row of THIS call will get. Set by `runTool`; a tool that
+   * creates a record (an AI draft order) stores it as `created_by_tool_call_id`.
+   */
+  toolCallId?: string;
   audit: ToolAuditSink;
 }
 
@@ -256,6 +263,8 @@ export async function runTool(
   options: RunToolOptions = {},
 ): Promise<ToolRunResult> {
   const started = Date.now();
+  const toolCallId = randomUUID();
+  ctx = { ...ctx, toolCallId };
   let result: ToolRunResult;
   let auditCode: string | null = null;
 
@@ -317,6 +326,7 @@ export async function recordToolAudit(
 ): Promise<void> {
   try {
     await ctx.audit.record({
+      ...(ctx.toolCallId ? { id: ctx.toolCallId } : {}),
       toolName: toolName.slice(0, 100),
       audience: ctx.audience,
       actor: ctx.actor,
