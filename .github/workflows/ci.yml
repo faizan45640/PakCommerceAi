@@ -235,7 +235,9 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: "latest" asks the GitHub API for the newest release on every run,
+          # and that call is rate limited, which failed whole integration runs.
+          version: 2.114.0
 
       # Tier-2 tests bind one real dependency: Postgres with the auth schema, so
       # RLS policies and auth.uid() behave as they do in production. The UI and
