@@ -400,6 +400,21 @@ Login calls `supabase.auth.signInWithPassword`. A toast with the Supabase error 
 
 ---
 
+## WhatsApp Cloud API test setup (T-075 spike)
+
+One Meta test number is wired to one workspace through env. Per-seller setup comes later.
+
+1. At developers.facebook.com create an app (type Business) and add the **WhatsApp** product. Under WhatsApp > API Setup you get a free test number, its **Phone number ID**, a temporary access token, and you can add up to 5 recipient numbers (your own phone).
+2. App settings > Basic: copy the **App Secret**.
+3. Fill in `.env` (see `.env.example`): `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` (any random string you choose), `WHATSAPP_WORKSPACE_ID` (your workspace id). All five must be set or the webhook returns 404.
+4. Start the API and expose it: `ngrok http 4000` (or `cloudflared tunnel --url http://localhost:4000`).
+5. WhatsApp > Configuration > Webhook: callback URL `https://<public-host>/api/v1/webhooks/whatsapp`, verify token = your `WHATSAPP_VERIFY_TOKEN`, then **Verify and save**. Subscribe to the **messages** field.
+6. Send a WhatsApp message from your phone to the test number: it appears in the inbox (state `open`). Click **Take over**, reply from the thread; delivery ticks update the status. Free-form replies only work within 24 hours of the buyer's last message.
+
+The temporary token expires in about 24 hours; regenerate it or create a System User token for longer tests.
+
+---
+
 ## 10. Daily workflow
 
 ```bash

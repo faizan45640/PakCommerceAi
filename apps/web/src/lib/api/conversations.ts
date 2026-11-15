@@ -97,6 +97,15 @@ export async function changeConversationState(
   return response.data;
 }
 
+/** Sends a seller reply over WhatsApp. Only allowed while the conversation is in human takeover. */
+export async function sendConversationMessage(workspaceId: string, id: string, body: string): Promise<Message> {
+  const response = await apiFetch<ApiDataResponse<Message>>(`/api/v1/conversations/${encodeURIComponent(id)}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ workspaceId, body }),
+  });
+  return response.data;
+}
+
 /** Marks every message in the thread as seen; returns the conversation with `unreadCount` 0. */
 export async function markConversationRead(workspaceId: string, id: string): Promise<Conversation> {
   const response = await apiFetch<ApiDataResponse<Conversation>>(

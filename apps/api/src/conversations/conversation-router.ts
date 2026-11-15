@@ -13,9 +13,13 @@ import {
   listConversations,
   listMessages,
   markConversationRead,
+  sendSellerReply,
+  sendSellerReplyInputSchema,
   transitionConversationState,
   transitionConversationInputSchema,
 } from "./conversation-service.js";
+import { getMetaCloudConfig, MetaCloudProvider } from "../whatsapp/meta-cloud.js";
+import type { WhatsAppProvider } from "../whatsapp/provider.js";
 import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "./mock-inbound.js";
 
 /**
@@ -23,6 +27,28 @@ import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "
  * inbound endpoint. Conversations are created by inbound ingestion only.
  */
 export const conversationRouter = Router();
+
+/** Spike-only: the single env-configured Meta number. Null when the feature is off. */
+function defaultWhatsAppProvider(): WhatsAppProvider | null {
+  const config = getMetaCloudConfig();
+  return config ? new MetaCloudProvider(config) : null;
+}
+
+/** Seller reply over WhatsApp. Only while the seller holds the conversation (`human_takeover`). */
+conversationRouter.post("/:id/messages", async (request, response, next) => {
+  try {
+    const auth = sellerContext(request);
+    const id = parseOrThrow(idSchema, request.params.id, "conversation id");
+    const input = parseOrThrow(sendSellerReplyInputSchema, request.body, "reply");
+
+    const provider = defaultWhatsAppProvider();
+    if (!provider) throw new NotFoundError("WhatsApp is not connected.");
+
+    response.status(201).json({ data: await sendSellerReply(auth, id, input, provider) });
+  } catch (error) {
+    next(error);
+  }
+});
 
 const idSchema = z.uuid();
 const workspaceQuerySchema = z.object({ workspaceId: z.uuid() });

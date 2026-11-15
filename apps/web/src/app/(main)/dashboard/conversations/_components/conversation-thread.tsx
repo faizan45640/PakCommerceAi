@@ -14,6 +14,7 @@ import {
   fetchConversationById,
   fetchMessages,
   markConversationRead,
+  sendConversationMessage,
 } from "@/lib/api/conversations";
 import { fetchCurrentWorkspace } from "@/lib/api/products";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,9 @@ export function ConversationThread({
   const [reloadKey, setReloadKey] = React.useState(0);
   const [pendingState, setPendingState] = React.useState<ConversationState | null>(null);
   const [stateError, setStateError] = React.useState<string | null>(null);
+  const [draft, setDraft] = React.useState("");
+  const [isSending, setIsSending] = React.useState(false);
+  const [sendError, setSendError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!conversationId) return;
@@ -126,6 +130,39 @@ export function ConversationThread({
       setStateError(err instanceof Error ? err.message : "Could not change the conversation state.");
     } finally {
       setPendingState(null);
+    }
+  }
+
+  async function sendReply() {
+    const body = draft.trim();
+    if (!conversationId || !workspaceId || !body || isSending) return;
+    setIsSending(true);
+    setSendError(null);
+    try {
+      const sent = await sendConversationMessage(workspaceId, conversationId, body);
+      setMessages((current) => [...current, sent]);
+      setDraft("");
+      // Keep the inbox row's preview in step.
+      setConversation((current) =>
+        current ? { ...current, lastMessagePreview: body.slice(0, 160), lastMessageSender: "seller" } : current,
+      );
+      requestAnimationFrame(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    } catch (err: unknown) {
+      setSendError(err instanceof Error ? err.message : "Could not send the message.");
+      // A provider failure is stored as a failed message; reload to show it.
+      if (err instanceof ApiRequestError && err.status === 502) {
+        try {
+          const page = await fetchMessages(conversationId, { workspaceId, limit: PAGE_SIZE });
+          setMessages(toChronological(page.items));
+        } catch {
+          // The error above is enough.
+        }
+      }
+    } finally {
+      setIsSending(false);
     }
   }
 
@@ -274,9 +311,46 @@ export function ConversationThread({
           )}
         </div>
 
-        {conversation.state === "human_takeover" ? null : (
+        {conversation.state === "human_takeover" ? (
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void sendReply();
+            }}
+          >
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void sendReply();
+                }
+              }}
+              maxLength={4096}
+              rows={2}
+              disabled={isSending}
+              placeholder="Write a reply... (Enter to send, Shift+Enter for a new line)"
+              aria-label="Reply"
+              className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <div className="flex items-center justify-between gap-2">
+              {sendError ? (
+                <p role="alert" className="text-destructive text-xs">
+                  {sendError}
+                </p>
+              ) : (
+                <span />
+              )}
+              <Button type="submit" size="sm" disabled={isSending || draft.trim() === ""}>
+                {isSending ? "Sending..." : "Send"}
+              </Button>
+            </div>
+          </form>
+        ) : (
           <p className="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-xs">
-            Replying from here needs you to take over this conversation. Sending is not available yet.
+            Take over this conversation to reply from here.
           </p>
         )}
       </CardContent>

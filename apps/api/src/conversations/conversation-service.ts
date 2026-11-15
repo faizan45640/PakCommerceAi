@@ -1,5 +1,7 @@
+import type { AppSupabaseClient } from "@pakcommerce/integrations/supabase";
 import type { ApiMeta } from "@pakcommerce/shared";
 import {
+  MAX_MESSAGE_BODY_LENGTH,
   normalizePhone,
   type Conversation,
   type Message,
@@ -14,7 +16,9 @@ import {
 } from "@pakcommerce/shared/conversations";
 import { z } from "zod";
 
-import { ConflictError, NotFoundError } from "../lib/http-errors.js";
+import { ConflictError, HttpError, NotFoundError } from "../lib/http-errors.js";
+import { createApiSupabaseAdminClient } from "../lib/supabase.js";
+import type { WhatsAppProvider } from "../whatsapp/provider.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import { escapePostgrestFilterValue } from "../lib/postgrest.js";
 import type { SellerContext } from "../middleware/seller-context.js";
@@ -208,6 +212,71 @@ export async function transitionConversationState(
   }
 
   return toConversation(data as ConversationRow);
+}
+
+export const sendSellerReplyInputSchema = z.object({
+  workspaceId: z.uuid(),
+  body: z.string().trim().min(1).max(MAX_MESSAGE_BODY_LENGTH),
+});
+
+export type SendSellerReplyInput = z.output<typeof sendSellerReplyInputSchema>;
+
+/**
+ * Sends a seller's WhatsApp reply (T-075).
+ *
+ * Ownership and state are checked with the seller's own client (RLS), and only
+ * `human_takeover` may send, so the AI and the seller never talk at once. The
+ * message is sent first and recorded after: `messages` is append-only, so
+ * `provider_message_id` cannot be filled in on a row inserted earlier, and the
+ * status webhooks need it to find the row. The insert is a trusted server
+ * write (admin client) for the same reason. A provider failure is recorded as a
+ * `failed` message and reported as 502.
+ */
+export async function sendSellerReply(
+  auth: SellerContext,
+  conversationId: string,
+  input: SendSellerReplyInput,
+  provider: WhatsAppProvider,
+  admin: AppSupabaseClient = createApiSupabaseAdminClient(),
+): Promise<Message> {
+  const conversation = await getConversation(auth, input.workspaceId, conversationId);
+
+  if (conversation.state !== "human_takeover") {
+    throw new ConflictError("Take over this conversation before replying.", {
+      state: [`Replies are only allowed in human_takeover, not ${conversation.state}.`],
+    });
+  }
+
+  let providerMessageId: string | null = null;
+  try {
+    providerMessageId = await provider.sendText(conversation.buyerPhone, input.body);
+  } catch (error) {
+    console.error("whatsapp send failed", error instanceof Error ? error.name : "error");
+  }
+
+  const { data, error } = await admin
+    .from("messages")
+    .insert({
+      workspace_id: input.workspaceId,
+      seller_id: auth.sellerId,
+      conversation_id: conversationId,
+      direction: "outbound",
+      sender: "seller",
+      body: input.body,
+      media: [],
+      provider_message_id: providerMessageId,
+      status: providerMessageId ? "sent" : "failed",
+    })
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message, { cause: error });
+
+  if (!providerMessageId) {
+    throw new HttpError(502, "internal_error", "WhatsApp could not deliver the message. It is saved as failed.");
+  }
+
+  return toMessage(data as MessageRow);
 }
 
 /** Resolves when `workspaceId` belongs to the caller; otherwise 404 (RLS hides foreign rows). */
