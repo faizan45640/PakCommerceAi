@@ -116,6 +116,7 @@ Get both from the Supabase dashboard → **Project Settings → API**.
 |---|---|---|---|
 | `API_PORT` | api | No — defaults to `4000` | |
 | `APP_URL` | api | No — defaults to `http://localhost:3000` | Sets the CORS origin |
+| `ENABLE_MOCK_INBOUND` | api | No | Enables `POST /api/v1/conversations/mock-inbound` (fake Twilio inbound for the inbox). Defaults to on when `NODE_ENV` is `development` or `test`, off otherwise; `true`/`false` overrides. Keep it off in real production: any signed-in seller could inject messages into their own inbox. |
 | `NEXT_PUBLIC_SUPABASE_URL` | web | Only for auth | Exposed to the browser |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | web | Only for auth | Exposed to the browser — **publishable key only** |
 | `SUPABASE_URL` | api | Only for Supabase calls | |
