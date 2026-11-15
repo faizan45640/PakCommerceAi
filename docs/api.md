@@ -409,6 +409,67 @@ belongs to someone else.
 
 ---
 
+## Conversations (WhatsApp inbox)
+
+Shapes come from `@pakcommerce/shared/conversations` (`Conversation`, `Message`). All routes need
+a seller token and run through RLS, so another seller's conversation answers `404`.
+Conversations are created only by inbound ingestion (`ingest_inbound_message`), never by a seller.
+
+### `GET /api/v1/conversations`
+
+| Query param | Notes |
+|---|---|
+| `workspaceId` | **Required** |
+| `query` | Case-insensitive substring match on buyer name or phone (any phone format; `*` ignored) |
+| `states` | Comma-separated: `open,ai_active,waiting_approval,human_takeover,closed` |
+| `unreadOnly` | `true` keeps conversations with unread messages |
+| `limit` | 1-100, default 25 |
+| `cursor` | From the previous response's `nextCursor` |
+
+Ordered `last_message_at desc nulls last, id desc`. Returns `{ data, meta, nextCursor }`.
+
+### `GET /api/v1/conversations/:id?workspaceId=`
+
+`{ data: Conversation }`. `404` when missing or not yours.
+
+### `GET /api/v1/conversations/:id/messages?workspaceId=&limit=&cursor=`
+
+Newest first (`limit` 1-200, default 50). `{ data, meta, nextCursor }`; `nextCursor` loads older messages.
+
+### `POST /api/v1/conversations/:id/read?workspaceId=`
+
+Sets `unreadCount` to 0 and returns `{ data: Conversation }`.
+
+### `POST /api/v1/conversations/mock-inbound`
+
+Fakes a Twilio inbound WhatsApp message so the inbox can be demoed before Twilio is connected.
+Returns `404` unless `ENABLE_MOCK_INBOUND` is on (default in development/test; explicit in production, see RUNBOOK).
+
+```json
+{
+  "workspaceId": "uuid",
+  "From": "whatsapp:+923001234567",
+  "ProfileName": "Ayesha",
+  "Body": "Salam, is this kurta available?",
+  "MessageSid": "SM...",
+  "NumMedia": 1,
+  "MediaUrl0": "https://example.com/photo.jpg",
+  "MediaContentType0": "image/jpeg",
+  "aiEnabled": false
+}
+```
+
+`MessageSid` is generated (`SMmock...`) when absent; a repeated `MessageSid` returns the original
+message with `duplicate: true` and changes nothing. `NumMedia`/`MediaUrl{n}`/`MediaContentType{n}`
+are optional (up to 10, https URLs only). `Body` up to 4096 characters; a message needs text or media.
+The caller must own `workspaceId` (checked with their own token before any write; otherwise `404`).
+
+`201` (new) or `200` (duplicate): `{ data: { conversationId, messageId, duplicate, state } }`.
+`state` is the thread state after ingest: a new thread starts `ai_active` when `aiEnabled`, else
+`open`; a closed thread reopens; live threads keep their state.
+
+---
+
 ## Limitations
 
 Honest list of what this does not do yet.

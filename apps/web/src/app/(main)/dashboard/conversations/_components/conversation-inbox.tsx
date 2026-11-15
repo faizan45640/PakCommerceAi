@@ -128,7 +128,12 @@ export function ConversationInbox({ selectedId, updatedConversation }: Conversat
         cursor: nextCursor,
       });
       if (token !== generation.current) return;
-      setItems((current) => [...current, ...data.items]);
+      // Offset pages shift when a buyer replies between loads (that row jumps
+      // to the top), so the next page can repeat rows already shown.
+      setItems((current) => {
+        const seen = new Set(current.map((item) => item.id));
+        return [...current, ...data.items.filter((item) => !seen.has(item.id))];
+      });
       setNextCursor(data.nextCursor ?? null);
     } catch (err: unknown) {
       if (token === generation.current) {
