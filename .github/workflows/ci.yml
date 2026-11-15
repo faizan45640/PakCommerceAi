@@ -163,9 +163,11 @@ jobs:
         with:
           python-version-file: apps/ml/.python-version
           cache: pip
-          cache-dependency-path: apps/ml/requirements-dev.txt
+          cache-dependency-path: |
+            apps/ml/requirements.txt
+            apps/ml/requirements-dev.txt
 
-      - name: Install Python dev tools
+      - name: Install Python dependencies (runtime + dev)
         run: pip install -r requirements-dev.txt
 
       - name: Lint (ruff)

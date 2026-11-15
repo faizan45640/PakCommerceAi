@@ -254,7 +254,7 @@ npm run typecheck -w @pakcommerce/web
 npm run ci:ml
 ```
 
-Runs `pip install -r requirements-dev.txt`, `ruff check .`, `ruff format --check .`, `pytest tests/ -q` inside `apps/ml`. Two toolchain tests exist. There is no model.
+Runs `pip install -r requirements-dev.txt` (includes runtime deps), `ruff check .`, `ruff format --check .`, `pytest tests/ -q` inside `apps/ml`. Tests use fake chat models and mocked Node tools; no network or real LLM.
 
 > Uses `python3`. On Windows, where the executable is usually `python`, run the steps manually from `apps/ml` or use WSL/Git Bash.
 
