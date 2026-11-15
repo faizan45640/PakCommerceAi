@@ -2,6 +2,7 @@ import type { Database } from "@pakcommerce/integrations/supabase";
 import type {
   Order,
   OrderChannel,
+  OrderCreatedVia,
   OrderDetail,
   OrderItem,
   OrderListItem,
@@ -78,6 +79,8 @@ export function toOrder(row: OrderRow, itemRows: OrderItemRow[]): Order {
     status: row.status as OrderStatus,
     channel: row.channel as OrderChannel,
     paymentMethod: row.payment_method as OrderPaymentMethod,
+    createdVia: row.created_via as OrderCreatedVia,
+    conversationId: row.conversation_id,
     customer: {
       name: row.customer_name,
       phone: row.customer_phone,
@@ -119,6 +122,8 @@ export function toOrderListItem(
     status: row.status as OrderStatus,
     channel: row.channel as OrderChannel,
     paymentMethod: row.payment_method as OrderPaymentMethod,
+    createdVia: row.created_via as OrderCreatedVia,
+    conversationId: row.conversation_id,
     total: {
       amountMinor: row.total_amount_minor,
       currency: row.currency as "PKR",

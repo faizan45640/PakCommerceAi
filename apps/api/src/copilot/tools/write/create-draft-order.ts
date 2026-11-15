@@ -121,7 +121,7 @@ export function createDraftOrderTool(auth: SellerContext) {
           ...(input.note ? { note: input.note } : {}),
         });
 
-        const order = await createDraftOrder(auth, serviceInput);
+        const order = await createDraftOrder(auth, serviceInput, { createdVia: "copilot" });
 
         const itemCount = order.items.reduce((sum, line) => sum + line.quantity, 0);
         return {

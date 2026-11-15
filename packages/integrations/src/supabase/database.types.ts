@@ -580,7 +580,10 @@ export type Database = {
           cancelled_at: string | null
           channel: Database["public"]["Enums"]["order_channel"]
           confirmed_at: string | null
+          conversation_id: string | null
           created_at: string
+          created_by_tool_call_id: string | null
+          created_via: string
           currency: string
           customer_address_line: string | null
           customer_city: string
@@ -603,7 +606,10 @@ export type Database = {
           cancelled_at?: string | null
           channel?: Database["public"]["Enums"]["order_channel"]
           confirmed_at?: string | null
+          conversation_id?: string | null
           created_at?: string
+          created_by_tool_call_id?: string | null
+          created_via?: string
           currency?: string
           customer_address_line?: string | null
           customer_city: string
@@ -626,7 +632,10 @@ export type Database = {
           cancelled_at?: string | null
           channel?: Database["public"]["Enums"]["order_channel"]
           confirmed_at?: string | null
+          conversation_id?: string | null
           created_at?: string
+          created_by_tool_call_id?: string | null
+          created_via?: string
           currency?: string
           customer_address_line?: string | null
           customer_city?: string
@@ -646,6 +655,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_conversation_workspace_fkey"
+            columns: ["conversation_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "orders_customer_workspace_fkey"
             columns: ["customer_id", "workspace_id"]
@@ -910,22 +926,28 @@ export type Database = {
       sales_agent_settings: {
         Row: {
           ai_enabled: boolean
+          auto_confirm_orders: boolean
           policy_text: string | null
           seller_id: string
+          shipping_fee_minor: number
           updated_at: string
           workspace_id: string
         }
         Insert: {
           ai_enabled?: boolean
+          auto_confirm_orders?: boolean
           policy_text?: string | null
           seller_id: string
+          shipping_fee_minor?: number
           updated_at?: string
           workspace_id: string
         }
         Update: {
           ai_enabled?: boolean
+          auto_confirm_orders?: boolean
           policy_text?: string | null
           seller_id?: string
+          shipping_fee_minor?: number
           updated_at?: string
           workspace_id?: string
         }
@@ -1223,6 +1245,19 @@ export type Database = {
           p_target_quantity: number
           p_variant_id: string
           p_workspace_id: string
+        }
+        Returns: string
+      }
+      ai_cancel_order_draft: {
+        Args: { p_conversation_id: string; p_note: string; p_order_id: string }
+        Returns: undefined
+      }
+      ai_confirm_order: {
+        Args: {
+          p_auto_confirm: boolean
+          p_conversation_id: string
+          p_handoff_reason: string
+          p_order_id: string
         }
         Returns: string
       }

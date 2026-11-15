@@ -8,7 +8,7 @@ import type {
   ParsedOrderSearchQuery,
 } from "@pakcommerce/shared";
 
-import { NotFoundError, ValidationError } from "../lib/http-errors.js";
+import { ConflictError, NotFoundError, ValidationError } from "../lib/http-errors.js";
 import { escapePostgrestFilterValue } from "../lib/postgrest.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import type { SellerContext } from "../middleware/seller-context.js";
@@ -44,9 +44,19 @@ interface ResolvedLineItem {
   quantity: number;
 }
 
+/** Where a draft came from. Defaults to a dashboard/REST order. */
+export interface DraftOrderOrigin {
+  createdVia?: "manual" | "copilot" | "whatsapp_ai";
+  /** Sales agent only: the conversation (must be `ai_active`, checked in the database). */
+  conversationId?: string;
+  /** Sales agent only: the audit row id of the tool call. */
+  toolCallId?: string;
+}
+
 export async function createDraftOrder(
   auth: SellerContext,
   input: ParsedCreateDraftOrderInput,
+  origin: DraftOrderOrigin = {},
 ): Promise<Order> {
   const lines = await resolveLineItems(auth, input);
 
@@ -75,6 +85,13 @@ export async function createDraftOrder(
     currency,
     note: input.note ?? null,
     performed_by: auth.sellerId,
+    created_via: origin.createdVia ?? "manual",
+    ...(origin.conversationId
+      ? {
+          conversation_id: origin.conversationId,
+          created_by_tool_call_id: origin.toolCallId ?? null,
+        }
+      : {}),
     items: lines.map((line) => ({
       product_id: line.productId,
       variant_id: line.variantId,
@@ -196,6 +213,7 @@ export async function listOrders(
     .eq("workspace_id", query.workspaceId);
 
   if (query.customerId) builder = builder.eq("customer_id", query.customerId);
+  if (query.conversationId) builder = builder.eq("conversation_id", query.conversationId);
   if (query.statuses?.length) builder = builder.in("status", query.statuses);
   if (query.channels?.length) builder = builder.in("channel", query.channels);
   if (query.query) {
@@ -325,6 +343,12 @@ function translateCreateError(error: { message: string }) {
     return new ValidationError("A draft order must have at least one item.", {
       items: ["Add at least one line item."],
     });
+  }
+  if (/ai_not_allowed/.test(error.message)) {
+    return new ConflictError("The AI no longer holds this conversation.");
+  }
+  if (/orders_one_open_ai_draft_per_conversation/.test(error.message)) {
+    return new ConflictError("This conversation already has an open AI draft.");
   }
   if (/row-level security/i.test(error.message)) {
     return new NotFoundError("Workspace not found.");

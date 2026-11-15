@@ -63,6 +63,83 @@ async function enumValues(name: string): Promise<string[]> {
   return rows.map((row) => row.value);
 }
 
+describe("order source columns (S11)", () => {
+  it("created_via defaults to manual and only allows the three sources", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "order-via");
+      const id = await insertOrder(client, seller);
+      const { rows } = await client.query(`select created_via, conversation_id from public.orders where id = $1`, [id]);
+      expect(rows[0]).toEqual({ created_via: "manual", conversation_id: null });
+
+      await client.query("savepoint s");
+      await expect(
+        client.query(`update public.orders set created_via = 'robot' where id = $1`, [id]),
+      ).rejects.toThrow(/orders_created_via_valid/);
+      await client.query("rollback to savepoint s");
+    });
+  });
+
+  it("conversation_id is tenant-safe and cleared when the conversation is deleted", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "order-conv");
+      const other = await createSeller(client, "order-conv-other");
+      const id = await insertOrder(client, seller);
+      const {
+        rows: [conversation],
+      } = await client.query<{ id: string }>(
+        `insert into public.conversations (workspace_id, seller_id, buyer_phone)
+         values ($1, $2, '+923001234567') returning id`,
+        [seller.workspaceId, seller.sellerId],
+      );
+      const {
+        rows: [foreign],
+      } = await client.query<{ id: string }>(
+        `insert into public.conversations (workspace_id, seller_id, buyer_phone)
+         values ($1, $2, '+923001234567') returning id`,
+        [other.workspaceId, other.sellerId],
+      );
+
+      await client.query("savepoint s");
+      await expect(
+        client.query(`update public.orders set conversation_id = $2 where id = $1`, [id, foreign!.id]),
+      ).rejects.toThrow(/orders_conversation_workspace_fkey/);
+      await client.query("rollback to savepoint s");
+
+      await client.query(`update public.orders set conversation_id = $2 where id = $1`, [id, conversation!.id]);
+      await client.query(`delete from public.conversations where id = $1`, [conversation!.id]);
+      const { rows } = await client.query(
+        `select conversation_id, workspace_id from public.orders where id = $1`,
+        [id],
+      );
+      expect(rows[0]).toEqual({ conversation_id: null, workspace_id: seller.workspaceId });
+    });
+  });
+
+  it("sellers hold no write privilege on conversation_id or created_by_tool_call_id", async () => {
+    const { rows } = await client.query<{ col: string; priv: string }>(
+      `select column_name as col, privilege_type as priv
+       from information_schema.column_privileges
+       where table_schema = 'public' and table_name = 'orders' and grantee = 'authenticated'
+         and privilege_type in ('INSERT', 'UPDATE')
+         and column_name in ('conversation_id', 'created_by_tool_call_id', 'created_via')
+       order by 1, 2`,
+    );
+    expect(rows).toEqual([{ col: "created_via", priv: "INSERT" }]);
+  });
+
+  it("sales_agent_settings gains auto_confirm_orders (default true) and a bounded shipping fee", async () => {
+    const { rows } = await client.query(
+      `select column_name, column_default, is_nullable from information_schema.columns
+       where table_schema = 'public' and table_name = 'sales_agent_settings'
+         and column_name in ('auto_confirm_orders', 'shipping_fee_minor') order by 1`,
+    );
+    expect(rows).toEqual([
+      { column_name: "auto_confirm_orders", column_default: "true", is_nullable: "NO" },
+      { column_name: "shipping_fee_minor", column_default: "0", is_nullable: "NO" },
+    ]);
+  });
+});
+
 describe("table shape", () => {
   it("orders table exists with contract columns", async () => {
     expect(await columnsOf("orders")).toEqual(
@@ -70,7 +147,10 @@ describe("table shape", () => {
         "cancelled_at",
         "channel",
         "confirmed_at",
+        "conversation_id",
         "created_at",
+        "created_by_tool_call_id",
+        "created_via",
         "currency",
         "customer_address_line",
         "customer_city",
