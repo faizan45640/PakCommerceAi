@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 
 import { formatPkr } from "@/lib/currency";
 
+import { OrderConversationLink, OrderCreatedViaBadge } from "../order-ai-badge";
 import { OrderChannelBadge, OrderStatusBadge, shortOrderId } from "../order-badges";
 import type { OrderRow } from "./schema";
 
@@ -16,12 +17,17 @@ export const ordersColumns: ColumnDef<OrderRow>[] = [
     accessorKey: "id",
     header: "Order ID",
     cell: ({ row }) => (
-      <Link
-        href={`/dashboard/orders/${row.original.id}`}
-        className="font-medium text-sm hover:underline"
-      >
-        {shortOrderId(row.original.id)}
-      </Link>
+      <div>
+        <Link href={`/dashboard/orders/${row.original.id}`} className="font-medium text-sm hover:underline">
+          {shortOrderId(row.original.id)}
+        </Link>
+        {row.original.createdVia && row.original.createdVia !== "manual" ? (
+          <div className="mt-1 flex flex-col items-start gap-0.5">
+            <OrderCreatedViaBadge createdVia={row.original.createdVia} />
+            <OrderConversationLink conversationId={row.original.conversationId} />
+          </div>
+        ) : null}
+      </div>
     ),
   },
   {

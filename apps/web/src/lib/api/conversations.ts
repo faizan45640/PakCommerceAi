@@ -2,6 +2,7 @@ import type { AiActivity, Conversation, ConversationState, Message } from "@pakc
 import type { ApiDataResponse, ApiListResponse } from "@pakcommerce/shared/api";
 
 import { apiFetch } from "./api-client";
+import type { OrderDetailWithAi } from "./orders";
 
 export interface ConversationListParams {
   workspaceId: string;
@@ -142,4 +143,32 @@ export async function markConversationRead(workspaceId: string, id: string): Pro
     { method: "POST" },
   );
   return response.data;
+}
+
+export type OrderApprovalDecision = "approve" | "reject";
+
+// TODO(shared): replace with @pakcommerce/shared once T-086 lands.
+export interface OrderApprovalResult {
+  conversation: Conversation;
+  order: OrderDetailWithAi;
+  /** Confirmation sent to the buyer (approve only). */
+  message: Message | null;
+}
+
+/**
+ * Seller decision on the AI draft order of a conversation waiting for approval.
+ * Approve confirms the order (conversation back to `ai_active`); reject cancels it (`human_takeover`).
+ * Rejects with a 409 `ApiRequestError` when the conversation is not waiting approval or the order is not the pending one.
+ */
+export async function decideOrderApproval(
+  workspaceId: string,
+  id: string,
+  orderId: string,
+  decision: OrderApprovalDecision,
+): Promise<Conversation> {
+  const response = await apiFetch<ApiDataResponse<OrderApprovalResult>>(
+    `/api/v1/conversations/${encodeURIComponent(id)}/order-approval`,
+    { method: "POST", body: JSON.stringify({ workspaceId, orderId, decision }) },
+  );
+  return response.data.conversation;
 }

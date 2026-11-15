@@ -6,8 +6,11 @@ import type { Conversation } from "@pakcommerce/shared/conversations";
 
 import { BuyerSimulator } from "./buyer-simulator";
 import { ConversationCustomerPanel } from "./conversation-customer-panel";
+import { ConversationOrders } from "./conversation-orders";
 import { ConversationInbox } from "./conversation-inbox";
+import { isWaitingApproval } from "./conversation-orders-model";
 import { ConversationThread } from "./conversation-thread";
+import { OrderApprovalCard } from "./order-approval-card";
 
 /** Inbox on the left, the selected thread on the right. */
 export function ConversationsSplitView({ selectedId }: { selectedId?: string }) {
@@ -30,6 +33,18 @@ export function ConversationsSplitView({ selectedId }: { selectedId?: string }) 
             conversationId={selectedId}
             onConversationUpdated={setUpdated}
             refreshTick={refreshTick}
+            renderApproval={(conversation) =>
+              isWaitingApproval(conversation) ? (
+                <OrderApprovalCard
+                  key={conversation.id}
+                  conversation={conversation}
+                  onDecided={(next) => {
+                    setUpdated(next);
+                    bumpRefresh();
+                  }}
+                />
+              ) : null
+            }
             renderBuyerReply={(conversation) => (
               <BuyerSimulator
                 key={conversation.id}
@@ -39,11 +54,17 @@ export function ConversationsSplitView({ selectedId }: { selectedId?: string }) 
             )}
           />
         </div>
-        <div className="xl:col-span-3">
+        <div className="flex flex-col gap-4 xl:col-span-3">
           <ConversationCustomerPanel
             key={selectedId ?? "none"}
             conversationId={selectedId}
             updatedConversation={updated}
+          />
+          <ConversationOrders
+            key={selectedId ?? "none"}
+            conversationId={selectedId}
+            updatedConversation={updated}
+            refreshTick={refreshTick}
           />
         </div>
       </div>

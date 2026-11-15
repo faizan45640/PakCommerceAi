@@ -5,7 +5,13 @@ import { fetchSalesAgentSettings, saveSalesAgentSettings } from "./sales-agent";
 
 vi.mock("./api-client", () => ({ apiFetch: vi.fn() }));
 
-const settings = { workspaceId: "w1", aiEnabled: true, policyText: "COD available" };
+const settings = {
+  workspaceId: "w1",
+  aiEnabled: true,
+  policyText: "COD available",
+  autoConfirmOrders: false,
+  shippingFee: { amountMinor: 20000, currency: "PKR" as const },
+};
 
 beforeEach(() => vi.mocked(apiFetch).mockReset());
 

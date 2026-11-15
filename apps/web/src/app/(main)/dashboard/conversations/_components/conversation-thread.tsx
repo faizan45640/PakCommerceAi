@@ -47,10 +47,13 @@ export function ConversationThread({
   onConversationUpdated,
   refreshTick = 0,
   renderBuyerReply,
+  renderApproval,
 }: {
   conversationId?: string;
   /** Dev/demo: a "reply as the buyer" box under the thread (the buyer simulator). */
   renderBuyerReply?: (conversation: Conversation) => React.ReactNode;
+  /** Rendered above the composer when set; the parent decides when it has something to show. */
+  renderApproval?: (conversation: Conversation) => React.ReactNode;
   /** Bumped by the parent (for example the buyer simulator) to pull in new messages quietly. */
   refreshTick?: number;
   /** Called with the conversation returned by mark-as-read so the inbox row updates. */
@@ -352,6 +355,8 @@ export function ConversationThread({
             ))
           )}
         </div>
+
+        {renderApproval?.(conversation)}
 
         {conversation.state === "human_takeover" ? (
           <form
