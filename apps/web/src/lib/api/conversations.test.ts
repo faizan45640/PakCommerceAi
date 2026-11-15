@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch } from "./api-client";
-import { buildConversationListSearchParams, fetchConversations } from "./conversations";
+import {
+  buildConversationListSearchParams,
+  fetchConversationById,
+  fetchConversations,
+  fetchMessages,
+  markConversationRead,
+} from "./conversations";
 
 vi.mock("./api-client", () => ({ apiFetch: vi.fn() }));
 
@@ -44,5 +50,29 @@ describe("fetchConversations", () => {
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations?workspaceId=w1&states=open");
     expect(result.items).toEqual([{ id: "c1" }]);
     expect(result.nextCursor).toBe("next");
+  });
+});
+
+describe("thread endpoints", () => {
+  beforeEach(() => vi.mocked(apiFetch).mockReset());
+
+  it("fetches one conversation and unwraps data", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ data: { id: "c1" } });
+    await expect(fetchConversationById("w1", "c1")).resolves.toEqual({ id: "c1" });
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/c1?workspaceId=w1");
+  });
+
+  it("pages messages with the cursor", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ data: [{ id: "m1" }], meta: {}, nextCursor: null });
+    const result = await fetchMessages("c1", { workspaceId: "w1", limit: 50, cursor: "old" });
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/c1/messages?workspaceId=w1&limit=50&cursor=old");
+    expect(result).toEqual({ items: [{ id: "m1" }], nextCursor: null });
+  });
+
+  it("posts mark-as-read", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ data: { id: "c1", unreadCount: 0 } });
+    const conversation = await markConversationRead("w1", "c1");
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/c1/read?workspaceId=w1", { method: "POST" });
+    expect(conversation.unreadCount).toBe(0);
   });
 });

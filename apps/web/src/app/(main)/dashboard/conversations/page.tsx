@@ -6,7 +6,7 @@ import { AgentConfidenceIndicator } from "./_components/agent-confidence-indicat
 import { AgentKpiStrip } from "./_components/agent-kpi-strip";
 import { AgentSettings } from "./_components/agent-settings";
 import { ConversationInbox } from "./_components/conversation-inbox";
-import { ConversationTranscript } from "./_components/conversation-transcript";
+import { ConversationThread } from "./_components/conversation-thread";
 import { TopCustomerQuestions } from "./_components/top-customer-questions";
 
 interface ConversationsPageProps {
@@ -43,7 +43,7 @@ export default async function ConversationsPage({ searchParams }: ConversationsP
               <ConversationInbox selectedId={selectedId} />
             </div>
             <div className="xl:col-span-7">
-              <ConversationTranscript />
+              <ConversationThread key={selectedId ?? "none"} conversationId={selectedId} />
             </div>
           </div>
         </TabsContent>
