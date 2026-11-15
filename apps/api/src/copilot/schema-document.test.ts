@@ -84,11 +84,8 @@ function migrationTables(): Set<string> {
  * Tables the copilot deliberately does not expose to its SQL tools.
  * `copilot_chats` is the chat transcript itself — conversation data, not
  * seller business data, so the model never needs to write SQL against it.
- * `conversations` and `messages` hold WhatsApp buyer text: untrusted input
- * (a buyer can write instructions aimed at the model), so Rafiq is not told
- * about them. The inbox reads them through its own API.
  */
-const NOT_EXPOSED_TABLES = new Set(["copilot_chats", "conversations", "messages"]);
+const NOT_EXPOSED_TABLES = new Set(["copilot_chats"]);
 
 describe("SCHEMA_DOCUMENT", () => {
   it("mentions every queryable table", () => {

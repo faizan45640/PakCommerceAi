@@ -242,6 +242,30 @@ describe("messages write rules", () => {
     });
   });
 
+  it("a seller cannot choose provider_message_id or created_at", async () => {
+    await withRollback(client, async () => {
+      const alice = await sellerWithThread("alice");
+      for (const column of ["provider_message_id", "created_at"]) {
+        const value = column === "created_at" ? "'2000-01-01'" : "'SMforged'";
+        const error = await rejection(() =>
+          asUser(client, alice.seller.userId, () =>
+            client.query(
+              `insert into public.messages
+                 (workspace_id, seller_id, conversation_id, direction, sender, body, status, ${column})
+               values ($1, $2, $3, 'outbound', 'seller', 'x', 'queued', ${value})`,
+              [
+                alice.seller.workspaceId,
+                alice.seller.sellerId,
+                alice.conversationId,
+              ],
+            ),
+          ),
+        );
+        expect(error.message, column).toMatch(/permission denied/);
+      }
+    });
+  });
+
   it("a seller cannot write into another seller's conversation", async () => {
     await withRollback(client, async () => {
       const alice = await sellerWithThread("alice");
@@ -340,6 +364,20 @@ describe("anon and RPC access", () => {
 describe("copilot mutateDatabase guards", () => {
   const mutation = (sql: string) =>
     client.query(`select public.run_guarded_mutation($1) as result`, [sql]);
+
+  it("customer writes are refused by the customers guard, never by a nested conversations write", async () => {
+    await withRollback(client, async () => {
+      const alice = await sellerWithThread("alice");
+      const customer = `insert into public.customers (workspace_id, seller_id, name, phone, city)
+           values ('${alice.seller.workspaceId}', '${alice.seller.sellerId}', 'Ayesha', '+923001234567', 'Lahore')`;
+      const error = await rejection(() =>
+        asUser(client, alice.seller.userId, () => mutation(customer)),
+      );
+      // The refusal names customers: the back-link write into conversations is
+      // never reached, and would not trip the guard if it were (trigger depth 2).
+      expect(error.message).toMatch(/copilot_mutation_refused: customers/);
+    });
+  });
 
   it("cannot write conversations or messages", async () => {
     await withRollback(client, async () => {

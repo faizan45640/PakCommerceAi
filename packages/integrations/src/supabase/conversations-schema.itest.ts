@@ -520,6 +520,69 @@ describe("ingest_inbound_message", () => {
   it.each([
     [true, "ai_active"],
     [false, "open"],
+  ])("a new thread starts with ai enabled = %s -> %s", async (ai, expected) => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(
+        client,
+        `ing-newstate-${expected.replace("_", "")}`,
+      );
+      const result = await ingest(seller, { sid: "SMn", ai });
+      expect(result.state).toBe(expected);
+      expect((await conversation(result.conversation_id)).state).toBe(expected);
+    });
+  });
+
+  it("an existing open thread is not switched to the agent by a later message", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "ing-stays-open");
+      const first = await ingest(seller, { sid: "SMa", ai: false });
+      const second = await ingest(seller, { sid: "SMb", ai: true });
+      expect(second.state).toBe("open");
+      expect((await conversation(first.conversation_id)).state).toBe("open");
+    });
+  });
+
+  it("relinks a customer created after the thread, and one the backlink missed", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "ing-relink");
+      const first = await ingest(seller, { sid: "SMa" });
+      expect(
+        (await conversation(first.conversation_id)).customer_id,
+      ).toBeNull();
+
+      const customerId = await insertCustomer(seller, "+923001234567");
+      expect((await conversation(first.conversation_id)).customer_id).toBe(
+        customerId,
+      );
+
+      await client.query(`delete from public.customers where id = $1`, [
+        customerId,
+      ]);
+      expect(
+        (await conversation(first.conversation_id)).customer_id,
+      ).toBeNull();
+
+      // A customer the backlink trigger never saw is picked up by the next message.
+      await client.query(
+        `alter table public.customers disable trigger customers_link_conversations`,
+      );
+      const recreated = await insertCustomer(seller, "+923001234567");
+      await client.query(
+        `alter table public.customers enable trigger customers_link_conversations`,
+      );
+      expect(
+        (await conversation(first.conversation_id)).customer_id,
+      ).toBeNull();
+      await ingest(seller, { sid: "SMb" });
+      expect((await conversation(first.conversation_id)).customer_id).toBe(
+        recreated,
+      );
+    });
+  });
+
+  it.each([
+    [true, "ai_active"],
+    [false, "open"],
   ])(
     "a closed conversation reopens (ai enabled = %s -> %s)",
     async (ai, expected) => {
@@ -675,6 +738,33 @@ describe("message constraints", () => {
       await insertMessage(seller, id, {
         body: "a".repeat(4096),
         media: Array(10).fill(media),
+      });
+    });
+  });
+
+  it("every media entry needs an https url and a contentType", async () => {
+    await withRollback(client, async () => {
+      const seller = await createSeller(client, "msg-media-url");
+      const id = await insertConversation(seller);
+      const bad = [
+        { url: "javascript:alert(1)", contentType: "image/png" },
+        { url: "data:text/html;base64,AAAA", contentType: "image/png" },
+        { url: "http://x.test/a", contentType: "image/png" },
+        { url: "https://x.test/a" },
+        { url: "https://x.test/a", contentType: 5 },
+        { contentType: "image/png" },
+      ];
+      for (const entry of bad) {
+        const error = await rejection(() =>
+          insertMessage(seller, id, { body: "hi", media: [entry] }),
+        );
+        expect(error.message, JSON.stringify(entry)).toMatch(
+          /messages_media_valid/,
+        );
+      }
+      await insertMessage(seller, id, {
+        body: "hi",
+        media: [{ url: "https://x.test/a", contentType: "image/png" }],
       });
     });
   });

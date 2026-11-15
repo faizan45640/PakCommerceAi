@@ -102,7 +102,7 @@ create table public.conversations (
 );
 
 create index conversations_workspace_last_message_idx
-  on public.conversations (workspace_id, last_message_at desc nulls last);
+  on public.conversations (workspace_id, last_message_at desc nulls last, id desc);
 create index conversations_seller_id_idx on public.conversations (seller_id);
 -- Serves the ON DELETE SET NULL action when a customer is deleted.
 create index conversations_customer_id_idx
@@ -229,10 +229,34 @@ create trigger customers_link_conversations
   after insert on public.customers
   for each row execute function public.link_customer_to_conversations();
 
--- Conversations are written by the inbox, never by the copilot's free-form SQL tool.
+-- Conversations and messages are written by the inbox, never by the copilot's
+-- free-form SQL tool. Same rule as refuse_copilot_mutation(), but it only judges
+-- the statement the copilot itself ran (trigger depth 1). Writes made by our own
+-- triggers (the customers backlink, the messages summary) sit at depth 2 and the
+-- ON DELETE SET NULL action fires no statement trigger at all; without this, a
+-- copilot customer insert would fail on a conversations error.
+create or replace function public.refuse_copilot_inbox_mutation()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if pg_trigger_depth() <= 1
+     and coalesce(current_setting('pakcommerce.copilot_mutation', true), '') = 'on' then
+    raise exception
+      'copilot_mutation_refused: % cannot be changed through mutateDatabase', tg_table_name
+      using errcode = 'insufficient_privilege',
+            hint = 'Conversations and messages are managed by the WhatsApp inbox.';
+  end if;
+  return null;
+end;
+$$;
+
+revoke all on function public.refuse_copilot_inbox_mutation() from public, anon, authenticated;
+
 create trigger conversations_refuse_copilot_mutation
   before insert or update or delete on public.conversations
-  for each statement execute function public.refuse_copilot_mutation();
+  for each statement execute function public.refuse_copilot_inbox_mutation();
 
 revoke all on public.conversations from anon, authenticated;
 grant select on public.conversations to authenticated;
@@ -291,6 +315,15 @@ create table public.messages (
          then jsonb_array_length(media) <= 10
          else false end
   ),
+  -- Every attachment is an https URL with a content type (no javascript:, data:, http:).
+  constraint messages_media_valid check (
+    case when jsonb_typeof(media) = 'array'
+         then jsonb_array_length(jsonb_path_query_array(
+                media,
+                '$[*] ? (@.url.type() == "string" && @.url like_regex "^https://" && @.contentType.type() == "string" && @.contentType like_regex ".")'
+              )) = jsonb_array_length(media)
+         else false end
+  ),
   constraint messages_has_content check (
     (body is not null and btrim(body) <> '')
     or case when jsonb_typeof(media) = 'array'
@@ -312,6 +345,9 @@ create unique index messages_workspace_provider_message_key
   where provider_message_id is not null;
 create index messages_conversation_created_idx
   on public.messages (conversation_id, created_at desc);
+-- Provider status callbacks identify a message by its SID alone.
+create index messages_provider_message_id_idx
+  on public.messages (provider_message_id) where provider_message_id is not null;
 create index messages_seller_id_idx on public.messages (seller_id);
 
 comment on table public.messages is
@@ -380,10 +416,14 @@ create trigger messages_update_conversation
 
 create trigger messages_refuse_copilot_mutation
   before insert or update or delete on public.messages
-  for each statement execute function public.refuse_copilot_mutation();
+  for each statement execute function public.refuse_copilot_inbox_mutation();
 
 revoke all on public.messages from anon, authenticated;
-grant select, insert on public.messages to authenticated;
+grant select on public.messages to authenticated;
+-- Column-level: a seller supplies the content only. provider_message_id, status
+-- (checked by the policy) and created_at are never the seller's to choose.
+grant insert (workspace_id, seller_id, conversation_id, direction, sender, body, media, status)
+  on public.messages to authenticated;
 grant all on public.messages to service_role;
 
 alter table public.messages enable row level security;
@@ -402,6 +442,7 @@ create policy messages_insert_seller_reply
     and direction = 'outbound'
     and sender = 'seller'
     and status = 'queued'
+    and provider_message_id is null
   );
 
 -- ---------------------------------------------------------------------------
@@ -466,10 +507,18 @@ begin
     end if;
   end if;
 
-  insert into public.conversations as c (workspace_id, seller_id, buyer_phone, buyer_name)
-  values (p_workspace_id, v_seller_id, p_buyer_phone, p_buyer_name)
+  -- A new thread starts with the agent when it is enabled. An existing thread
+  -- keeps its state (excluded.state is ignored on conflict).
+  -- excluded.customer_id is the customer lookup made by the BEFORE INSERT
+  -- trigger, so an existing thread picks up a customer created since.
+  insert into public.conversations as c (workspace_id, seller_id, buyer_phone, buyer_name, state)
+  values (
+    p_workspace_id, v_seller_id, p_buyer_phone, p_buyer_name,
+    case when p_ai_enabled then 'ai_active' else 'open' end::public.conversation_state
+  )
   on conflict (workspace_id, channel, buyer_phone) do update
-    set buyer_name = coalesce(nullif(btrim(excluded.buyer_name), ''), c.buyer_name)
+    set buyer_name = coalesce(nullif(btrim(excluded.buyer_name), ''), c.buyer_name),
+        customer_id = coalesce(c.customer_id, excluded.customer_id)
   returning c.id, c.state into v_conversation_id, v_state;
 
   -- Live states keep their state; a closed thread reopens (stateAfterBuyerMessage).
