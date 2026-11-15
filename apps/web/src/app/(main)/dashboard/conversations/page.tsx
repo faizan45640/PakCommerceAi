@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +9,8 @@ import { ConversationsSplitView } from "./_components/conversations-split-view";
 import { ConversationTranscript } from "./_components/conversation-transcript";
 import { TopCustomerQuestions } from "./_components/top-customer-questions";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface ConversationsPageProps {
   searchParams: Promise<{ c?: string | string[] }>;
 }
@@ -18,7 +18,7 @@ interface ConversationsPageProps {
 export default async function ConversationsPage({ searchParams }: ConversationsPageProps) {
   const { c } = await searchParams;
   const candidate = (Array.isArray(c) ? c[0] : c)?.trim();
-  const selectedId = candidate && z.uuid().safeParse(candidate).success ? candidate : undefined;
+  const selectedId = candidate && UUID_PATTERN.test(candidate) ? candidate : undefined;
 
   return (
     <div className="flex flex-col gap-4">
