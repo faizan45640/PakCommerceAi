@@ -452,7 +452,7 @@ was read); `404` when not found or not yours.
 ### `POST /api/v1/conversations/mock-inbound`
 
 Fakes a Twilio inbound WhatsApp message so the inbox can be demoed before Twilio is connected.
-Returns `404` unless `ENABLE_MOCK_INBOUND` is on (default in development/test; explicit in production, see RUNBOOK).
+Returns `409` while a real WhatsApp provider (Meta/Twilio) is connected (simulator only). Returns `404` unless `ENABLE_MOCK_INBOUND` is on (default in development/test; explicit in production, see RUNBOOK).
 
 ```json
 {
@@ -474,8 +474,33 @@ are optional (up to 10, https URLs only). `Body` up to 4096 characters; a messag
 The caller must own `workspaceId` (checked with their own token before any write; otherwise `404`).
 
 `201` (new) or `200` (duplicate): `{ data: { conversationId, messageId, duplicate, state } }`.
-`state` is the thread state after ingest: a new thread starts `ai_active` when `aiEnabled`, else
-`open`; a closed thread reopens; live threads keep their state.
+`state` is the thread state after ingest: a new thread starts `ai_active` when AI replies are on, else
+`open`; a closed thread reopens; live threads keep their state. `aiEnabled` is optional: when omitted
+the workspace's sales agent setting is used (below).
+
+### AI reply pipeline
+
+After a **new** (non-duplicate) inbound message is stored in an `ai_active` conversation, the API runs
+an agent turn in the background (the webhook/mock response does not wait). Turns for one conversation
+run one at a time, in order. A turn calls `POST ${ML_URL}/agent/respond` (Bearer `AGENT_SERVICE_TOKEN`,
+45 s timeout) with the message, the last 20 messages (role and text only, no phones) and the policy text.
+The reply is sent through the active WhatsApp provider (`WHATSAPP_PROVIDER=simulator` fakes it) and stored
+as an outbound `ai` message (`sent`, or `failed`); it is dropped if the state is no longer `ai_active`.
+`handoff.required`, an unreachable or invalid agent, or missing config moves the conversation
+`ai_active -> human_takeover` with a short `handoffReason` (for example "Buyer wants to order",
+"AI unavailable"); a reply that comes with a handoff is sent first.
+
+### `GET /api/v1/sales-agent/settings?workspaceId=`
+
+`{ data: { workspaceId, aiEnabled, policyText } }`. Defaults (`false`, `""`) when never saved.
+`404` for a workspace that is not yours.
+
+### `PUT /api/v1/sales-agent/settings`
+
+Body `{ "workspaceId": "uuid", "aiEnabled": true, "policyText": "up to 4000 chars" }`. Returns the saved
+settings. Saving `aiEnabled: false` also moves every `ai_active` conversation of the workspace to `open` (as the seller). `aiEnabled` decides whether new and reopened conversations start `ai_active`; `policyText`
+(delivery, returns, payment/COD) is the only policy text the agent may quote. `400` on invalid input, `404` for
+a foreign workspace.
 
 ---
 

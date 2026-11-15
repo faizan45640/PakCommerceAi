@@ -270,3 +270,28 @@ export const aiActivitySchema = z.object({
 
 export type AiActivityToolCall = z.infer<typeof aiActivityToolCallSchema>;
 export type AiActivity = z.infer<typeof aiActivitySchema>;
+
+// ---------------------------------------------------------------------------
+// Sales agent settings (T-079). One row per workspace.
+// ---------------------------------------------------------------------------
+
+export const MAX_POLICY_TEXT_LENGTH = 4000;
+
+/** What `GET /api/v1/sales-agent/settings` returns. `policyText` is "" when none is set. */
+export const salesAgentSettingsSchema = z.object({
+  workspaceId: z.uuid(),
+  /** New and reopened conversations start with the AI answering. */
+  aiEnabled: z.boolean(),
+  /** Delivery times, returns, payment/COD. The agent may only quote this. */
+  policyText: z.string().max(MAX_POLICY_TEXT_LENGTH),
+});
+
+/** Body of `PUT /api/v1/sales-agent/settings`. */
+export const salesAgentSettingsInputSchema = z.object({
+  workspaceId: z.uuid(),
+  aiEnabled: z.boolean(),
+  policyText: z.string().max(MAX_POLICY_TEXT_LENGTH).default(""),
+});
+
+export type SalesAgentSettings = z.infer<typeof salesAgentSettingsSchema>;
+export type SalesAgentSettingsInput = z.input<typeof salesAgentSettingsInputSchema>;

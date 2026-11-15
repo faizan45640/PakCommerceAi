@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createApp } from "./app.js";
+import { startAgentSweep } from "./sales-agent/pipeline.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,4 +17,5 @@ const port = Number(process.env.API_PORT ?? process.env.PORT) || 4000;
 
 createApp().listen(port, () => {
   console.log(`API running at http://localhost:${port}`);
+  startAgentSweep();
 });

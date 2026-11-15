@@ -10,5 +10,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
+    // Inbound tests must not start background agent turns. pipeline.test.ts passes its own env.
+    env: { SALES_AGENT_PIPELINE: "off" },
   },
 });

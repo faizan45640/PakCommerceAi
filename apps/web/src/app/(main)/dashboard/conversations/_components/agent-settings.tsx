@@ -1,17 +1,75 @@
 // agent-settings.tsx
 "use client";
 
-import {Settings } from "lucide-react";
+import * as React from "react";
+import { Settings } from "lucide-react";
+import { MAX_POLICY_TEXT_LENGTH } from "@pakcommerce/shared/conversations";
+import { toast } from "sonner";
 
-//import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { ApiRequestError } from "@/lib/api/api-client";
+import { fetchCurrentWorkspace } from "@/lib/api/products";
+import { fetchSalesAgentSettings, saveSalesAgentSettings } from "@/lib/api/sales-agent";
+
+const POLICY_PLACEHOLDER = `Delivery: Lahore 2-3 days, other cities 4-6 days. Charges Rs 200, free above Rs 5000.
+Returns: 7 days if unused and in original packing.
+Payment: Cash on delivery available; bank transfer and JazzCash accepted.`;
 
 export function AgentSettings() {
+  const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
+  const [aiEnabled, setAiEnabled] = React.useState(false);
+  const [policyText, setPolicyText] = React.useState("");
+  const [saved, setSaved] = React.useState({ aiEnabled: false, policyText: "" });
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const workspace = await fetchCurrentWorkspace();
+        const settings = await fetchSalesAgentSettings(workspace.id);
+        if (cancelled) return;
+        setWorkspaceId(workspace.id);
+        setAiEnabled(settings.aiEnabled);
+        setPolicyText(settings.policyText);
+        setSaved({ aiEnabled: settings.aiEnabled, policyText: settings.policyText });
+      } catch (error) {
+        if (!cancelled) setLoadError(error instanceof ApiRequestError ? error.message : "Could not load settings.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dirty = aiEnabled !== saved.aiEnabled || policyText.trim() !== saved.policyText.trim();
+  const canSave = !!workspaceId && dirty && !saving && !loading;
+
+  async function save() {
+    if (!workspaceId) return;
+    setSaving(true);
+    try {
+      const next = await saveSalesAgentSettings({ workspaceId, aiEnabled, policyText });
+      setAiEnabled(next.aiEnabled);
+      setPolicyText(next.policyText);
+      setSaved({ aiEnabled: next.aiEnabled, policyText: next.policyText });
+      toast.success("Agent settings saved");
+    } catch (error) {
+      toast.error(error instanceof ApiRequestError ? error.message : "Could not save settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -19,54 +77,53 @@ export function AgentSettings() {
           <Settings className="size-4 text-muted-foreground" />
           Agent Settings
         </CardTitle>
-        <CardAction className="flex items-center gap-1 text-muted-foreground text-xs">
-          <Button size="sm" className="h-7 text-xs">
-            Save Changes
+        <CardAction>
+          <Button size="sm" className="h-7 text-xs" disabled={!canSave} onClick={save}>
+            {saving ? "Saving..." : "Save Changes"}
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="auto-respond" className="text-sm">Auto-respond to new messages</Label>
-            <Switch id="auto-respond" defaultChecked />
+        {loadError ? <p className="text-destructive text-xs">{loadError}</p> : null}
+
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Label htmlFor="ai-replies" className="text-sm">
+              AI replies
+            </Label>
+            <p className="text-muted-foreground text-xs">
+              New and reopened conversations are answered by the AI. It hands over to you when unsure.
+            </p>
           </div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="create-draft" className="text-sm">Auto-create draft orders</Label>
-            <Switch id="create-draft" defaultChecked />
-          </div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="handoff-alerts" className="text-sm">Enable human handoff alerts</Label>
-            <Switch id="handoff-alerts" defaultChecked />
-          </div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="confidence-track" className="text-sm">Track confidence scores</Label>
-            <Switch id="confidence-track" defaultChecked />
-          </div>
+          <Switch
+            id="ai-replies"
+            checked={aiEnabled}
+            onCheckedChange={setAiEnabled}
+            disabled={loading || !!loadError}
+          />
         </div>
 
         <Separator />
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm">Confidence threshold</Label>
-              <div className="text-xs text-muted-foreground">Minimum confidence for auto-approval</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input type="number" defaultValue={75} className="w-16 h-8 text-center" />
-              <span className="text-sm text-muted-foreground">%</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm">Max auto-approval amount</Label>
-              <div className="text-xs text-muted-foreground">Maximum order value for auto-approval</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">$</span>
-              <Input type="number" defaultValue={200} className="w-20 h-8 text-center" />
-            </div>
+          <Label htmlFor="store-policy" className="text-sm">
+            Store policy
+          </Label>
+          <p className="text-muted-foreground text-xs">
+            Delivery times, returns, payment and COD. The AI only quotes this text; without it, policy questions go
+            to you.
+          </p>
+          <Textarea
+            id="store-policy"
+            rows={8}
+            maxLength={MAX_POLICY_TEXT_LENGTH}
+            placeholder={POLICY_PLACEHOLDER}
+            value={policyText}
+            onChange={(event) => setPolicyText(event.target.value)}
+            disabled={loading || !!loadError}
+          />
+          <div className="text-right text-muted-foreground text-xs">
+            {policyText.length}/{MAX_POLICY_TEXT_LENGTH}
           </div>
         </div>
       </CardContent>

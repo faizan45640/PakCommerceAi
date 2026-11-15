@@ -38,7 +38,7 @@ conversationRouter.post("/:id/messages", async (request, response, next) => {
     const active = getActiveWhatsApp();
     // Spike-only: the one connected number belongs to one workspace. Any other
     // workspace (even the caller's own) must not send through it.
-    if (!active || input.workspaceId !== active.workspaceId) {
+    if (!active || (active.workspaceId !== null && input.workspaceId !== active.workspaceId)) {
       throw new NotFoundError("WhatsApp is not connected.");
     }
 

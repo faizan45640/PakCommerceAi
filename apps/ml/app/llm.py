@@ -34,6 +34,13 @@ def _require(env: Mapping[str, str], key: str) -> str:
     return value
 
 
+def _deepseek_thinking(env: Mapping[str, str]) -> str:
+    value = (env.get("DEEPSEEK_THINKING") or "disabled").strip().lower()
+    if value not in ("enabled", "disabled"):
+        raise LLMConfigError("DEEPSEEK_THINKING must be 'enabled' or 'disabled'.")
+    return value
+
+
 def get_chat_model(
     env: Mapping[str, str] | None = None, *, temperature: float = 0.2
 ) -> BaseChatModel:
@@ -53,6 +60,10 @@ def get_chat_model(
             api_key=_require(env, "DEEPSEEK_API_KEY"),
             api_base=(env.get("DEEPSEEK_BASE_URL") or "").strip() or DEEPSEEK_BASE_URL,
             temperature=temperature,
+            # DeepSeek V4 models think by default, and thinking mode rejects the
+            # forced tool_choice that structured output uses. The agent's steps are
+            # short classify/answer calls, so thinking stays off unless asked for.
+            extra_body={"thinking": {"type": _deepseek_thinking(env)}},
         )
     if provider == "google":
         from langchain_google_genai import ChatGoogleGenerativeAI
