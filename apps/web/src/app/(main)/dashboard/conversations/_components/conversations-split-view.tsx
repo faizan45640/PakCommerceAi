@@ -4,6 +4,7 @@ import * as React from "react";
 
 import type { Conversation } from "@pakcommerce/shared/conversations";
 
+import { BuyerSimulator } from "./buyer-simulator";
 import { ConversationCustomerPanel } from "./conversation-customer-panel";
 import { ConversationInbox } from "./conversation-inbox";
 import { ConversationThread } from "./conversation-thread";
@@ -12,25 +13,32 @@ import { ConversationThread } from "./conversation-thread";
 export function ConversationsSplitView({ selectedId }: { selectedId?: string }) {
   // A row the thread changed (marked read); the inbox swaps it in.
   const [updated, setUpdated] = React.useState<Conversation | null>(null);
+  // Bumped by the buyer simulator while it waits for the AI, so inbox and thread reload quietly.
+  const [refreshTick, setRefreshTick] = React.useState(0);
+  const bumpRefresh = React.useCallback(() => setRefreshTick((tick) => tick + 1), []);
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-      <div className="xl:col-span-4">
-        <ConversationInbox selectedId={selectedId} updatedConversation={updated} />
-      </div>
-      <div className="xl:col-span-5">
-        <ConversationThread
-          key={selectedId ?? "none"}
-          conversationId={selectedId}
-          onConversationUpdated={setUpdated}
-        />
-      </div>
-      <div className="xl:col-span-3">
-        <ConversationCustomerPanel
-          key={selectedId ?? "none"}
-          conversationId={selectedId}
-          updatedConversation={updated}
-        />
+    <div className="flex flex-col gap-4">
+      <BuyerSimulator onActivity={bumpRefresh} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-4">
+          <ConversationInbox selectedId={selectedId} updatedConversation={updated} refreshTick={refreshTick} />
+        </div>
+        <div className="xl:col-span-5">
+          <ConversationThread
+            key={selectedId ?? "none"}
+            conversationId={selectedId}
+            onConversationUpdated={setUpdated}
+            refreshTick={refreshTick}
+          />
+        </div>
+        <div className="xl:col-span-3">
+          <ConversationCustomerPanel
+            key={selectedId ?? "none"}
+            conversationId={selectedId}
+            updatedConversation={updated}
+          />
+        </div>
       </div>
     </div>
   );

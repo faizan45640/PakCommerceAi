@@ -1,4 +1,4 @@
-import type { Conversation, ConversationState, Message } from "@pakcommerce/shared/conversations";
+import type { AiActivity, Conversation, ConversationState, Message } from "@pakcommerce/shared/conversations";
 import type { ApiDataResponse, ApiListResponse } from "@pakcommerce/shared/api";
 
 import { apiFetch } from "./api-client";
@@ -102,6 +102,35 @@ export async function sendConversationMessage(workspaceId: string, id: string, b
   const response = await apiFetch<ApiDataResponse<Message>>(`/api/v1/conversations/${encodeURIComponent(id)}/messages`, {
     method: "POST",
     body: JSON.stringify({ workspaceId, body }),
+  });
+  return response.data;
+}
+
+/** What the AI did in this conversation: state, handoff reason, last reply and recent tool calls. */
+export async function fetchAiActivity(workspaceId: string, id: string): Promise<AiActivity> {
+  const response = await apiFetch<ApiDataResponse<AiActivity>>(
+    `/api/v1/conversations/${encodeURIComponent(id)}/ai-activity?${new URLSearchParams({ workspaceId }).toString()}`,
+  );
+  return response.data;
+}
+
+export interface MockInboundResult {
+  conversationId: string;
+  messageId: string;
+  duplicate: boolean;
+  state: ConversationState;
+}
+
+/** Dev/demo: posts a fake buyer message. Rejects with a 404 `ApiRequestError` when mock inbound is disabled. */
+export async function sendMockInbound(payload: {
+  workspaceId: string;
+  From: string;
+  ProfileName?: string;
+  Body: string;
+}): Promise<MockInboundResult> {
+  const response = await apiFetch<ApiDataResponse<MockInboundResult>>("/api/v1/conversations/mock-inbound", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
   return response.data;
 }

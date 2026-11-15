@@ -19,6 +19,7 @@ import {
 import { fetchCurrentWorkspace } from "@/lib/api/products";
 import { cn } from "@/lib/utils";
 
+import { AiStatusStrip } from "./ai-status-strip";
 import {
   CONVERSATION_STATE_LABELS,
   CONVERSATION_STATE_TONES,
@@ -30,6 +31,7 @@ import {
   MESSAGE_STATUS_LABELS,
   availableStateActions,
   bubbleSide,
+  appendNewer,
   groupByDay,
   mediaChip,
   messageTime,
@@ -43,8 +45,11 @@ const PAGE_SIZE = 50;
 export function ConversationThread({
   conversationId,
   onConversationUpdated,
+  refreshTick = 0,
 }: {
   conversationId?: string;
+  /** Bumped by the parent (for example the buyer simulator) to pull in new messages quietly. */
+  refreshTick?: number;
   /** Called with the conversation returned by mark-as-read so the inbox row updates. */
   onConversationUpdated?: (conversation: Conversation) => void;
 }) {
@@ -117,6 +122,31 @@ export function ConversationThread({
       ignore = true;
     };
   }, [conversationId, reloadKey]);
+
+  // Quiet refresh (no spinner): new messages and the latest state, when the parent asks.
+  React.useEffect(() => {
+    if (refreshTick === 0 || !conversationId || !workspaceId) return;
+    let ignore = false;
+    Promise.all([
+      fetchConversationById(workspaceId, conversationId),
+      fetchMessages(conversationId, { workspaceId, limit: PAGE_SIZE }),
+    ])
+      .then(([fresh, page]) => {
+        if (ignore) return;
+        setConversation(fresh);
+        setMessages((current) => appendNewer(current, page.items));
+        requestAnimationFrame(() => {
+          const el = scrollRef.current;
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      })
+      .catch(() => {
+        // Best effort; the next tick tries again.
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [refreshTick, conversationId, workspaceId]);
 
   async function changeState(to: ConversationState) {
     if (!conversationId || !workspaceId || pendingState) return;
@@ -260,6 +290,13 @@ export function ConversationThread({
             className="normal-case"
           />
         </CardTitle>
+        {workspaceId ? (
+          <AiStatusStrip
+            workspaceId={workspaceId}
+            conversation={conversation}
+            refreshKey={`${reloadKey}:${conversation.state}:${conversation.lastMessageSender ?? ""}:${messages.at(-1)?.id ?? ""}`}
+          />
+        ) : null}
         <div className="flex flex-wrap items-center gap-2" aria-label="Conversation controls">
           {availableStateActions(conversation.state).map((action) => (
             <Button
@@ -377,10 +414,14 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={cn("flex max-w-[80%] flex-col gap-0.5", side === "left" ? "items-start" : "items-end self-end")}>
-      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-        {isAi ? <Bot className="size-3" /> : null}
-        {MESSAGE_SENDER_LABELS[message.sender]}
-      </span>
+      {isAi ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 font-medium text-[10px] text-primary">
+          <Bot className="size-3" />
+          AI
+        </span>
+      ) : (
+        <span className="text-[10px] text-muted-foreground">{MESSAGE_SENDER_LABELS[message.sender]}</span>
+      )}
       <div
         className={cn(
           "flex flex-col gap-1.5 rounded-lg px-3 py-2 text-sm",

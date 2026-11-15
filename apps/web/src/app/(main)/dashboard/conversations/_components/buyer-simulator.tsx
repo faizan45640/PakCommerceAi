@@ -1,0 +1,202 @@
+"use client";
+
+import * as React from "react";
+
+import { usePathname, useRouter } from "next/navigation";
+import { ChevronDown, FlaskConical } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ApiRequestError } from "@/lib/api/api-client";
+import { fetchConversationById, fetchMessages, sendMockInbound } from "@/lib/api/conversations";
+import { fetchCurrentWorkspace } from "@/lib/api/products";
+
+import {
+  SIMULATOR_DEFAULT_NAME,
+  SIMULATOR_DEFAULT_PHONE,
+  SIMULATOR_POLL_INTERVAL_MS,
+  aiReplyArrived,
+  buildMockInboundPayload,
+  shouldStopPolling,
+  validateSimulatorForm,
+} from "./buyer-simulator-model";
+
+const fieldClass =
+  "w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * Dev/demo tool: posts a fake buyer message through the mock inbound endpoint,
+ * selects the conversation, and polls so the AI reply shows up on its own.
+ * Hidden when the API reports mock inbound as disabled (404).
+ */
+export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [open, setOpen] = React.useState(false);
+  const [phone, setPhone] = React.useState(SIMULATOR_DEFAULT_PHONE);
+  const [name, setName] = React.useState(SIMULATOR_DEFAULT_NAME);
+  const [message, setMessage] = React.useState("");
+  const [isSending, setIsSending] = React.useState(false);
+  const [isWaiting, setIsWaiting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [disabled, setDisabled] = React.useState(false);
+  const pollTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runId = React.useRef(0);
+  const onActivityRef = React.useRef(onActivity);
+  React.useEffect(() => {
+    onActivityRef.current = onActivity;
+  });
+
+  React.useEffect(
+    () => () => {
+      runId.current += 1;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    },
+    [],
+  );
+
+  function poll(workspaceId: string, conversationId: string, inboundMessageId: string, startedAt: number, run: number) {
+    pollTimer.current = setTimeout(async () => {
+      if (run !== runId.current) return;
+      try {
+        const [conversation, page] = await Promise.all([
+          fetchConversationById(workspaceId, conversationId),
+          fetchMessages(conversationId, { workspaceId, limit: 10 }),
+        ]);
+        if (run !== runId.current) return;
+        onActivityRef.current();
+        const done = shouldStopPolling({
+          aiReplied: aiReplyArrived(page.items, inboundMessageId),
+          state: conversation.state,
+          elapsedMs: Date.now() - startedAt,
+        });
+        if (done) {
+          setIsWaiting(false);
+          return;
+        }
+      } catch {
+        if (shouldStopPolling({ aiReplied: false, state: "ai_active", elapsedMs: Date.now() - startedAt })) {
+          setIsWaiting(false);
+          return;
+        }
+      }
+      poll(workspaceId, conversationId, inboundMessageId, startedAt, run);
+    }, SIMULATOR_POLL_INTERVAL_MS);
+  }
+
+  async function send() {
+    if (isSending) return;
+    const problem = validateSimulatorForm({ phone, name, message });
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setIsSending(true);
+    setError(null);
+    runId.current += 1;
+    const run = runId.current;
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    setIsWaiting(false);
+    try {
+      const workspace = await fetchCurrentWorkspace();
+      const result = await sendMockInbound(buildMockInboundPayload(workspace.id, { phone, name, message }));
+      setMessage("");
+      router.replace(`${pathname}?c=${encodeURIComponent(result.conversationId)}`, { scroll: false });
+      onActivityRef.current();
+      if (result.state === "ai_active") {
+        setIsWaiting(true);
+        poll(workspace.id, result.conversationId, result.messageId, Date.now(), run);
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiRequestError && err.status === 404) {
+        setDisabled(true);
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Could not send the test message.");
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  if (disabled) return null;
+
+  return (
+    <Card className="border-dashed">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CardHeader>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="flex w-full items-center justify-between gap-2 text-left">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <FlaskConical className="size-4 text-muted-foreground" />
+                Test as a buyer
+              </CardTitle>
+              <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+            </button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent>
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void send();
+              }}
+            >
+              <p className="rounded-md bg-muted px-3 py-1.5 text-muted-foreground text-xs">
+                Simulator — not a real WhatsApp message. It goes through the same path as a buyer message.
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="flex flex-col gap-1 text-xs">
+                  Buyer phone
+                  <input
+                    className={fieldClass}
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    maxLength={32}
+                    inputMode="tel"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs">
+                  Buyer name
+                  <input
+                    className={fieldClass}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    maxLength={200}
+                  />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1 text-xs">
+                Message
+                <textarea
+                  className={`${fieldClass} resize-none`}
+                  rows={2}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  maxLength={4096}
+                  placeholder="Salam, do you have this in stock?"
+                />
+              </label>
+              <div className="flex items-center justify-between gap-2">
+                {error ? (
+                  <p role="alert" className="text-destructive text-xs">
+                    {error}
+                  </p>
+                ) : isWaiting ? (
+                  <p className="text-muted-foreground text-xs">Waiting for the AI to reply...</p>
+                ) : (
+                  <span />
+                )}
+                <Button type="submit" size="sm" disabled={isSending}>
+                  {isSending ? "Sending..." : "Send as buyer"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
+}

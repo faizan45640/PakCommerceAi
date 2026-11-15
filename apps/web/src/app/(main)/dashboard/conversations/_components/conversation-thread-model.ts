@@ -46,6 +46,13 @@ export function prependOlder(current: Message[], olderNewestFirst: Message[]): M
   return [...toChronological(olderNewestFirst).filter((message) => !known.has(message.id)), ...current];
 }
 
+/** Adds messages from a fresh first page (newest first) that the thread does not show yet, at the end. */
+export function appendNewer(current: Message[], freshNewestFirst: Message[]): Message[] {
+  const known = new Set(current.map((message) => message.id));
+  const added = toChronological(freshNewestFirst).filter((message) => !known.has(message.id));
+  return added.length === 0 ? current : [...current, ...added];
+}
+
 export interface MessageDay {
   key: string;
   label: string;

@@ -18,6 +18,7 @@ import {
   transitionConversationState,
   transitionConversationInputSchema,
 } from "./conversation-service.js";
+import { getAiActivity } from "./ai-activity.js";
 import { getActiveWhatsApp } from "../whatsapp/factory.js";
 import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "./mock-inbound.js";
 
@@ -131,6 +132,18 @@ conversationRouter.get("/:id/messages", async (request, response, next) => {
     const { items, meta, nextCursor } = await listMessages(auth, id, query);
 
     response.json({ data: items, meta, nextCursor });
+  } catch (error) {
+    next(error);
+  }
+});
+
+conversationRouter.get("/:id/ai-activity", async (request, response, next) => {
+  try {
+    const auth = sellerContext(request);
+    const id = parseOrThrow(idSchema, request.params.id, "conversation id");
+    const { workspaceId } = parseOrThrow(workspaceQuerySchema, request.query, "conversation query");
+
+    response.json({ data: await getAiActivity(auth, workspaceId, id) });
   } catch (error) {
     next(error);
   }

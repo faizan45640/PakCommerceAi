@@ -242,3 +242,31 @@ export type ConversationSearchQuery = z.input<typeof conversationSearchQuerySche
 export type ParsedConversationSearchQuery = z.output<typeof conversationSearchQuerySchema>;
 export type MessageListQuery = z.input<typeof messageListQuerySchema>;
 export type ParsedMessageListQuery = z.output<typeof messageListQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// AI activity for one conversation (T-080): what the agent did last, shown in
+// the thread. Never carries tool input.
+// ---------------------------------------------------------------------------
+
+export const AI_ACTIVITY_TOOL_CALL_LIMIT = 10;
+
+export const aiActivityToolCallSchema = z.object({
+  tool: z.string().min(1).max(100),
+  ok: z.boolean(),
+  errorCode: z.string().max(100).nullable(),
+  durationMs: z.int().nonnegative(),
+  at: conversationTimestampSchema,
+});
+
+export const aiActivitySchema = z.object({
+  state: conversationStateSchema,
+  handoffReason: z.string().max(500).nullable(),
+  stateChangedAt: conversationTimestampSchema,
+  lastAiMessageAt: conversationTimestampSchema.nullable(),
+  lastAiMessagePreview: z.string().max(CONVERSATION_PREVIEW_LENGTH).nullable(),
+  /** Newest first, at most `AI_ACTIVITY_TOOL_CALL_LIMIT`. */
+  recentToolCalls: z.array(aiActivityToolCallSchema).max(AI_ACTIVITY_TOOL_CALL_LIMIT),
+});
+
+export type AiActivityToolCall = z.infer<typeof aiActivityToolCallSchema>;
+export type AiActivity = z.infer<typeof aiActivitySchema>;
