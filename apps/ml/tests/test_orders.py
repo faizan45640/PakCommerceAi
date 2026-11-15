@@ -162,6 +162,27 @@ def types(out: dict[str, Any]) -> list[str]:
     return [e["type"] for e in out["orderEvents"]]
 
 
+def summary_call(variant: str = "v-m", qty: int = 2, **customer: Any) -> AIMessage:
+    cust = {**CUSTOMER, **customer}
+    return call(
+        "recordOrderSummary",
+        {"items": [{"variantId": variant, "quantity": qty}], "customer": cust},
+        "s1",
+    )
+
+
+SUMMARY_TEXT = "2 x Black Kurta (M) Rs 2500, Ali, Lahore, House 12 Gulberg. Order place karoon?"
+
+
+def show_summary(chat: Chat, **kw: Any) -> dict[str, Any]:
+    """Details turn: variants seen via checkInventory, then the summary is recorded and shown."""
+    return chat.say(
+        "medium 2, Ali Lahore House 12 Street 4 Gulberg",
+        "order_interest",
+        [call("checkInventory", {"productId": "p1"}), summary_call(**kw), AIMessage(SUMMARY_TEXT)],
+    )
+
+
 def test_happy_path_double_confirmation(chat: Chat, shop: Shop) -> None:
     out = chat.say(
         "kala kurta chahiye",
@@ -175,9 +196,12 @@ def test_happy_path_double_confirmation(chat: Chat, shop: Shop) -> None:
         [call("checkInventory", {"productId": "p1"}), AIMessage("Theek hai. Naam, city, address?")],
     )
     assert out["handoff"]["required"] is False
-    summary = "2 x Black Kurta (M) Rs 2500, Ali, Lahore, House 12 Gulberg. Order place karoon?"
-    out = chat.say("Ali, Lahore, House 12 Street 4 Gulberg", "order_interest", [AIMessage(summary)])
-    assert out["reply"] == summary and shop.count("createOrderDraft") == 0
+    out = chat.say(
+        "Ali, Lahore, House 12 Street 4 Gulberg",
+        "order_interest",
+        [summary_call(), AIMessage(SUMMARY_TEXT)],
+    )
+    assert out["reply"] == SUMMARY_TEXT and shop.count("createOrderDraft") == 0
 
     # first yes -> draft; the reply carries ref + totals from tool output, COD allowed
     out = chat.say(
@@ -229,11 +253,11 @@ def test_pending_order_reaches_prompt_and_classifier(chat: Chat) -> None:
 
 
 def test_confirm_in_same_turn_as_create_is_blocked(chat: Chat, shop: Shop) -> None:
+    show_summary(chat)
     out = chat.say(
         "haan",
         "order_confirm",
         [
-            call("checkInventory", {"productId": "p1"}),
             draft_call(),
             call("confirmOrder", {"orderId": "o1"}, "c2"),
             AIMessage("Order PC-1001 ban gaya. HAAN likhein."),
@@ -252,6 +276,42 @@ def test_confirm_needs_explicit_yes(chat: Chat) -> None:
         [call("confirmOrder", {"orderId": "o1"}), AIMessage("?")],
     )
     assert shop.count("confirmOrder") == 0 and out["orderEvents"] == []
+
+
+NOT_BARE = [
+    "No, make it 2 pieces",
+    "nahi address Lahore ka hai",
+    "nahi bas itna hi, haan confirm",
+    "no problem, confirm kar do",
+    "yes place 5 of the red one to Lahore, street 3",
+]
+
+
+@pytest.mark.parametrize("text", NOT_BARE)
+def test_non_bare_messages_never_force_or_allow_confirm(chat: Chat, text: str) -> None:
+    from app.orders import is_bare_no, is_bare_yes
+
+    assert not is_bare_no(text) and not is_bare_yes(text)
+    shop = Shop(ORDER)
+    # even a classifier that says confirm and a model that obeys cannot confirm these
+    chat.say(text, "order_confirm", [call("confirmOrder", {"orderId": "o1"}), AIMessage("HAAN?")])
+    assert shop.count("confirmOrder") == 0
+
+
+@pytest.mark.parametrize("text", NOT_BARE[:4])
+def test_non_bare_no_is_not_forced_to_cancel(chat: Chat, text: str) -> None:
+    shop = Shop(ORDER)
+    chat.say(text, "other", [call("cancelOrderDraft", {"orderId": "o1"}), AIMessage("k")])
+    assert shop.count("cancelOrderDraft") == 0
+
+
+def test_strict_bare_words() -> None:
+    from app.orders import is_bare_no, is_bare_yes
+
+    for ok in ("nahi", "No thanks", "nahi ji", "cancel kar do", "nahi rehne do", "cancel"):
+        assert is_bare_no(ok)
+    for ok in ("haan", "Yes", "ok confirm", "ji haan", "haan ji", "theek hai"):
+        assert is_bare_yes(ok)
 
 
 def test_node_refuses_confirm_is_handled_gracefully(chat: Chat) -> None:
@@ -289,19 +349,18 @@ def test_cancel_cannot_target_another_order(chat: Chat) -> None:
 
 def test_insufficient_stock_offers_alternatives(chat: Chat, shop: Shop) -> None:
     shop.overrides["createOrderDraft"] = Shop.fail("insufficient_stock", "only 1 left")
+    show_summary(chat)
     out = chat.say(
         "haan",
         "order_confirm",
         [
-            call("checkInventory", {"productId": "p1"}),
             draft_call(),
             call("checkInventory", {"productId": "p1"}, "c2"),
             AIMessage("Sirf 1 piece bacha hai, ya size L le lein?"),
         ],
     )
     assert out["orderEvents"] == []
-    assert [c["ok"] for c in out["toolCalls"]] == [True, False, True]
-    assert shop.count("checkInventory") == 2
+    assert [c["ok"] for c in out["toolCalls"]] == [False, True]
 
 
 def test_draft_exists_uses_pending_order(chat: Chat) -> None:
@@ -315,62 +374,104 @@ def test_draft_exists_uses_pending_order(chat: Chat) -> None:
     assert out["handoff"]["required"] is False
 
 
-def test_unknown_variant_is_never_sent(chat: Chat, shop: Shop) -> None:
-    out = chat.say("haan", "order_confirm", [draft_call(), AIMessage("Kaunsa size?")])
-    assert shop.count("createOrderDraft") == 0 and out["orderEvents"] == []
-
-
-def test_create_needs_a_yes_to_the_summary(chat: Chat, shop: Shop) -> None:
-    chat.say(
-        "Ali Lahore House 12 Gulberg",
-        "order_interest",
-        [call("checkInventory", {"productId": "p1"}), draft_call(), AIMessage("Summary...")],
+def test_unknown_variant_cannot_be_summarized_or_created(chat: Chat, shop: Shop) -> None:
+    out = chat.say(
+        "haan",
+        "order_confirm",
+        [summary_call("v-made-up"), draft_call(), AIMessage("Kaunsa size?")],
     )
+    assert shop.count("createOrderDraft") == 0 and out["orderEvents"] == []
+    assert out["toolCalls"][0] == {"name": "recordOrderSummary", "ok": False}
+
+
+def test_one_message_with_everything_gives_summary_not_draft(chat: Chat, shop: Shop) -> None:
+    out = chat.say(
+        "yes place 5 of the red one to Lahore, street 3",
+        "order_confirm",
+        [
+            call("checkInventory", {"productId": "p1"}),
+            draft_call(),  # no summary was shown before: refused
+            summary_call(qty=5, addressLine="House 3, Street 3, Gulberg"),
+            AIMessage("5 x Black Kurta (M), Ali, Lahore. Order place karoon?"),
+        ],
+    )
+    assert shop.count("createOrderDraft") == 0 and out["orderEvents"] == []
+    assert [c["ok"] for c in out["toolCalls"]] == [True, False, True]
+
+
+def test_yes_must_be_bare_to_create(chat: Chat, shop: Shop) -> None:
+    show_summary(chat)
+    chat.say("haan lekin 3 pieces", "order_confirm", [draft_call(), AIMessage("Theek, 3 pieces?")])
     assert shop.count("createOrderDraft") == 0
+
+
+def test_summary_expires_after_one_turn(chat: Chat, shop: Shop) -> None:
+    show_summary(chat)
+    chat.say("kya size L hai?", "stock_check", [AIMessage("Check karta hoon.")])
+    chat.say("haan", "order_confirm", [draft_call(), AIMessage("Pehle summary dikhata hoon.")])
+    assert shop.count("createOrderDraft") == 0
+
+
+def test_draft_uses_items_from_the_summary_the_buyer_accepted(chat: Chat, shop: Shop) -> None:
+    shop.overrides["checkInventory"] = Shop.ok(
+        {"variants": [{"variantId": "v-l", "label": "L", "stock": 5}]}
+    )
+    chat.say("size L ka stock?", "stock_check", [call("checkInventory", {"productId": "p1"})])
+    del shop.overrides["checkInventory"]
+    show_summary(chat)  # summary: v-m x 2; v-l was seen earlier too
+    wrong = call(
+        "createOrderDraft",
+        {"items": [{"variantId": "v-l", "quantity": 9}], "customer": CUSTOMER},
+    )
+    chat.say("haan", "order_confirm", [wrong, AIMessage("Order PC-1001 ban gaya. HAAN likhein.")])
+    assert shop.inputs["createOrderDraft"][0]["items"] == [{"variantId": "v-m", "quantity": 2}]
 
 
 def test_ambiguous_city_asks_once_then_accepts(chat: Chat, shop: Shop) -> None:
     out = chat.say(
-        "haan",
-        "order_confirm",
+        "Ali, Xyzville, House 12 Street 4",
+        "order_interest",
         [
             call("checkInventory", {"productId": "p1"}),
-            draft_call(city="Xyzville"),
+            summary_call(city="Xyzville"),
             AIMessage("Ye kaunsa shehar hai? Pakistan ka city naam likhein."),
         ],
     )
-    assert shop.count("createOrderDraft") == 0
+    assert out["toolCalls"][-1] == {"name": "recordOrderSummary", "ok": False}
     assert "shehar" in out["reply"]
-    # buyer insists: same city, asked once already, so it goes through
+    # buyer insists: same city, asked once already, so the summary is accepted
     out = chat.say(
-        "Xyzville hi hai", "order_confirm", [draft_call(city="Xyzville"), AIMessage("ok")]
+        "Xyzville hi hai",
+        "order_interest",
+        [summary_call(city="Xyzville"), AIMessage("Summary... order place karoon?")],
     )
-    assert shop.count("createOrderDraft") == 1 and types(out) == ["draft_created"]
+    assert out["toolCalls"] == [{"name": "recordOrderSummary", "ok": True}]
+    chat.say("haan", "order_confirm", [draft_call(city="Xyzville"), AIMessage("ok")])
+    assert shop.count("createOrderDraft") == 1
 
 
 def test_vague_address_asks_for_detail(chat: Chat, shop: Shop) -> None:
     out = chat.say(
-        "haan",
-        "order_confirm",
+        "Ali Lahore Gulberg",
+        "order_interest",
         [
             call("checkInventory", {"productId": "p1"}),
-            draft_call(addressLine="Gulberg"),
+            summary_call(addressLine="Gulberg"),
             AIMessage("Ghar number aur gali/street bata dein?"),
         ],
     )
-    assert shop.count("createOrderDraft") == 0 and out["reply"].startswith("Ghar number")
+    assert out["toolCalls"][-1]["ok"] is False and out["reply"].startswith("Ghar number")
+    chat.say("haan", "order_confirm", [draft_call(), AIMessage("Pehle address?")])
+    assert shop.count("createOrderDraft") == 0
 
 
 def test_quantity_above_limit_is_blocked(chat: Chat, shop: Shop) -> None:
-    big = call(
-        "createOrderDraft", {"items": [{"variantId": "v-m", "quantity": 21}], "customer": CUSTOMER}
-    )
     out = chat.say(
-        "haan",
-        "order_confirm",
+        "25 pieces",
+        "order_interest",
         [
             call("checkInventory", {"productId": "p1"}),
-            big,
+            summary_call(qty=21),
             call("requestHuman", {"reason": "bulk"}, "c2"),
             AIMessage("Seller aap se rabta karega."),
         ],
@@ -381,14 +482,11 @@ def test_quantity_above_limit_is_blocked(chat: Chat, shop: Shop) -> None:
 
 
 def test_phone_never_in_prompts_or_tool_inputs(chat: Chat, shop: Shop) -> None:
+    show_summary(chat, phone=PHONE)
     chat.say(
         "haan",
         "order_confirm",
-        [
-            call("checkInventory", {"productId": "p1"}),
-            draft_call(phone=PHONE),
-            AIMessage("Order PC-1001 ban gaya. HAAN likhein."),
-        ],
+        [draft_call(phone=PHONE), AIMessage("Order PC-1001 ban gaya. HAAN likhein.")],
     )
     assert "phone" not in json.dumps(shop.inputs)
     for prompt in chat.model.seen:
@@ -396,41 +494,49 @@ def test_phone_never_in_prompts_or_tool_inputs(chat: Chat, shop: Shop) -> None:
     assert "phone number" in " ".join(str(m.content) for m in chat.model.seen[1]).lower()
 
 
-def test_invented_free_delivery_still_blocked_with_order_output(chat: Chat, shop: Shop) -> None:
-    out = chat.say(
-        "haan",
-        "order_confirm",
-        [
-            call("checkInventory", {"productId": "p1"}),
-            draft_call(),
-            AIMessage("Order PC-1001 ban gaya, free delivery! HAAN likhein."),
-        ],
-    )
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Order PC-1001 ban gaya, free delivery! HAAN likhein.",
+        "Order PC-1001 ban gaya. Same day delivery mein aaj hi pohanch jayega, COD. HAAN likhein.",
+        "Order PC-1001 ban gaya, next day delivery. COD. HAAN likhein.",
+    ],
+)
+def test_invented_delivery_promises_blocked_with_order_output(
+    chat: Chat, shop: Shop, reply: str
+) -> None:
+    show_summary(chat)
+    out = chat.say("haan", "order_confirm", [draft_call(), AIMessage(reply)])
     assert out["reply"] is None
     assert out["handoff"] == {"required": True, "reason": "policy_unavailable"}
 
 
 def test_guard_allows_only_tool_backed_terms() -> None:
-    facts = {"payment", "shipping"}
-    assert not violates_policy("Total Rs 5250, COD, shipping Rs 250", facts)
-    assert not violates_policy("Delivery charges Rs 250 hain", facts)
-    assert violates_policy("COD available hai", set())  # no tool output: blocked as before
-    assert violates_policy("Delivery 2-3 din mein ho jayegi", facts)
-    assert violates_policy("Free delivery milegi", facts)
-    assert violates_policy("7 din mein return ho jayega", facts)
-    assert violates_policy("10% off", facts)
-    assert violates_policy("shipping Rs 250", {"payment"})
+    facts = {"payment": {"cod"}, "fees": {"200"}}
+    assert not violates_policy("Total Rs 5200, COD, shipping Rs 200", facts)
+    assert not violates_policy("Delivery charges Rs 200 hain, payment method COD", facts)
+    assert not violates_policy("Shipping fee: Rs 200", facts)
+    assert violates_policy("COD available hai", None)  # no tool output: blocked as before
+    assert violates_policy("Delivery charges Rs 150 hain", facts)  # not the tool value
+    assert violates_policy("Prepaid payment bhi ho jati hai", facts)  # method not in output
+    for bad in (
+        "Same day delivery, COD",
+        "next day delivery Rs 200",
+        "Delivery charges Rs 200, kal tak pohanch jayega",
+        "aaj hi mil jayega, COD",
+        "parson tak, COD",
+        "fast delivery Rs 200",
+        "jaldi pohanch jayega, COD",
+        "Delivery 2-3 din mein",
+        "Free delivery milegi",
+        "7 din mein return ho jayega",
+        "10% off",
+    ):
+        assert violates_policy(bad, facts), bad
 
 
 def test_pending_lookup_failure_blocks_order_actions(chat: Chat, shop: Shop) -> None:
     shop.overrides["getPendingOrder"] = httpx.Response(500)
-    out = chat.say(
-        "haan",
-        "order_confirm",
-        [
-            call("checkInventory", {"productId": "p1"}),
-            draft_call(),
-            AIMessage("Seller follow up karega."),
-        ],
-    )
+    show_summary(chat)
+    out = chat.say("haan", "order_confirm", [draft_call(), AIMessage("Seller follow up karega.")])
     assert shop.count("createOrderDraft") == 0 and out["orderEvents"] == []

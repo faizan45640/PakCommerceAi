@@ -19,7 +19,10 @@ _YES = re.compile(
     re.IGNORECASE,
 )
 _NO = re.compile(
-    r"^\s*(?:no|nahi|nahin|nope|cancel|mat|rehne|rehnay|نہیں)\b.{0,30}$", re.IGNORECASE
+    r"^\s*(?:ji\s+)?(?:no thank you|no thanks|no|nahi rehne do|nahi rehnay do|nahi chahiye"
+    r"|nahi|nahin|nai|nope|cancel kar do|cancel it|cancel|rehne do|rehnay do|mat karo"
+    r"|نہیں چاہیے|نہیں)(?:\s+ji)?[\s.!]*$",
+    re.IGNORECASE,
 )
 
 
@@ -172,26 +175,14 @@ def norm(text: Any) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
 
 
-def gate_create_draft(
+def gate_summary(
     args: dict[str, Any],
     *,
-    pending_known: bool,
-    pending: dict[str, Any] | None,
-    intent: str,
     known_variants: set[str],
     asked: set[str],
     new_asked: set[str],
 ) -> str | None:
-    """Return a model-readable refusal, or None when the draft may be created."""
-    if not pending_known:
-        return "blocked: pending order lookup failed. Tell the buyer a seller will follow up."
-    if pending:
-        return "blocked: draft_exists. A pending order already exists; use getPendingOrder."
-    if intent != "order_confirm":
-        return (
-            "blocked: the buyer has not said yes to the order summary in this message. Show the "
-            "summary and ask for a yes first."
-        )
+    """Validate the order details before a summary is shown; None means they are fine."""
     items = args.get("items") or []
     if not items:
         return "blocked: no items. Ask which product and variant the buyer wants."
@@ -224,6 +215,31 @@ def gate_create_draft(
     return None
 
 
+def gate_create_draft(
+    *,
+    body: str,
+    pending_known: bool,
+    pending: dict[str, Any] | None,
+    summary: dict[str, Any] | None,
+) -> str | None:
+    """A draft needs: the summary shown in the previous turn, and a bare yes to it."""
+    if not pending_known:
+        return "blocked: pending order lookup failed. Tell the buyer a seller will follow up."
+    if pending:
+        return "blocked: draft_exists. A pending order already exists; use getPendingOrder."
+    if not summary:
+        return (
+            "blocked: no order summary was shown in the previous message. Call "
+            "recordOrderSummary, show the summary and ask for a yes."
+        )
+    if not is_bare_yes(body):
+        return (
+            "blocked: the buyer did not simply say yes to the summary. Show an updated summary "
+            "with recordOrderSummary or answer their question."
+        )
+    return None
+
+
 def gate_order_action(
     name: str,
     args: dict[str, Any],
@@ -231,6 +247,7 @@ def gate_order_action(
     pending_known: bool,
     pending: dict[str, Any] | None,
     intent: str,
+    body: str,
 ) -> str | None:
     """confirmOrder / cancelOrderDraft act only on the draft loaded from the DB at turn start."""
     if not pending_known:
@@ -239,11 +256,13 @@ def gate_order_action(
         return "blocked: there is no draft order to act on."
     if str(args.get("orderId")) != str(pending.get("orderId")):
         return "blocked: orderId does not match the pending order. Use the orderId given above."
-    if name == "confirmOrder" and intent != "order_confirm":
+    if name == "confirmOrder" and not (intent == "order_confirm" and is_bare_yes(body)):
         return (
-            "blocked: confirmOrder needs a NEW explicit yes from the buyer in this message "
-            "after they saw the order ref and total."
+            "blocked: confirmOrder needs a NEW message that is just a yes, sent after the buyer "
+            "saw the order ref and total. Ask them to reply HAAN."
         )
+    if name == "cancelOrderDraft" and intent != "order_cancel":
+        return "blocked: the buyer did not ask to cancel. Ask what they want to change."
     return None
 
 
@@ -255,30 +274,51 @@ POLICY_TERMS = re.compile(
     r"|% ?off|\bfree\b(?!\s*-?\s*size\b)|\bmuft\b|wapas|wapsi|ڈیلیوری|واپس|مفت|رعایت|ریفنڈ",
     re.IGNORECASE,
 )
-_PAYMENT_OK = re.compile(r"cash on delivery|\bcod\b|cash on|payment|prepaid", re.IGNORECASE)
-_SHIPPING_OK = re.compile(r"shipping fee|shipping|delivery charges|delivery|ڈیلیوری", re.IGNORECASE)
-_DELIVERY_TIME = re.compile(
-    r"\d+\s*(?:-|to)?\s*\d*\s*(?:working\s+)?(?:days?|din|hours?|ghant[ae])\b", re.IGNORECASE
+_FEE_PHRASE = re.compile(
+    r"(?:shipping|delivery|dilivery)(?:\s+(?:fee|fees|charges?))?\s*(?:[:=-]\s*)?"
+    r"(?:rs\.?|pkr)?\s*([\d,]+)",
+    re.IGNORECASE,
+)
+_METHOD_WORDS = {
+    "cod": re.compile(r"cash on delivery|\bcod\b", re.IGNORECASE),
+    "prepaid": re.compile(r"\bprepaid\b", re.IGNORECASE),
+}
+_PAYMENT_METHOD_PHRASE = re.compile(r"payment method", re.IGNORECASE)
+# Speed and time promises are never tool output, so they are blocked in order replies.
+_TIME_PROMISE = re.compile(
+    r"same[- ]day|next[- ]day|\bkal\b|\baaj\b|\bparson\b|\bfast\b|\bjaldi\b|\bexpress\b"
+    r"|\d+\s*(?:-|to)?\s*\d*\s*(?:working\s+)?(?:days?|din|hours?|ghant[ae])\b",
+    re.IGNORECASE,
 )
 
 
-def order_facts(outputs: list[Any]) -> set[str]:
-    """Which order terms are backed by this turn's tool output (pending order or tool results)."""
-    facts: set[str] = set()
+def order_facts(outputs: list[Any]) -> dict[str, set[str]]:
+    """Values backed by this turn's tool output: payment methods and shipping fees."""
+    facts: dict[str, set[str]] = {"payment": set(), "fees": set()}
     for out in outputs:
-        if find_values(out, "paymentMethod"):
-            facts.add("payment")
-        if find_values(out, "shippingFeePkr"):
-            facts.add("shipping")
+        for v in find_values(out, "paymentMethod"):
+            facts["payment"].add(str(v).lower())
+        for v in find_values(out, "shippingFeePkr"):
+            facts["fees"].add(str(v).replace(",", ""))
     return facts
 
 
-def violates_policy(text: str, facts: set[str]) -> bool:
+def violates_policy(text: str, facts: dict[str, set[str]] | None) -> bool:
+    facts = facts or {}
     remaining = text
-    if "payment" in facts:
-        remaining = _PAYMENT_OK.sub(" ", remaining)
-    if "shipping" in facts:
-        remaining = _SHIPPING_OK.sub(" ", remaining)
-        if _DELIVERY_TIME.search(remaining):
-            return True  # a delivery-time promise is never in tool output
+    if facts.get("fees") or facts.get("payment"):
+        if _TIME_PROMISE.search(remaining):
+            return True
+    for method in facts.get("payment") or ():
+        pattern = _METHOD_WORDS.get(method)
+        if pattern:
+            remaining = pattern.sub(" ", remaining)
+    if facts.get("payment"):
+        remaining = _PAYMENT_METHOD_PHRASE.sub(" ", remaining)
+    fees = facts.get("fees") or set()
+
+    def drop_fee(m: re.Match[str]) -> str:
+        return " " if m.group(1).replace(",", "") in fees else m.group(0)
+
+    remaining = _FEE_PHRASE.sub(drop_fee, remaining)
     return bool(POLICY_TERMS.search(remaining))

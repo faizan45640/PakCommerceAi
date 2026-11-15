@@ -39,18 +39,25 @@ the agent's checkpointer only holds conversation memory.
 2. Slots collected one or two at a time: product + variant (`searchProducts`, `checkInventory`),
    quantity, name, city, full address. The phone is never asked for or sent (Node uses the
    WhatsApp number; any phone-like key in tool args is stripped).
-3. Summary (unit prices from tools, no totals) -> buyer yes (`order_confirm`) -> `createOrderDraft`
-   -> reply with ref, subtotal, shipping, total, payment method from tool output and ask for HAAN.
-4. A NEW yes while a draft is pending -> `confirmOrder`. A bare yes/no with a draft pending is
-   forced to `order_confirm` / `order_cancel` in code, whatever the classifier said.
+3. The model calls the local tool `recordOrderSummary` (items, name, city, address; validated and
+   stored in checkpointed state for the next turn only), then shows the summary (unit prices, no
+   totals). Only a message that is just a yes (strict: "haan", "yes", "ok confirm", "ji haan")
+   right after that turn calls `createOrderDraft`, built from the recorded summary (not from model
+   args). A message like "yes place 5 to Lahore, street 3" only produces a new summary. The reply
+   to the draft carries ref, subtotal, shipping, total, payment method from tool output and asks
+   for HAAN.
+4. With a draft pending, `confirmOrder` needs a bare yes in a NEW message; a bare yes/no is forced
+   to `order_confirm` / `order_cancel` in code. Anything longer ("No, make it 2 pieces", "nahi
+   bas itna hi, haan confirm") goes to the LLM and can neither confirm nor be forced to cancel.
    `confirmed` -> thanks + ref. `awaiting_seller` -> "seller confirm karega" (no extra handoff).
 5. No / cancel at any point with a draft -> `cancelOrderDraft`.
 
 Server-side gates (code, not only prompt), refused calls come back to the model as tool errors:
 
-- `createOrderDraft`: needs an `order_confirm` message, no pending draft, every `variantId`
-  seen in earlier `searchProducts`/`checkInventory` output (remembered in the checkpointer),
-  quantity 1..20 (more: `requestHuman`), name/city/address present.
+- `recordOrderSummary`: every `variantId` seen in earlier `searchProducts`/`checkInventory` output
+  (remembered in the checkpointer), quantity 1..20 (more: `requestHuman`), name/city/address present.
+- `createOrderDraft`: needs a summary recorded in the previous turn, a bare yes, and no pending
+  draft; items and customer come from that summary.
 - T-088 ambiguity: a city not in the Pakistani city list, or an address with no area/street/number,
   is refused once with a clarifying-question instruction; if the buyer repeats the same value it
   is accepted.
@@ -59,6 +66,7 @@ Server-side gates (code, not only prompt), refused calls come back to the model 
   additionally needs an `order_confirm` intent. Node enforces `needs_buyer_confirmation` too.
 - `requestHuman` (local tool): upset buyer, >20 pieces, anything unsafe -> `handoff.reason: needs_human`
   with the holding reply.
-- Policy guard: words about payment (COD, payment) and shipping are allowed only when this turn's
-  tool output / pending order carries `paymentMethod` / `shippingFeePkr`. "Free", discount, returns
-  and delivery-time promises stay blocked.
+- Policy guard: only the payment method word that equals `paymentMethod` and a fee phrase whose
+  amount equals `shippingFeePkr` (for example "delivery charges Rs 200") are exempt. Free delivery,
+  discounts, returns and speed/time promises (same day, next day, kal, aaj, parson, fast, jaldi,
+  "X din") stay blocked.

@@ -25,6 +25,7 @@ from app.orders import (
     format_pending,
     gate_create_draft,
     gate_order_action,
+    gate_summary,
     is_bare_no,
     is_bare_yes,
     order_facts,
@@ -83,6 +84,10 @@ class AgentState(TypedDict, total=False):
     # Conversation memory kept by the checkpointer (T-084): variantIds seen in tool output
     # (so the model can never invent one) and city/address clarifications already asked.
     known_variants: Annotated[list[str], _union_capped]
+    # The order details the buyer was last shown (set by recordOrderSummary). It only survives
+    # for the next turn: summary_in is what the previous turn left, summary is rebuilt each turn.
+    summary: dict[str, Any] | None
+    summary_in: dict[str, Any] | None
     asked: Annotated[list[str], _union_capped]
 
 
@@ -91,12 +96,14 @@ ORDER_RULES = [
     "1) Collect, one or two at a time: product + variant (use searchProducts / checkInventory), "
     "quantity, full name, city, full address (area, street, house number). Never ask for a "
     "phone number: it is already known.",
-    "2) When everything is known, send a summary (items with unit prices from tool output, "
-    "name, city, address) and ask 'Order place kar doon? (haan/nahi)'. Do not state a total or "
-    "any delivery/payment terms yet.",
-    "3) Only after the buyer says yes to that summary, call createOrderDraft. Then send the "
-    "order ref and the subtotal, shipping fee, total and payment method exactly as in the tool "
-    "output, and ask them to reply HAAN to confirm the order.",
+    "2) When everything is known, call recordOrderSummary (items with variantId and quantity, "
+    "customer name, city, addressLine), then send the summary (items with unit prices from tool "
+    "output, name, city, address) and ask 'Order place kar doon? (haan/nahi)'. Do not state a "
+    "total or any delivery/payment terms yet. If the buyer changes anything, record a new summary.",
+    "3) Only when the buyer's next message is just a yes to that summary, call createOrderDraft "
+    "(it uses the recorded summary). Then send the order ref and the subtotal, shipping fee, "
+    "total and payment method exactly as in the tool output, and ask them to reply HAAN to "
+    "confirm the order.",
     "4) Only when a PENDING ORDER exists and the buyer sends a NEW yes, call confirmOrder with "
     "its orderId. Never confirm in the same message that created the draft.",
     "5) If the buyer says no / cancel at any point and a pending order exists, call "
@@ -172,6 +179,21 @@ HUMAN_TOOL = StructuredTool.from_function(
 )
 
 
+async def _record_summary(items: list[dict[str, Any]], customer: dict[str, Any]) -> str:
+    return "ok"
+
+
+SUMMARY_TOOL = StructuredTool.from_function(
+    coroutine=_record_summary,
+    name="recordOrderSummary",
+    description=(
+        "Record the order details you are about to show the buyer for a yes. items: "
+        "[{variantId, quantity}], customer: {name, city, addressLine}. Call it right before "
+        "sending the summary; the order can only be created from the last recorded summary."
+    ),
+)
+
+
 def _order_event(name: str, args: dict[str, Any], data: Any) -> dict[str, str] | None:
     """Order events for Node, derived only from successful tool results."""
     if name == "createOrderDraft":
@@ -216,7 +238,13 @@ def build_graph(
 
     async def load_pending_node(state: AgentState) -> dict[str, Any]:
         """Deterministic pre-step: the DB, not chat history, says whether a draft exists."""
-        base: dict[str, Any] = {"pending_order": None, "pending_known": False, "order_events": []}
+        base: dict[str, Any] = {
+            "pending_order": None,
+            "pending_known": False,
+            "order_events": [],
+            "summary_in": state.get("summary"),
+            "summary": None,
+        }
         if tools_client is None:
             return base
         try:
@@ -237,10 +265,11 @@ def build_graph(
         )
         intent = result.intent
         # A bare yes/no with a draft pending is never ambiguous: do not rely on the LLM.
-        if pending and pending.get("status") == "draft" and intent != "handoff":
+        draft = bool(pending and pending.get("status") == "draft")
+        if (draft or state.get("summary_in")) and intent != "handoff":
             if is_bare_yes(state["body"]):
                 intent = "order_confirm"
-            elif is_bare_no(state["body"]):
+            elif is_bare_no(state["body"]) and draft:
                 intent = "order_cancel"
         return {
             "intent": intent,
@@ -298,7 +327,7 @@ def build_graph(
                 "handoff_required": True,
                 "handoff_reason": "order_tools_unavailable",
             }
-        tools: list[Any] = [*remote, HUMAN_TOOL] if remote else []
+        tools: list[Any] = [*remote, HUMAN_TOOL, SUMMARY_TOOL] if remote else []
         llm = model.bind_tools(tools) if tools else model
 
         pending = state.get("pending_order")
@@ -319,6 +348,8 @@ def build_graph(
         events: list[dict[str, str]] = []
         calls: list[dict[str, Any]] = []
         want_human = False
+        summary_in = state.get("summary_in")
+        new_summary: dict[str, Any] | None = None
 
         def result(**fields: Any) -> dict[str, Any]:
             return {
@@ -326,6 +357,7 @@ def build_graph(
                 "order_events": events,
                 "known_variants": sorted(new_variants),
                 "asked": sorted(new_asked),
+                "summary": new_summary,
                 **fields,
             }
 
@@ -352,22 +384,43 @@ def build_graph(
                 if name == "requestHuman":
                     want_human = True
                     content, ok = "ok, a seller will be notified", True
+                elif name == "recordOrderSummary":
+                    blocked = gate_summary(
+                        args,
+                        known_variants=known_variants | new_variants,
+                        asked=asked,
+                        new_asked=new_asked,
+                    )
+                    if blocked:
+                        content, ok = blocked, False
+                    else:
+                        new_summary = {"items": args["items"], "customer": args["customer"]}
+                        content, ok = "ok, summary recorded. Now show it and ask for a yes.", True
                 elif tool is None:
                     content, ok = f"Unknown tool {name}.", False
                 else:
                     if name == "createOrderDraft":
                         blocked = gate_create_draft(
+                            body=state["body"],
+                            pending_known=pending_known,
+                            pending=pending,
+                            summary=summary_in,
+                        )
+                        if not blocked and summary_in:
+                            # Create exactly what the buyer said yes to, not what the model says.
+                            args = {
+                                **args,
+                                "items": summary_in["items"],
+                                "customer": summary_in["customer"],
+                            }
+                    elif name in ("confirmOrder", "cancelOrderDraft"):
+                        blocked = gate_order_action(
+                            name,
                             args,
                             pending_known=pending_known,
                             pending=pending,
                             intent=intent,
-                            known_variants=known_variants | new_variants,
-                            asked=asked,
-                            new_asked=new_asked,
-                        )
-                    elif name in ("confirmOrder", "cancelOrderDraft"):
-                        blocked = gate_order_action(
-                            name, args, pending_known=pending_known, pending=pending, intent=intent
+                            body=state["body"],
                         )
                     try:
                         if blocked:
@@ -376,7 +429,7 @@ def build_graph(
                         ok = True
                     except ToolException as exc:
                         content, ok = str(exc), False
-                if ok and name != "requestHuman":
+                if ok and name not in ("requestHuman", "recordOrderSummary"):
                     data = parse_output(content)
                     outputs.append(data)
                     new_variants.update(str(v) for v in find_values(data, "variantId"))
