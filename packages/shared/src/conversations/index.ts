@@ -140,3 +140,105 @@ export function stateAfterBuyerMessage(
 export function reopenStateFor(aiEnabled: boolean): ConversationState {
   return aiEnabled ? "ai_active" : "open";
 }
+
+// ---------------------------------------------------------------------------
+// Conversation and message records (T-068). The API maps database rows onto
+// these; the dashboard and the Python agent only ever see these shapes.
+// ---------------------------------------------------------------------------
+
+export const conversationChannelValues = ["whatsapp"] as const;
+export const messageDirectionValues = ["inbound", "outbound"] as const;
+/** Who wrote a message. Same names as the actors, so an AI reply is `ai`. */
+export const messageSenderValues = ["buyer", "ai", "seller", "system"] as const;
+/**
+ * `received` for inbound. Outbound starts `queued` and follows the provider's
+ * status callbacks.
+ */
+export const messageStatusValues = [
+  "received",
+  "queued",
+  "sent",
+  "delivered",
+  "read",
+  "failed",
+] as const;
+
+export const MAX_MESSAGE_BODY_LENGTH = 4096;
+export const MAX_MESSAGE_MEDIA = 10;
+export const CONVERSATION_PREVIEW_LENGTH = 160;
+
+export const conversationChannelSchema = z.enum(conversationChannelValues);
+export const messageDirectionSchema = z.enum(messageDirectionValues);
+export const messageSenderSchema = z.enum(messageSenderValues);
+export const messageStatusSchema = z.enum(messageStatusValues);
+
+export type ConversationChannel = z.infer<typeof conversationChannelSchema>;
+export type MessageDirection = z.infer<typeof messageDirectionSchema>;
+export type MessageSender = z.infer<typeof messageSenderSchema>;
+export type MessageStatus = z.infer<typeof messageStatusSchema>;
+
+const conversationIdSchema = z.uuid();
+const conversationTimestampSchema = z.iso.datetime({ offset: true });
+
+export const messageMediaSchema = z.object({
+  /** Provider URL, https only. Fetching it needs the seller's provider credentials. */
+  url: z.url({ protocol: /^https$/ }),
+  contentType: z.string().trim().min(1).max(100),
+});
+
+export const messageSchema = z.object({
+  id: conversationIdSchema,
+  conversationId: conversationIdSchema,
+  direction: messageDirectionSchema,
+  sender: messageSenderSchema,
+  body: z.string().max(MAX_MESSAGE_BODY_LENGTH).nullable(),
+  media: z.array(messageMediaSchema).max(MAX_MESSAGE_MEDIA),
+  status: messageStatusSchema,
+  createdAt: conversationTimestampSchema,
+});
+
+export const conversationSchema = z.object({
+  id: conversationIdSchema,
+  workspaceId: conversationIdSchema,
+  channel: conversationChannelSchema,
+  /** Normalised phone (see `normalizePhone`); the buyer's identity. */
+  buyerPhone: z.string().min(1).max(32),
+  /** Name the buyer shows on WhatsApp. Not verified. */
+  buyerName: z.string().max(200).nullable(),
+  /** Linked Customer 360 record when one exists for this phone. */
+  customerId: conversationIdSchema.nullable(),
+  state: conversationStateSchema,
+  handoffReason: z.string().max(500).nullable(),
+  unreadCount: z.int().nonnegative(),
+  lastMessageAt: conversationTimestampSchema.nullable(),
+  lastMessagePreview: z.string().max(CONVERSATION_PREVIEW_LENGTH).nullable(),
+  lastMessageSender: messageSenderSchema.nullable(),
+  stateChangedAt: conversationTimestampSchema,
+  createdAt: conversationTimestampSchema,
+  updatedAt: conversationTimestampSchema,
+});
+
+export const conversationSearchQuerySchema = z.object({
+  workspaceId: conversationIdSchema,
+  /** Matches buyer name or phone. */
+  query: z.string().trim().min(1).max(120).optional(),
+  states: z.array(conversationStateSchema).max(conversationStateValues.length).optional(),
+  unreadOnly: z.boolean().default(false),
+  limit: z.int().min(1).max(100).default(25),
+  cursor: z.string().trim().min(1).max(500).optional(),
+});
+
+export const messageListQuerySchema = z.object({
+  workspaceId: conversationIdSchema,
+  /** Newest first, then the client reverses for display. */
+  limit: z.int().min(1).max(200).default(50),
+  cursor: z.string().trim().min(1).max(500).optional(),
+});
+
+export type MessageMedia = z.infer<typeof messageMediaSchema>;
+export type Message = z.infer<typeof messageSchema>;
+export type Conversation = z.infer<typeof conversationSchema>;
+export type ConversationSearchQuery = z.input<typeof conversationSearchQuerySchema>;
+export type ParsedConversationSearchQuery = z.output<typeof conversationSearchQuerySchema>;
+export type MessageListQuery = z.input<typeof messageListQuerySchema>;
+export type ParsedMessageListQuery = z.output<typeof messageListQuerySchema>;
