@@ -1,3 +1,13 @@
-# Runtime deps for FastAPI service — add when scaffolding apps/ml
-# fastapi==0.115.6
-# uvicorn[standard]==0.34.0
+# Runtime deps for the WhatsApp Sales Agent (FastAPI + LangGraph).
+fastapi==0.163.0
+uvicorn[standard]==0.54.0
+httpx==0.28.1
+pydantic==2.14.3
+langchain-core==1.8.0
+langgraph==1.2.22
+langgraph-checkpoint-postgres==3.2.1
+psycopg[binary,pool]==3.3.9
+langchain-deepseek==1.1.1
+langchain-google-genai==4.5.0
+langchain-openai==1.8.0
+langchain-ollama==1.1.0
