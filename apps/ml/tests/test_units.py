@@ -123,3 +123,27 @@ def test_schema_is_sanitized_for_provider_converters() -> None:
     from langchain_google_genai._function_utils import convert_to_genai_function_declarations
 
     convert_to_genai_function_declarations([tool])
+
+
+def test_deepseek_thinking_off_by_default_and_configurable():
+    ds = get_chat_model({"AI_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "k"})
+    assert ds.extra_body == {"thinking": {"type": "disabled"}}
+    on = get_chat_model(
+        {"AI_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "k", "DEEPSEEK_THINKING": "enabled"}
+    )
+    assert on.extra_body == {"thinking": {"type": "enabled"}}
+    with pytest.raises(LLMConfigError):
+        get_chat_model(
+            {"AI_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "k", "DEEPSEEK_THINKING": "max"}
+        )
+
+
+def test_policy_guard_ignores_free_size_but_catches_free_delivery() -> None:
+    from app.graph import POLICY_TERMS
+
+    assert not POLICY_TERMS.search("Shawl free size 2.5m mein hai, price 8500 PKR")
+    assert not POLICY_TERMS.search("Free-Size kurta available hai")
+    assert POLICY_TERMS.search("free sizegift voucher")
+    assert POLICY_TERMS.search("delivery free hai")
+    assert POLICY_TERMS.search("Lahore mein free shipping")
+    assert POLICY_TERMS.search("aapko 10% off milega")
