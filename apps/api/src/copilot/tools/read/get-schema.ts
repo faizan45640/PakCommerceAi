@@ -59,7 +59,7 @@ export const SCHEMA_QUERY = (table?: string) => `
 select table_name, column_name, data_type, is_nullable
 from information_schema.columns
 where table_schema = 'public'
-  ${table ? "and table_name = '" + table + "'" : ""}
+  ${table ? "and table_name = '" + table + "'" : "and table_name in (" + QUERYABLE_TABLES.map((t) => "'" + t + "'").join(", ") + ")"}
 order by table_name, ordinal_position`;
 
 export function getSchemaTool(auth: SellerContext) {

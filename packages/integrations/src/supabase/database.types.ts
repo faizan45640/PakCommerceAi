@@ -39,6 +39,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_tool_calls: {
+        Row: {
+          actor: string
+          audience: string
+          conversation_id: string | null
+          created_at: string
+          duration_ms: number
+          error_code: string | null
+          id: string
+          input: Json
+          ok: boolean
+          seller_id: string
+          tool_name: string
+          workspace_id: string | null
+        }
+        Insert: {
+          actor: string
+          audience: string
+          conversation_id?: string | null
+          created_at?: string
+          duration_ms: number
+          error_code?: string | null
+          id?: string
+          input?: Json
+          ok: boolean
+          seller_id: string
+          tool_name: string
+          workspace_id?: string | null
+        }
+        Update: {
+          actor?: string
+          audience?: string
+          conversation_id?: string | null
+          created_at?: string
+          duration_ms?: number
+          error_code?: string | null
+          id?: string
+          input?: Json
+          ok?: boolean
+          seller_id?: string
+          tool_name?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_tool_calls_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           channel_mappings: Json

@@ -179,6 +179,47 @@ async function resolveWorkspaceId(auth: SellerContext): Promise<string | null> {
   return null;
 }
 
+/**
+ * The search itself, given a workspace that is already decided. Shared by the
+ * copilot tool (workspace resolved from the seller) and the sales-agent tool
+ * (workspace taken from the conversation).
+ */
+export async function runProductSearch(
+  auth: SellerContext,
+  workspaceId: string,
+  input: SearchProductsInput,
+): Promise<SearchProductsResult> {
+  try {
+    const parsedInput = searchProductsInputSchema.parse(input);
+    const { items, meta } = await listProducts(auth, {
+      workspaceId,
+      query: parsedInput.query,
+      statuses: parsedInput.statuses,
+      inventoryStates: parsedInput.inventoryStates,
+      categoryIds: parsedInput.categoryIds,
+      tags: parsedInput.tags,
+      sort: parsedInput.sort ?? "updated_desc",
+      limit: parsedInput.limit ?? 10,
+    });
+
+    // Structured output: validate what we return against the shared contract,
+    // so the model summarises real catalogue data, never a malformed row.
+    const parsed = z.array(productListItemSchema).safeParse(items);
+
+    return {
+      status: "success",
+      count: items.length,
+      total: meta.total,
+      products: parsed.success ? parsed.data : [],
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Could not search products.",
+    };
+  }
+}
+
 export function searchProductsTool(auth: SellerContext) {
   return {
     description:
@@ -194,35 +235,7 @@ export function searchProductsTool(auth: SellerContext) {
         };
       }
 
-      try {
-        const parsedInput = searchProductsInputSchema.parse(input);
-        const { items, meta } = await listProducts(auth, {
-          workspaceId,
-          query: parsedInput.query,
-          statuses: parsedInput.statuses,
-          inventoryStates: parsedInput.inventoryStates,
-          categoryIds: parsedInput.categoryIds,
-          tags: parsedInput.tags,
-          sort: parsedInput.sort ?? "updated_desc",
-          limit: parsedInput.limit ?? 10,
-        });
-
-        // Structured output: validate what we return against the shared contract,
-        // so the model summarises real catalogue data, never a malformed row.
-        const parsed = z.array(productListItemSchema).safeParse(items);
-
-        return {
-          status: "success",
-          count: items.length,
-          total: meta.total,
-          products: parsed.success ? parsed.data : [],
-        };
-      } catch (error) {
-        return {
-          status: "error",
-          message: error instanceof Error ? error.message : "Could not search products.",
-        };
-      }
+      return runProductSearch(auth, workspaceId, input);
     },
   };
 }

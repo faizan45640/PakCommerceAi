@@ -14,6 +14,7 @@ import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
 import { createTwilioWebhookRouter } from "./whatsapp/twilio-router.js";
 import { createWhatsAppWebhookRouter } from "./whatsapp/webhook-router.js";
+import { createAgentRouter } from "./agent/agent-router.js";
 import { healthRouter } from "./routes/health.js";
 
 export interface CreateAppOptions {
@@ -44,6 +45,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // reads its own raw body. Public: authenticated by signature, not a token.
   app.use("/api/v1/webhooks/whatsapp", createWhatsAppWebhookRouter());
   app.use("/api/v1/webhooks/twilio", createTwilioWebhookRouter());
+
+  // Before express.json(): the agent router checks its token first, then parses its
+  // own body, so a disabled or unauthenticated surface never reveals a parse error.
+  app.use("/api/v1/agent", createAgentRouter());
 
   app.use(express.json());
 
