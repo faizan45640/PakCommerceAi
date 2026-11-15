@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { moneySchema } from "@pakcommerce/shared/products";
+
 /**
  * Conversation states for the WhatsApp inbox.
  *
@@ -284,6 +286,13 @@ export const salesAgentSettingsSchema = z.object({
   aiEnabled: z.boolean(),
   /** Delivery times, returns, payment/COD. The agent may only quote this. */
   policyText: z.string().max(MAX_POLICY_TEXT_LENGTH),
+  /**
+   * On: when the buyer confirms twice, the AI confirms the order itself (stock
+   * is deducted). Off: the conversation waits for the seller's approval.
+   */
+  autoConfirmOrders: z.boolean(),
+  /** Delivery charge added to every order the AI drafts. PKR. */
+  shippingFee: moneySchema,
 });
 
 /** Body of `PUT /api/v1/sales-agent/settings`. */
@@ -291,7 +300,17 @@ export const salesAgentSettingsInputSchema = z.object({
   workspaceId: z.uuid(),
   aiEnabled: z.boolean(),
   policyText: z.string().max(MAX_POLICY_TEXT_LENGTH).default(""),
+  autoConfirmOrders: z.boolean().default(true),
+  shippingFee: moneySchema.default({ amountMinor: 0, currency: "PKR" }),
 });
 
+/** Body of `POST /api/v1/conversations/:id/order-approval` (S11): the seller's decision on an AI order. */
+export const orderApprovalInputSchema = z.object({
+  workspaceId: z.uuid(),
+  orderId: z.uuid(),
+  decision: z.enum(["approve", "reject"]),
+});
+
+export type OrderApprovalInput = z.input<typeof orderApprovalInputSchema>;
 export type SalesAgentSettings = z.infer<typeof salesAgentSettingsSchema>;
 export type SalesAgentSettingsInput = z.input<typeof salesAgentSettingsInputSchema>;

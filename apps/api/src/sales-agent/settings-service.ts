@@ -15,14 +15,48 @@ import type { SellerContext } from "../middleware/seller-context.js";
 
 export const DEFAULT_SETTINGS = { aiEnabled: false, policyText: "" } as const;
 
-function toSettings(
-  workspaceId: string,
-  row: { ai_enabled: boolean; policy_text: string | null } | null,
-): SalesAgentSettings {
+/** What a workspace without a settings row gets for the order fields. */
+export const DEFAULT_ORDER_SETTINGS = { autoConfirmOrders: true, shippingFeeMinor: 0 } as const;
+
+const SETTINGS_COLUMNS = "ai_enabled, policy_text, auto_confirm_orders, shipping_fee_minor";
+
+interface SettingsRow {
+  ai_enabled: boolean;
+  policy_text: string | null;
+  auto_confirm_orders: boolean;
+  shipping_fee_minor: number;
+}
+
+function toSettings(workspaceId: string, row: SettingsRow | null): SalesAgentSettings {
   return {
     workspaceId,
     aiEnabled: row?.ai_enabled ?? DEFAULT_SETTINGS.aiEnabled,
     policyText: row?.policy_text ?? DEFAULT_SETTINGS.policyText,
+    autoConfirmOrders: row?.auto_confirm_orders ?? DEFAULT_ORDER_SETTINGS.autoConfirmOrders,
+    shippingFee: {
+      amountMinor: row?.shipping_fee_minor ?? DEFAULT_ORDER_SETTINGS.shippingFeeMinor,
+      currency: "PKR",
+    },
+  };
+}
+
+/**
+ * The order settings the sales agent's tools need. Unlike `loadSalesAgentSettings`
+ * this throws on a read failure: an order must not be priced or confirmed on a guess.
+ */
+export async function loadOrderSettings(
+  db: AppSupabaseClient,
+  workspaceId: string,
+): Promise<{ autoConfirmOrders: boolean; shippingFeeMinor: number }> {
+  const { data, error } = await db
+    .from("sales_agent_settings")
+    .select("auto_confirm_orders, shipping_fee_minor")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) throw new Error(error.message, { cause: error });
+  return {
+    autoConfirmOrders: data?.auto_confirm_orders ?? DEFAULT_ORDER_SETTINGS.autoConfirmOrders,
+    shippingFeeMinor: data?.shipping_fee_minor ?? DEFAULT_ORDER_SETTINGS.shippingFeeMinor,
   };
 }
 
@@ -34,7 +68,7 @@ export async function getSalesAgentSettings(
 
   const { data, error } = await auth.db
     .from("sales_agent_settings")
-    .select("ai_enabled, policy_text")
+    .select(SETTINGS_COLUMNS)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) throw new Error(error.message, { cause: error });
@@ -52,7 +86,12 @@ export async function saveSalesAgentSettings(
   // Turning the AI off must stop it on live threads too: hand them back as the seller.
   if (!input.aiEnabled) await stopAiOnLiveConversations(auth, input.workspaceId);
 
-  const values = { ai_enabled: input.aiEnabled, policy_text: policyText === "" ? null : policyText };
+  const values = {
+    ai_enabled: input.aiEnabled,
+    policy_text: policyText === "" ? null : policyText,
+    auto_confirm_orders: input.autoConfirmOrders,
+    shipping_fee_minor: input.shippingFee.amountMinor,
+  };
 
   // Sellers may only update ai_enabled/policy_text (column grants), so this is
   // update-then-insert rather than an upsert that would rewrite the owner columns.
@@ -61,7 +100,7 @@ export async function saveSalesAgentSettings(
       .from("sales_agent_settings")
       .update(values)
       .eq("workspace_id", input.workspaceId)
-      .select("ai_enabled, policy_text")
+      .select(SETTINGS_COLUMNS)
       .maybeSingle();
     if (updated.error) throw new Error(updated.error.message, { cause: updated.error });
     if (updated.data) return toSettings(input.workspaceId, updated.data);
@@ -69,7 +108,7 @@ export async function saveSalesAgentSettings(
     const inserted = await auth.db
       .from("sales_agent_settings")
       .insert({ workspace_id: input.workspaceId, seller_id: auth.sellerId, ...values })
-      .select("ai_enabled, policy_text")
+      .select(SETTINGS_COLUMNS)
       .single();
     if (!inserted.error) return toSettings(input.workspaceId, inserted.data);
     // 23505: a parallel save created the row first; loop to update it.
@@ -91,7 +130,7 @@ export async function loadSalesAgentSettings(
     const client = db ?? createApiSupabaseAdminClient();
     const { data, error } = await client
       .from("sales_agent_settings")
-      .select("ai_enabled, policy_text")
+      .select(SETTINGS_COLUMNS)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
     if (error) throw error;

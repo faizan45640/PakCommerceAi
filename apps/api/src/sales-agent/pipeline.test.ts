@@ -256,6 +256,18 @@ describe("agent turn", () => {
     expect(state.conversation.handoff_reason).toBeNull();
   });
 
+  it("still sends the reply when the agent's own confirmOrder moved the thread to waiting_approval", async () => {
+    const fetchImpl = vi.fn(async () => {
+      state.conversation.state = "waiting_approval"; // the AI asked for approval during this turn
+      return jsonResponse(agentOk());
+    });
+    scheduleAgentTurn(turn(), deps(fetchImpl as unknown as typeof fetch));
+    await whenAgentIdle();
+
+    expect(provider.sent).toHaveLength(1);
+    expect(state.conversation.state).toBe("waiting_approval");
+  });
+
   it.each([
     ["a 500", async () => jsonResponse({ error: "boom" }, 500)],
     ["a network error", async () => Promise.reject(new TypeError("fetch failed"))],

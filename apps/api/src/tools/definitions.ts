@@ -11,6 +11,16 @@ import { updateProductDetailsTool } from "../copilot/tools/write/update-product.
 import { updateProductStockTool } from "../copilot/tools/write/update-stock.js";
 import { checkInventory, checkInventoryInputSchema, compactSearch } from "./sales-agent-tools.js";
 import {
+  cancelOrderDraft,
+  cancelOrderDraftInputSchema,
+  confirmOrder,
+  confirmOrderInputSchema,
+  createOrderDraft,
+  createOrderDraftInputSchema,
+  getPendingOrder,
+  getPendingOrderInputSchema,
+} from "./sales-agent-order-tools.js";
+import {
   registerTool,
   type ToolAudience,
   type ToolContext,
@@ -163,3 +173,57 @@ registerTool(
     redact: ["customer.name", "customer.phone", "customer.addressLine", "customer.email", "notes"],
   }),
 );
+
+// --- WhatsApp sales agent: orders (S11). The AI holds the conversation, or it cannot write. ---
+
+registerTool({
+  name: "createOrderDraft",
+  description:
+    "Create a DRAFT order for this buyer after they confirmed the summary (items, name, city, address, payment). Use variantIds from checkInventory. Their phone is already known. Prices and delivery fee are added automatically. Returns the order number and totals: send them to the buyer and ask for a final HAAN. Does not confirm the order.",
+  inputSchema: createOrderDraftInputSchema,
+  permission: "write",
+  owner: "orders",
+  audiences: ["sales_agent"],
+  needsApproval: false,
+  audit: { redact: ["customer.name", "customer.city", "customer.addressLine", "notes"] },
+  execute: createOrderDraft,
+});
+
+registerTool({
+  name: "getPendingOrder",
+  description:
+    "Get this conversation's open draft order (or null). Use it when the buyer replies about an order you already drafted.",
+  inputSchema: getPendingOrderInputSchema,
+  permission: "read",
+  owner: "orders",
+  audiences: ["sales_agent"],
+  needsApproval: false,
+  audit: {},
+  execute: getPendingOrder,
+});
+
+registerTool({
+  name: "confirmOrder",
+  description:
+    "Confirm the draft order. Only call it after the buyer replied to your message with the order number and asked for a final HAAN; otherwise it fails with needs_buyer_confirmation. Returns confirmed, or awaiting_seller when the shop owner must approve first.",
+  inputSchema: confirmOrderInputSchema,
+  permission: "write",
+  owner: "orders",
+  audiences: ["sales_agent"],
+  needsApproval: false,
+  audit: {},
+  execute: confirmOrder,
+});
+
+registerTool({
+  name: "cancelOrderDraft",
+  description:
+    "Cancel this conversation's open draft order, for example when the buyer changes their mind or wants different items.",
+  inputSchema: cancelOrderDraftInputSchema,
+  permission: "write",
+  owner: "orders",
+  audiences: ["sales_agent"],
+  needsApproval: false,
+  audit: { redact: ["reason"] },
+  execute: cancelOrderDraft,
+});

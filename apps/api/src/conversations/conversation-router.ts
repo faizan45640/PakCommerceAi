@@ -1,6 +1,7 @@
 import {
   conversationSearchQuerySchema,
   messageListQuerySchema,
+  orderApprovalInputSchema,
 } from "@pakcommerce/shared/conversations";
 import { Router } from "express";
 import { z } from "zod";
@@ -19,6 +20,7 @@ import {
   transitionConversationInputSchema,
 } from "./conversation-service.js";
 import { getAiActivity } from "./ai-activity.js";
+import { decideOrderApproval } from "./order-approval.js";
 import { getActiveWhatsApp } from "../whatsapp/factory.js";
 import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "./mock-inbound.js";
 
@@ -169,6 +171,29 @@ conversationRouter.post("/:id/state", async (request, response, next) => {
     const input = parseOrThrow(transitionConversationInputSchema, request.body, "conversation state");
 
     response.json({ data: await transitionConversationState(auth, id, input) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Seller decision on an AI order waiting for approval. Approve confirms the
+ * order, hands the thread back to the AI and tells the buyer; reject cancels
+ * the draft and leaves the thread with the seller.
+ */
+conversationRouter.post("/:id/order-approval", async (request, response, next) => {
+  try {
+    const auth = sellerContext(request);
+    const id = parseOrThrow(idSchema, request.params.id, "conversation id");
+    const input = parseOrThrow(orderApprovalInputSchema, request.body, "order approval");
+
+    const active = getActiveWhatsApp();
+    // Same spike rule as replies: the connected number belongs to one workspace.
+    const usable = active && (active.workspaceId === null || active.workspaceId === input.workspaceId);
+
+    response.json({
+      data: await decideOrderApproval(auth, id, input, usable ? active.provider : null),
+    });
   } catch (error) {
     next(error);
   }

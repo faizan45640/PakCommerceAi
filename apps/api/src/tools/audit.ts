@@ -17,6 +17,7 @@ export const databaseToolAudit: ToolAuditSink = {
     const { error } = await createApiSupabaseAdminClient()
       .from("ai_tool_calls")
       .insert({
+        ...(entry.id ? { id: entry.id } : {}),
         seller_id: entry.sellerId,
         workspace_id: entry.workspaceId,
         conversation_id: entry.conversationId,

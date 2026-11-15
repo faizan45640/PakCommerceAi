@@ -117,18 +117,32 @@ describe("sales agent settings API", () => {
   it("returns defaults when no row exists, then saves and reads back", async () => {
     const first = await as(alice, "get", SETTINGS).query({ workspaceId: alice.workspaceId });
     expect(first.status).toBe(200);
-    expect(first.body.data).toEqual({ workspaceId: alice.workspaceId, aiEnabled: false, policyText: "" });
+    expect(first.body.data).toEqual({
+      workspaceId: alice.workspaceId,
+      aiEnabled: false,
+      policyText: "",
+      autoConfirmOrders: true,
+      shippingFee: { amountMinor: 0, currency: "PKR" },
+    });
 
     const put = await as(alice, "put", SETTINGS).send({
       workspaceId: alice.workspaceId,
       aiEnabled: true,
       policyText: "  Delivery 3 days. COD available.  ",
+      autoConfirmOrders: false,
+      shippingFee: { amountMinor: 25000, currency: "PKR" },
     });
     expect(put.status).toBe(200);
     expect(put.body.data).toEqual({
       workspaceId: alice.workspaceId,
       aiEnabled: true,
       policyText: "Delivery 3 days. COD available.",
+      autoConfirmOrders: false,
+      shippingFee: { amountMinor: 25000, currency: "PKR" },
+    });
+    expect((await as(alice, "get", SETTINGS).query({ workspaceId: alice.workspaceId })).body.data).toMatchObject({
+      autoConfirmOrders: false,
+      shippingFee: { amountMinor: 25000 },
     });
 
     // Second save updates the same row.
@@ -145,6 +159,15 @@ describe("sales agent settings API", () => {
     });
     expect(tooLong.status).toBe(400);
     expect((await as(alice, "put", SETTINGS).send({ workspaceId: alice.workspaceId, aiEnabled: "yes" })).status).toBe(400);
+    expect(
+      (
+        await as(alice, "put", SETTINGS).send({
+          workspaceId: alice.workspaceId,
+          aiEnabled: true,
+          shippingFee: { amountMinor: -1, currency: "PKR" },
+        })
+      ).status,
+    ).toBe(400);
     expect((await as(alice, "put", SETTINGS).send({ workspaceId: "nope", aiEnabled: true })).status).toBe(400);
     expect((await as(alice, "get", SETTINGS)).status).toBe(400);
   });
