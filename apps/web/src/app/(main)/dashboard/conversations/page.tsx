@@ -5,11 +5,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentConfidenceIndicator } from "./_components/agent-confidence-indicator";
 import { AgentKpiStrip } from "./_components/agent-kpi-strip";
 import { AgentSettings } from "./_components/agent-settings";
-import { ConversationList } from "./_components/conversation-list";
+import { ConversationInbox } from "./_components/conversation-inbox";
 import { ConversationTranscript } from "./_components/conversation-transcript";
 import { TopCustomerQuestions } from "./_components/top-customer-questions";
 
-export default function ConversationsPage() {
+interface ConversationsPageProps {
+  searchParams: Promise<{ c?: string | string[] }>;
+}
+
+export default async function ConversationsPage({ searchParams }: ConversationsPageProps) {
+  const { c } = await searchParams;
+  const selectedId = (Array.isArray(c) ? c[0] : c)?.trim() || undefined;
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -18,6 +25,9 @@ export default function ConversationsPage() {
         actions={<StatusBadge label="Buyer AI" tone="info" />}
       />
 
+      <p className="text-muted-foreground text-xs">
+        Sample figures: the metrics below are placeholders until live agent analytics ship.
+      </p>
       <AgentKpiStrip />
 
       <Tabs defaultValue="conversations" className="flex flex-col gap-4">
@@ -30,7 +40,7 @@ export default function ConversationsPage() {
         <TabsContent value="conversations" className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
             <div className="xl:col-span-5">
-              <ConversationList />
+              <ConversationInbox selectedId={selectedId} />
             </div>
             <div className="xl:col-span-7">
               <ConversationTranscript />
