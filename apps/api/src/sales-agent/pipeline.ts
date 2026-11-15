@@ -176,7 +176,7 @@ async function runTurn(db: AppSupabaseClient, input: AgentTurnInput, deps: Pipel
   const settings = await loadSalesAgentSettings(input.workspaceId, db);
   if (!settings.aiEnabled) return;
 
-  const history = await loadHistory(db, input.conversationId, trigger.created_at);
+  const history = await loadHistory(db, input.conversationId, input.messageId, trigger.created_at);
 
   const response = await callAgent(
     {
@@ -230,17 +230,26 @@ function cleanReply(reply: string | null): string | null {
   return text === "" ? null : text.slice(0, MAX_MESSAGE_BODY_LENGTH);
 }
 
-/** Last messages before the trigger, oldest first. No phones, only role and text. */
+/**
+ * The conversation so far, oldest first, as the agent should see it for this
+ * turn: buyer messages sent before the trigger, plus every reply already sent,
+ * even one stored after the trigger. When a buyer sends two messages quickly,
+ * both are stored before the first reply, and the second turn must still see
+ * that reply. Later buyer messages are left out; their own turn answers them.
+ * No phones, only role and text.
+ */
 async function loadHistory(
   db: AppSupabaseClient,
   conversationId: string,
-  before: string,
+  triggerId: string,
+  triggerAt: string,
 ): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
   const { data, error } = await db
     .from("messages")
     .select("direction, body, status")
     .eq("conversation_id", conversationId)
-    .lt("created_at", before)
+    .neq("id", triggerId)
+    .or(`created_at.lt."${triggerAt}",direction.eq.outbound`)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(HISTORY_LIMIT);

@@ -321,7 +321,9 @@ describe("AI reply pipeline", () => {
 
     expect(agentCalls.map((c) => (c.body.message as { body: string }).body)).toEqual(["First question", "Second question"]);
     const { messages } = await thread(alice, id);
-    expect(messages.map((m) => m.sender)).toEqual(["buyer", "ai", "buyer", "ai"]);
+    // Both buyer messages may be stored before the first reply; only the counts
+    // and the history the second turn saw are guaranteed.
+    expect(messages.map((m) => m.sender).sort()).toEqual(["ai", "ai", "buyer", "buyer"]);
     expect(agentCalls[1]!.body.history).toEqual([
       { role: "user", content: "First question" },
       { role: "assistant", content: "Yes, in stock." },

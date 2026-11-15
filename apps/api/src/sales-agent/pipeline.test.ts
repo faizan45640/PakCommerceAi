@@ -71,9 +71,12 @@ function fakeDb(state: FakeState) {
               : state.messages.find((m) => m.id === filters.id);
           return { data: found ?? null, error: null };
         }
+        // Mirrors loadHistory: not the trigger, and either older than it or a reply.
         const before = String(filters.created_at_lt);
-        const older = state.messages.filter((m) => String(m.created_at) < before);
-        return { data: [...older].reverse().slice(0, 20), error: null };
+        const seen = state.messages.filter(
+          (m) => m.id !== filters.id_neq && (String(m.created_at) < before || m.direction === "outbound"),
+        );
+        return { data: [...seen].reverse().slice(0, 20), error: null };
       }
       return { data: null, error: null };
     };
@@ -96,8 +99,18 @@ function fakeDb(state: FakeState) {
         filters[column] = value;
         return api;
       },
-      lt: (_column: string, value: unknown) => {
-        filters.created_at_lt = value;
+      lt: (column: string, value: unknown) => {
+        filters[`${column}_lt`] = value;
+        return api;
+      },
+      neq: (column: string, value: unknown) => {
+        filters[`${column}_neq`] = value;
+        return api;
+      },
+      or: (expression: string) => {
+        const match = /^created_at\.lt\."([^"]+)",direction\.eq\.outbound$/.exec(expression);
+        if (!match) throw new Error(`unexpected or() filter: ${expression}`);
+        filters.created_at_lt = match[1];
         return api;
       },
       order: () => api,
