@@ -63,7 +63,7 @@ export interface MessageListResult {
 
 export async function fetchConversationById(workspaceId: string, id: string): Promise<Conversation> {
   const response = await apiFetch<ApiDataResponse<Conversation>>(
-    `/api/v1/conversations/${id}?${new URLSearchParams({ workspaceId }).toString()}`,
+    `/api/v1/conversations/${encodeURIComponent(id)}?${new URLSearchParams({ workspaceId }).toString()}`,
   );
   return response.data;
 }
@@ -75,7 +75,7 @@ export async function fetchMessages(id: string, params: MessageListParams): Prom
   if (params.cursor) searchParams.set("cursor", params.cursor);
 
   const response = await apiFetch<ApiListResponse<Message> & { nextCursor?: string | null }>(
-    `/api/v1/conversations/${id}/messages?${searchParams.toString()}`,
+    `/api/v1/conversations/${encodeURIComponent(id)}/messages?${searchParams.toString()}`,
   );
   return { items: response.data, nextCursor: response.nextCursor };
 }
@@ -83,7 +83,7 @@ export async function fetchMessages(id: string, params: MessageListParams): Prom
 /** Marks every message in the thread as seen; returns the conversation with `unreadCount` 0. */
 export async function markConversationRead(workspaceId: string, id: string): Promise<Conversation> {
   const response = await apiFetch<ApiDataResponse<Conversation>>(
-    `/api/v1/conversations/${id}/read?${new URLSearchParams({ workspaceId }).toString()}`,
+    `/api/v1/conversations/${encodeURIComponent(id)}/read?${new URLSearchParams({ workspaceId }).toString()}`,
     { method: "POST" },
   );
   return response.data;

@@ -64,6 +64,9 @@ describe("thread model", () => {
       label: "Photo",
       href: "https://x/i",
     });
+    expect(mediaChip({ url: "javascript:alert(1)", contentType: "image/png" })).toEqual({ label: "Photo" });
+    expect(mediaChip({ url: "data:image/png;base64,AAAA", contentType: "image/png" }).href).toBeUndefined();
+    expect(mediaChip({ url: "http://x/i", contentType: "image/png" }).href).toBeUndefined();
     expect(mediaChip({ url: "https://x/d", contentType: "application/zip" }).label).toBe("Attachment");
   });
 });

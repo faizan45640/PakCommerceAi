@@ -69,6 +69,12 @@ describe("thread endpoints", () => {
     expect(result).toEqual({ items: [{ id: "m1" }], nextCursor: null });
   });
 
+  it("encodes ids in path segments", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ data: [], meta: {} });
+    await fetchMessages("a/b?c", { workspaceId: "w1" });
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/conversations/a%2Fb%3Fc/messages?workspaceId=w1");
+  });
+
   it("posts mark-as-read", async () => {
     vi.mocked(apiFetch).mockResolvedValue({ data: { id: "c1", unreadCount: 0 } });
     const conversation = await markConversationRead("w1", "c1");

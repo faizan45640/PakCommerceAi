@@ -5,9 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentConfidenceIndicator } from "./_components/agent-confidence-indicator";
 import { AgentKpiStrip } from "./_components/agent-kpi-strip";
 import { AgentSettings } from "./_components/agent-settings";
-import { ConversationInbox } from "./_components/conversation-inbox";
-import { ConversationThread } from "./_components/conversation-thread";
+import { ConversationsSplitView } from "./_components/conversations-split-view";
 import { TopCustomerQuestions } from "./_components/top-customer-questions";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ConversationsPageProps {
   searchParams: Promise<{ c?: string | string[] }>;
@@ -15,7 +16,8 @@ interface ConversationsPageProps {
 
 export default async function ConversationsPage({ searchParams }: ConversationsPageProps) {
   const { c } = await searchParams;
-  const selectedId = (Array.isArray(c) ? c[0] : c)?.trim() || undefined;
+  const candidate = (Array.isArray(c) ? c[0] : c)?.trim();
+  const selectedId = candidate && UUID_PATTERN.test(candidate) ? candidate : undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -38,14 +40,7 @@ export default async function ConversationsPage({ searchParams }: ConversationsP
         </TabsList>
 
         <TabsContent value="conversations" className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-            <div className="xl:col-span-5">
-              <ConversationInbox selectedId={selectedId} />
-            </div>
-            <div className="xl:col-span-7">
-              <ConversationThread key={selectedId ?? "none"} conversationId={selectedId} />
-            </div>
-          </div>
+          <ConversationsSplitView selectedId={selectedId} />
         </TabsContent>
 
         <TabsContent value="performance" className="flex flex-col gap-4">

@@ -37,7 +37,14 @@ import {
 const PAGE_SIZE = 50;
 
 /** The live thread for `conversationId`. Mount it with `key={conversationId}` so state resets per thread. */
-export function ConversationThread({ conversationId }: { conversationId?: string }) {
+export function ConversationThread({
+  conversationId,
+  onConversationUpdated,
+}: {
+  conversationId?: string;
+  /** Called with the conversation returned by mark-as-read so the inbox row updates. */
+  onConversationUpdated?: (conversation: Conversation) => void;
+}) {
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
   const [conversation, setConversation] = React.useState<Conversation | null>(null);
   const [messages, setMessages] = React.useState<Message[]>([]);
@@ -45,6 +52,15 @@ export function ConversationThread({ conversationId }: { conversationId?: string
   const [isLoading, setIsLoading] = React.useState(Boolean(conversationId));
   const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [olderError, setOlderError] = React.useState<string | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  // Set before older messages are prepended so their height can be compensated.
+  const prevHeight = React.useRef<number | null>(null);
+  const initialScrollDone = React.useRef(false);
+  const onUpdatedRef = React.useRef(onConversationUpdated);
+  React.useEffect(() => {
+    onUpdatedRef.current = onConversationUpdated;
+  });
   const [notFound, setNotFound] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
 
@@ -71,7 +87,10 @@ export function ConversationThread({ conversationId }: { conversationId?: string
         if (loaded.unreadCount > 0) {
           try {
             const read = await markConversationRead(workspace.id, id);
-            if (!ignore) setConversation(read);
+            if (!ignore) {
+              setConversation(read);
+              onUpdatedRef.current?.(read);
+            }
           } catch {
             // Not critical: the badge stays until the next open.
           }
@@ -94,16 +113,32 @@ export function ConversationThread({ conversationId }: { conversationId?: string
   async function loadOlder() {
     if (!conversationId || !workspaceId || !olderCursor) return;
     setIsLoadingOlder(true);
+    setOlderError(null);
+    prevHeight.current = scrollRef.current?.scrollHeight ?? null;
     try {
       const page = await fetchMessages(conversationId, { workspaceId, limit: PAGE_SIZE, cursor: olderCursor });
       setMessages((current) => prependOlder(current, page.items));
       setOlderCursor(page.nextCursor ?? null);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to load older messages.");
+      prevHeight.current = null;
+      setOlderError(err instanceof Error ? err.message : "Failed to load older messages.");
     } finally {
       setIsLoadingOlder(false);
     }
   }
+
+  // Newest message at the bottom on first load; keep the reader's place when older ones arrive.
+  React.useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (prevHeight.current !== null) {
+      el.scrollTop += el.scrollHeight - prevHeight.current;
+      prevHeight.current = null;
+    } else if (!initialScrollDone.current && messages.length > 0) {
+      el.scrollTop = el.scrollHeight;
+      initialScrollDone.current = true;
+    }
+  }, [messages, conversation]);
 
   if (!conversationId) {
     return (
@@ -169,7 +204,12 @@ export function ConversationThread({ conversationId }: { conversationId?: string
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="flex max-h-[32rem] flex-col gap-3 overflow-y-auto pr-2">
+        <div ref={scrollRef} className="flex max-h-[32rem] flex-col gap-3 overflow-y-auto pr-2">
+          {olderError ? (
+            <p role="alert" className="text-center text-destructive text-xs">
+              {olderError}
+            </p>
+          ) : null}
           {olderCursor ? (
             <Button
               variant="outline"
@@ -178,7 +218,7 @@ export function ConversationThread({ conversationId }: { conversationId?: string
               onClick={() => void loadOlder()}
               disabled={isLoadingOlder}
             >
-              {isLoadingOlder ? "Loading..." : "Load older messages"}
+              {isLoadingOlder ? "Loading..." : olderError ? "Retry" : "Load older messages"}
             </Button>
           ) : null}
           {messages.length === 0 ? (

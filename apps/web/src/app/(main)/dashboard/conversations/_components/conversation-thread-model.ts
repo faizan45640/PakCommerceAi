@@ -67,10 +67,19 @@ export interface MediaChip {
   href?: string;
 }
 
+/** Only https links are rendered as links (never javascript:, data: or plain http:). */
+export function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function mediaChip(media: MessageMedia): MediaChip {
   const type = media.contentType.toLowerCase();
   if (type.startsWith("audio/")) return { label: "Voice note" };
-  if (type.startsWith("image/")) return { label: "Photo", href: media.url };
+  if (type.startsWith("image/")) return { label: "Photo", href: isHttpsUrl(media.url) ? media.url : undefined };
   if (type.startsWith("video/")) return { label: "Video" };
   if (type === "application/pdf") return { label: "Document" };
   return { label: "Attachment" };
