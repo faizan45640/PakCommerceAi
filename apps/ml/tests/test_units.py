@@ -123,3 +123,16 @@ def test_schema_is_sanitized_for_provider_converters() -> None:
     from langchain_google_genai._function_utils import convert_to_genai_function_declarations
 
     convert_to_genai_function_declarations([tool])
+
+
+def test_deepseek_thinking_off_by_default_and_configurable():
+    ds = get_chat_model({"AI_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "k"})
+    assert ds.extra_body == {"thinking": {"type": "disabled"}}
+    on = get_chat_model(
+        {"AI_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "k", "DEEPSEEK_THINKING": "enabled"}
+    )
+    assert on.extra_body == {"thinking": {"type": "enabled"}}
+    with pytest.raises(LLMConfigError):
+        get_chat_model(
+            {"AI_PROVIDER": "deepseek", "DEEPSEEK_API_KEY": "k", "DEEPSEEK_THINKING": "max"}
+        )
