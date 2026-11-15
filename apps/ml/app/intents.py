@@ -30,6 +30,8 @@ INTENTS: dict[str, IntentSpec] = {
         "Looking for products, categories, colours, sizes or prices to browse.",
         (
             "lawn ke suits dikhao",
+            "kya available hai?",
+            "kya kya hai aapke paas",
             "black kurta under 3000",
             "کوئی اچھا سا بیگ ہے؟",
             "show me sneakers",
@@ -89,6 +91,8 @@ def classifier_system_prompt() -> str:
         "You classify one WhatsApp message from a buyer to an online shop in Pakistan.",
         "Buyers write English, Urdu script or Roman Urdu, often mixed.",
         "Pick exactly one intent. If the buyer is upset or the topic is risky, choose handoff.",
+        "Spelling is often informal or misspelt (avalable, he for hai, plz); read past it.",
+        "A general question about what the shop sells is product_search.",
         "If you are unsure, give a low confidence instead of guessing.",
         "",
         "Intents:",

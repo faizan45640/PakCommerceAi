@@ -62,12 +62,12 @@ def test_handoff_intent_gives_no_reply() -> None:
     assert out["handoff"]["reason"] == "buyer_needs_human"
 
 
-def test_low_confidence_hands_off() -> None:
-    model = make_model("product_search", confidence=0.3, script=[AIMessage("should not be sent")])
-    out = run(model)
-    assert out["reply"] is None
-    assert out["handoff"]["required"] is True
-    assert out["handoff"]["reason"].startswith("low_confidence")
+def test_low_confidence_answers_instead_of_handing_off() -> None:
+    question = "Kaunsi cheez dekhni hai? Kurta, shawl ya earbuds?"
+    model = make_model("product_search", confidence=0.3, script=[AIMessage(question)])
+    out = run(model, body="kya avalable he")
+    assert out["handoff"]["required"] is False
+    assert out["reply"] == question
 
 
 def test_policy_without_seller_text_hands_off() -> None:
