@@ -107,7 +107,7 @@ On push to `main` (or manual run), the workflow:
 |---|---|---|
 | Web | Netlify Git integration | Push to `dev` |
 | API | Render Blueprint (`render.yaml`) | Push to `dev` **after CI checks pass** |
-| ML | Nothing yet | `apps/ml` has no service |
+| ML | Not deployed yet | `apps/ml` (FastAPI + LangGraph WhatsApp agent) runs locally; see `apps/ml/README.md` and `docs/RUNBOOK.md` |
 
 The database is **not** deployed by this workflow — Supabase migrations are pushed
 separately (step 1 below).

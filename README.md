@@ -15,13 +15,15 @@ This repository is **early-stage**. The target system describes the **complete o
 | | |
 |---|---|
 | **Proposal** | The 20-week target. Aspirational. |
-| **This codebase** | Phase 3 is done. The catalogue API and seller copilot are in. Store sync, WhatsApp, RAG, and the COD model are not. |
-| **Built so far** | Supabase Auth, workspace/product/inventory/order/customer schema, product CRUD, inventory adjustments, draft/manual orders, confirm-with-stock deduction, a streaming Business Copilot with guarded writes, and the dashboard shell. |
-| **Not started** | Store connectors, sync engine, WhatsApp agent, RAG, ML/COD risk model, real courier scoring, ship/return flows, audit logs. |
+| **This codebase** | Catalogue, orders, Customer 360, the seller copilot (Rafiq) and the WhatsApp Sales Agent (inbox, takeover, AI replies, AI orders with double confirmation) are in. Store sync, RAG, voice notes and the COD model are not. |
+| **Built so far** | Supabase Auth, workspace/product/inventory/order/customer schema, product CRUD, inventory adjustments, draft/manual orders, confirm-with-stock deduction, a streaming Business Copilot with guarded writes, Customer 360, the WhatsApp inbox (Meta / Twilio / simulator), the Python LangGraph sales agent with a shared tool registry and audit log, and AI-placed orders with seller approval. |
+| **Not started** | Store connectors, sync engine, RAG, voice notes, ML/COD risk model, real courier scoring, ship/return flows, `apps/ml` deployment. |
 
 When a document describes a feature, check the status table below before assuming it exists.
 
 **To run the project → [`docs/RUNBOOK.md`](docs/RUNBOOK.md)**
+
+**How it all fits together (architecture, request flows, file map, security) → [`docs/SYSTEM_WALKTHROUGH.md`](docs/SYSTEM_WALKTHROUGH.md)**
 
 ---
 
