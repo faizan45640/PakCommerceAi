@@ -30,6 +30,8 @@ export const LOCAL_SERVICE_ROLE_KEY =
 export function applyTestEnv(): void {
   process.env.SUPABASE_URL = LOCAL_SUPABASE_URL;
   process.env.SUPABASE_PUBLISHABLE_KEY = LOCAL_ANON_KEY;
+  // Server-side only paths (the inbound message ingest runs as the service role).
+  process.env.SUPABASE_SERVICE_ROLE_KEY = LOCAL_SERVICE_ROLE_KEY;
 }
 
 export interface TestSeller {
