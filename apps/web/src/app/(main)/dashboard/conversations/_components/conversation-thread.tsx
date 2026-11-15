@@ -152,11 +152,13 @@ export function ConversationThread({
       });
     } catch (err: unknown) {
       setSendError(err instanceof Error ? err.message : "Could not send the message.");
-      // A provider failure is stored as a failed message; reload to show it.
-      if (err instanceof ApiRequestError && err.status === 502) {
+      // 409: the conversation state changed elsewhere. Refetch it so the compose box hides.
+      // 422/502 stay inline above; nothing else reloads.
+      if (err instanceof ApiRequestError && err.status === 409) {
         try {
-          const page = await fetchMessages(conversationId, { workspaceId, limit: PAGE_SIZE });
-          setMessages(toChronological(page.items));
+          const fresh = await fetchConversationById(workspaceId, conversationId);
+          setConversation(fresh);
+          onUpdatedRef.current?.(fresh);
         } catch {
           // The error above is enough.
         }

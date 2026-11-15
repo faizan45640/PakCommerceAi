@@ -36,12 +36,20 @@ export interface WhatsAppProvider {
   sendText(to: string, body: string): Promise<string>;
 }
 
+/** Known send failures the seller can act on; everything else is `other`. */
+export type ProviderFailureReason = "reengagement" | "token" | "recipient" | "other";
+
 export class WhatsAppProviderError extends Error {
   readonly status?: number;
+  /** Provider error code (Graph `error.code`), safe to log. */
+  readonly code?: number;
+  readonly reason: ProviderFailureReason;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, code?: number, reason: ProviderFailureReason = "other") {
     super(message);
     this.name = "WhatsAppProviderError";
     this.status = status;
+    this.code = code;
+    this.reason = reason;
   }
 }

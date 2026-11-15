@@ -19,7 +19,6 @@ import {
   transitionConversationInputSchema,
 } from "./conversation-service.js";
 import { getMetaCloudConfig, MetaCloudProvider } from "../whatsapp/meta-cloud.js";
-import type { WhatsAppProvider } from "../whatsapp/provider.js";
 import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "./mock-inbound.js";
 
 /**
@@ -28,12 +27,6 @@ import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "
  */
 export const conversationRouter = Router();
 
-/** Spike-only: the single env-configured Meta number. Null when the feature is off. */
-function defaultWhatsAppProvider(): WhatsAppProvider | null {
-  const config = getMetaCloudConfig();
-  return config ? new MetaCloudProvider(config) : null;
-}
-
 /** Seller reply over WhatsApp. Only while the seller holds the conversation (`human_takeover`). */
 conversationRouter.post("/:id/messages", async (request, response, next) => {
   try {
@@ -41,8 +34,13 @@ conversationRouter.post("/:id/messages", async (request, response, next) => {
     const id = parseOrThrow(idSchema, request.params.id, "conversation id");
     const input = parseOrThrow(sendSellerReplyInputSchema, request.body, "reply");
 
-    const provider = defaultWhatsAppProvider();
-    if (!provider) throw new NotFoundError("WhatsApp is not connected.");
+    const config = getMetaCloudConfig();
+    // Spike-only: the one connected number belongs to one workspace. Any other
+    // workspace (even the caller's own) must not send through it.
+    if (!config || input.workspaceId !== config.workspaceId) {
+      throw new NotFoundError("WhatsApp is not connected.");
+    }
+    const provider = new MetaCloudProvider(config);
 
     response.status(201).json({ data: await sendSellerReply(auth, id, input, provider) });
   } catch (error) {

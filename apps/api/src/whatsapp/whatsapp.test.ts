@@ -18,6 +18,8 @@ let conversationResult: { data: unknown; error: unknown } = { data: null, error:
 const adminCalls: Array<[string, unknown[]]> = [];
 const rpc = vi.fn();
 let insertedRow: Record<string, unknown> | null = null;
+let insertFailures = 0;
+let insertAttempts = 0;
 
 function chain(result: unknown, record?: Array<[string, unknown[]]>) {
   const builder: Record<string, unknown> = { then: (resolve: (v: unknown) => unknown) => resolve(result) };
@@ -37,6 +39,11 @@ const adminDb = {
     const builder = chain({ data: null, error: null }, adminCalls) as Record<string, unknown>;
     builder.insert = (row: Record<string, unknown>) => {
       adminCalls.push(["insert", [row]]);
+      insertAttempts += 1;
+      if (insertFailures > 0) {
+        insertFailures -= 1;
+        return chain({ data: null, error: { message: "db down" } });
+      }
       insertedRow = row;
       return chain({
         data: { id: "33333333-3333-4333-8333-333333333333", created_at: "2026-11-15T10:00:00.000Z", ...row },
@@ -81,6 +88,8 @@ beforeEach(() => {
   });
   adminCalls.length = 0;
   insertedRow = null;
+  insertFailures = 0;
+  insertAttempts = 0;
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -220,6 +229,48 @@ describe("inbound processing", () => {
     await vi.waitFor(() => expect(adminCalls.some(([m]) => m === "update")).toBe(true));
     expect(adminCalls).toContainEqual(["eq", ["provider_message_id", "wamid.OUT"]]);
     expect(adminCalls).toContainEqual(["in", ["status", ["queued", "sent"]]]);
+  });
+});
+
+describe("delivery guarantees", () => {
+  it("answers 500 on a transient ingest failure so Meta redelivers", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "connection reset", code: "08006" } });
+    expect((await post(change(textValue()))).status).toBe(500);
+  });
+
+  it("answers 200 on a permanent failure (integrity error) and for invalid messages", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "bad", code: "23514" } });
+    expect((await post(change(textValue()))).status).toBe(200);
+    rpc.mockClear();
+    const bad = textValue({ messages: [{ from: "abc", id: "wamid.X", type: "text", text: { body: "hi" } }] });
+    expect((await post(change(bad))).status).toBe(200);
+  });
+
+  it("answers 500 when a status update hits a database error", async () => {
+    const value = { metadata: { phone_number_id: PHONE_ID }, statuses: [{ id: "wamid.OUT", status: "sent" }] };
+    // The fake update chain resolves { error: null }; swap in a failing one for this call.
+    const original = adminDb.from;
+    adminDb.from = () => chain({ data: null, error: { message: "down", code: "57P01" } }) as never;
+    try {
+      expect((await post(change(value))).status).toBe(500);
+    } finally {
+      adminDb.from = original;
+    }
+  });
+
+  it("ingests media messages without media when the lookup fails, using a placeholder body", async () => {
+    fetchMock.mockRejectedValue(new Error("timeout"));
+    const value = textValue({
+      messages: [{ from: "923001234567", id: "wamid.V", type: "audio", audio: { id: "M9" } }],
+    });
+    expect((await post(change(value))).status).toBe(200);
+    expect(rpc.mock.calls[0]![1]).toMatchObject({ p_body: "[voice note]", p_media: [] });
+  });
+
+  it("passes an abort signal to the media lookup", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ url: "https://x.test/a", mime_type: "audio/ogg" })));
+    await post(change(textValue({ messages: [{ from: "923001234567", id: "wamid.V", type: "audio", audio: { id: "M9" } }] })));
+    expect(fetchMock.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
   });
 });
 
@@ -373,6 +424,51 @@ describe("POST /conversations/:id/messages", () => {
     expect(res.status).toBe(502);
     expect(JSON.stringify(res.body)).not.toContain("token-123");
     expect(insertedRow).toMatchObject({ status: "failed", provider_message_id: null });
+  });
+
+  it("is 404 for any workspace other than the connected one, before touching the provider", async () => {
+    conversationResult = { data: conversation("human_takeover"), error: null };
+    const res = await send({ workspaceId: "99999999-9999-4999-8999-999999999999", body: "Hello" });
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(insertAttempts).toBe(0);
+  });
+
+  it("retries the record insert once after a successful send", async () => {
+    conversationResult = { data: conversation("human_takeover"), error: null };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ messages: [{ id: "wamid.OUT" }] })));
+    insertFailures = 1;
+    const res = await send();
+    expect(res.status).toBe(201);
+    expect(insertAttempts).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still returns success with a message built from the send when the record cannot be saved", async () => {
+    conversationResult = { data: conversation("human_takeover"), error: null };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ messages: [{ id: "wamid.OUT" }] })));
+    insertFailures = 5;
+    const res = await send();
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ status: "sent", body: "Hello", conversationId: CONVERSATION });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [400, 131047, /24 hours/],
+    [401, undefined, /token expired/],
+    [400, 190, /token expired/],
+    [400, 131030, /test recipient list/],
+  ])("maps Graph failure %s/%s to a clear 422", async (status, code, message) => {
+    conversationResult = { data: conversation("human_takeover"), error: null };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(code ? { error: { code, message: "secret detail" } } : {}), { status }),
+    );
+    const res = await send();
+    expect(res.status).toBe(422);
+    expect(res.body.error.message).toMatch(message);
+    expect(JSON.stringify(res.body)).not.toContain("secret detail");
+    expect(insertedRow).toMatchObject({ status: "failed" });
   });
 
   it("is 404 when WhatsApp is not configured", async () => {

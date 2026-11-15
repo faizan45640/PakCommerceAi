@@ -411,6 +411,8 @@ One Meta test number is wired to one workspace through env. Per-seller setup com
 5. WhatsApp > Configuration > Webhook: callback URL `https://<public-host>/api/v1/webhooks/whatsapp`, verify token = your `WHATSAPP_VERIFY_TOKEN`, then **Verify and save**. Subscribe to the **messages** field.
 6. Send a WhatsApp message from your phone to the test number: it appears in the inbox (state `open`). Click **Take over**, reply from the thread; delivery ticks update the status. Free-form replies only work within 24 hours of the buyer's last message.
 
+Known gap: media links (images, voice notes) are short-lived Meta URLs and expire; proper storage comes with the voice-notes task.
+
 The temporary token expires in about 24 hours; regenerate it or create a System User token for longer tests.
 
 ---

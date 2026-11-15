@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { AppSupabaseClient } from "@pakcommerce/integrations/supabase";
 import type { ApiMeta } from "@pakcommerce/shared";
 import {
@@ -18,7 +20,7 @@ import { z } from "zod";
 
 import { ConflictError, HttpError, NotFoundError } from "../lib/http-errors.js";
 import { createApiSupabaseAdminClient } from "../lib/supabase.js";
-import type { WhatsAppProvider } from "../whatsapp/provider.js";
+import { WhatsAppProviderError, type WhatsAppProvider } from "../whatsapp/provider.js";
 import { decodePageCursor, encodePageCursor } from "../lib/page-cursor.js";
 import { escapePostgrestFilterValue } from "../lib/postgrest.js";
 import type { SellerContext } from "../middleware/seller-context.js";
@@ -248,35 +250,72 @@ export async function sendSellerReply(
   }
 
   let providerMessageId: string | null = null;
+  let failure: WhatsAppProviderError | null = null;
   try {
     providerMessageId = await provider.sendText(conversation.buyerPhone, input.body);
   } catch (error) {
-    console.error("whatsapp send failed", error instanceof Error ? error.name : "error");
+    failure = error instanceof WhatsAppProviderError ? error : new WhatsAppProviderError("send failed");
+    console.error("whatsapp send failed", failure.code ?? failure.status ?? "unknown");
   }
 
-  const { data, error } = await admin
-    .from("messages")
-    .insert({
-      workspace_id: input.workspaceId,
-      seller_id: auth.sellerId,
-      conversation_id: conversationId,
+  const row = {
+    workspace_id: input.workspaceId,
+    seller_id: auth.sellerId,
+    conversation_id: conversationId,
+    direction: "outbound" as const,
+    sender: "seller" as const,
+    body: input.body,
+    media: [],
+    provider_message_id: providerMessageId,
+    status: providerMessageId ? ("sent" as const) : ("failed" as const),
+  };
+
+  // Retry once: after a successful send, a lost record means the seller resends.
+  let saved: MessageRow | null = null;
+  let saveError: { message: string } | null = null;
+  for (let attempt = 0; attempt < 2 && !saved; attempt += 1) {
+    const { data, error } = await admin.from("messages").insert(row).select("*").single();
+    if (error) saveError = error;
+    else saved = data as MessageRow;
+  }
+
+  if (failure) throw replyFailure(failure);
+
+  if (!saved) {
+    // Delivered but not recorded. Answer success with the message built from the
+    // send result so the seller does not send it again; it will be missing from
+    // the thread after a reload (known gap, status webhooks for it find no row).
+    console.error("whatsapp reply sent but not recorded", saveError ? "db error" : "unknown");
+    return {
+      id: randomUUID(),
+      conversationId,
       direction: "outbound",
       sender: "seller",
       body: input.body,
       media: [],
-      provider_message_id: providerMessageId,
-      status: providerMessageId ? "sent" : "failed",
-    })
-    .select("*")
-    .single();
-
-  if (error) throw new Error(error.message, { cause: error });
-
-  if (!providerMessageId) {
-    throw new HttpError(502, "internal_error", "WhatsApp could not deliver the message. It is saved as failed.");
+      status: "sent",
+      createdAt: new Date().toISOString(),
+    };
   }
 
-  return toMessage(data as MessageRow);
+  return toMessage(saved);
+}
+
+function replyFailure(failure: WhatsAppProviderError): HttpError {
+  switch (failure.reason) {
+    case "reengagement":
+      return new HttpError(
+        422,
+        "validation_error",
+        "More than 24 hours since the buyer's last message. WhatsApp only allows template messages now.",
+      );
+    case "token":
+      return new HttpError(422, "validation_error", "WhatsApp access token expired or invalid.");
+    case "recipient":
+      return new HttpError(422, "validation_error", "This number isn't on the test recipient list.");
+    default:
+      return new HttpError(502, "internal_error", "WhatsApp could not deliver the message. It is saved as failed.");
+  }
 }
 
 /** Resolves when `workspaceId` belongs to the caller; otherwise 404 (RLS hides foreign rows). */

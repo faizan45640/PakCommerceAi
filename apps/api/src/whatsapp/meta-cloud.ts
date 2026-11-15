@@ -8,6 +8,7 @@ import {
   type DeliveryStatus,
   type InboundMessage,
   type ParsedInbound,
+  type ProviderFailureReason,
   type WhatsAppProvider,
 } from "./provider.js";
 
@@ -93,6 +94,20 @@ const payloadSchema = z.object({
 
 const STATUS_VALUES: readonly string[] = ["sent", "delivered", "read", "failed"];
 const MEDIA_TYPES = ["audio", "image", "document", "video"] as const;
+const MEDIA_PLACEHOLDERS = {
+  audio: "[voice note]",
+  image: "[image]",
+  document: "[document]",
+  video: "[video]",
+} as const;
+
+/** Maps Graph error codes the seller can act on. Never inspects or logs message content. */
+export function classifyFailure(status: number, code?: number): ProviderFailureReason {
+  if (code === 131047) return "reengagement";
+  if (status === 401 || code === 190) return "token";
+  if (code === 131030) return "recipient";
+  return "other";
+}
 
 export class MetaCloudProvider implements WhatsAppProvider {
   constructor(
@@ -167,10 +182,10 @@ export class MetaCloudProvider implements WhatsAppProvider {
     try {
       media.push(await this.resolveMedia(ref.id));
     } catch {
-      // Media lookup failed: keep the caption (if any) rather than dropping the message.
+      // Lookup failed or timed out: still ingest the message, without the media.
     }
-    const body = ref.caption?.trim() || null;
-    if (!body && media.length === 0) return null;
+    const caption = ref.caption?.trim() || null;
+    const body = caption ?? (media.length === 0 ? MEDIA_PLACEHOLDERS[type!] : null);
     return { ...base, body, media };
   }
 
@@ -178,6 +193,7 @@ export class MetaCloudProvider implements WhatsAppProvider {
   private async resolveMedia(mediaId: string): Promise<MessageMedia> {
     const response = await this.fetchImpl(this.url(encodeURIComponent(mediaId)), {
       headers: { Authorization: `Bearer ${this.config.accessToken}` },
+      signal: AbortSignal.timeout(5_000),
     });
     if (!response.ok) throw new WhatsAppProviderError("Media lookup failed.", response.status);
     const data = z
@@ -202,11 +218,18 @@ export class MetaCloudProvider implements WhatsAppProvider {
           type: "text",
           text: { body },
         }),
+        signal: AbortSignal.timeout(10_000),
       });
     } catch {
       throw new WhatsAppProviderError("Could not reach WhatsApp.");
     }
-    if (!response.ok) throw new WhatsAppProviderError("WhatsApp rejected the message.", response.status);
+    if (!response.ok) {
+      const parsed = z
+        .object({ error: z.object({ code: z.number() }) })
+        .safeParse(await response.json().catch(() => null));
+      const code = parsed.success ? parsed.data.error.code : undefined;
+      throw new WhatsAppProviderError("WhatsApp rejected the message.", response.status, code, classifyFailure(response.status, code));
+    }
 
     const data = z
       .object({ messages: z.array(z.object({ id: z.string().min(1) })).min(1) })
