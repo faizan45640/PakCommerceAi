@@ -33,7 +33,13 @@ import {
 
 const PAGE_SIZE = 25;
 
-export function ConversationInbox({ selectedId }: { selectedId?: string }) {
+interface ConversationInboxProps {
+  selectedId?: string;
+  /** A conversation changed elsewhere (e.g. marked read by the thread); its row is replaced. */
+  updatedConversation?: Conversation | null;
+}
+
+export function ConversationInbox({ selectedId, updatedConversation }: ConversationInboxProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
@@ -42,6 +48,9 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = React.useState<string | null>(null);
+  // Bumped whenever the list is reloaded, so a late "Load more" response is dropped.
+  const generation = React.useRef(0);
   const [reloadKey, setReloadKey] = React.useState(0);
 
   const [search, setSearch] = React.useState("");
@@ -73,10 +82,13 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
   React.useEffect(() => {
     if (!workspaceId) return;
     let ignore = false;
+    generation.current += 1;
 
     async function load(id: string) {
       setIsLoading(true);
+      setIsLoadingMore(false);
       setErrorMessage(null);
+      setLoadMoreError(null);
       try {
         const data = await fetchConversations({
           workspaceId: id,
@@ -103,7 +115,9 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
 
   async function loadMore() {
     if (!workspaceId || !nextCursor) return;
+    const token = generation.current;
     setIsLoadingMore(true);
+    setLoadMoreError(null);
     try {
       const data = await fetchConversations({
         workspaceId,
@@ -113,12 +127,15 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
         limit: PAGE_SIZE,
         cursor: nextCursor,
       });
+      if (token !== generation.current) return;
       setItems((current) => [...current, ...data.items]);
       setNextCursor(data.nextCursor ?? null);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to load more conversations.");
+      if (token === generation.current) {
+        setLoadMoreError(err instanceof Error ? err.message : "Failed to load more conversations.");
+      }
     } finally {
-      setIsLoadingMore(false);
+      if (token === generation.current) setIsLoadingMore(false);
     }
   }
 
@@ -130,6 +147,10 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
     setStates((current) => (checked ? [...current, state] : current.filter((value) => value !== state)));
   }
 
+  const rows = React.useMemo(
+    () => items.map((item) => (updatedConversation && item.id === updatedConversation.id ? updatedConversation : item)),
+    [items, updatedConversation],
+  );
   const hasFilters = Boolean(debouncedSearch.trim()) || states.length > 0 || unreadOnly;
 
   return (
@@ -202,7 +223,7 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
               <div key={index} className="h-14 animate-pulse rounded-md bg-muted" />
             ))}
           </div>
-        ) : items.length === 0 ? (
+        ) : rows.length === 0 ? (
           <p className="py-8 text-center text-muted-foreground text-sm">
             {hasFilters
               ? "No conversations match these filters."
@@ -211,7 +232,7 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
         ) : (
           <>
             <ul className="flex flex-col divide-y divide-border">
-              {items.map((conversation) => (
+              {rows.map((conversation) => (
                 <li key={conversation.id}>
                   <ConversationRow
                     conversation={conversation}
@@ -221,9 +242,14 @@ export function ConversationInbox({ selectedId }: { selectedId?: string }) {
                 </li>
               ))}
             </ul>
+            {loadMoreError ? (
+              <p role="alert" className="text-center text-destructive text-xs">
+                {loadMoreError}
+              </p>
+            ) : null}
             {nextCursor ? (
               <Button variant="outline" size="sm" onClick={() => void loadMore()} disabled={isLoadingMore}>
-                {isLoadingMore ? "Loading..." : "Load more"}
+                {isLoadingMore ? "Loading..." : loadMoreError ? "Retry" : "Load more"}
               </Button>
             ) : null}
           </>
