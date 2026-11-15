@@ -32,7 +32,8 @@ MAX_TRANSCRIPT_TURNS = 30
 # these without seller policy text is never sent: a human answers instead.
 POLICY_TERMS = re.compile(
     r"deliver|dilivery|shipping|return|refund|exchange|\bcod\b|cash on|payment|discount"
-    r"|% ?off|\bfree\b|\bmuft\b|wapas|wapsi|ڈیلیوری|واپس|مفت|رعایت|ریفنڈ",
+    # "free size" is a product size, not a free-delivery promise.
+    r"|% ?off|\bfree\b(?!\s*-?\s*size)|\bmuft\b|wapas|wapsi|ڈیلیوری|واپس|مفت|رعایت|ریفنڈ",
     re.IGNORECASE,
 )
 MAX_TOOL_ROUNDS = 4
