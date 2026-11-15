@@ -12,6 +12,7 @@ import { orderRouter } from "./orders/order-router.js";
 import { productRouter } from "./products/product-router.js";
 import { workspaceRouter } from "./workspaces/workspace-router.js";
 import { copilotRouter } from "./copilot/copilot-router.js";
+import { createTwilioWebhookRouter } from "./whatsapp/twilio-router.js";
 import { createWhatsAppWebhookRouter } from "./whatsapp/webhook-router.js";
 import { healthRouter } from "./routes/health.js";
 
@@ -42,6 +43,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // Meta signs the exact bytes, so the webhook sits before express.json() and
   // reads its own raw body. Public: authenticated by signature, not a token.
   app.use("/api/v1/webhooks/whatsapp", createWhatsAppWebhookRouter());
+  app.use("/api/v1/webhooks/twilio", createTwilioWebhookRouter());
 
   app.use(express.json());
 
