@@ -18,7 +18,7 @@ import {
   transitionConversationState,
   transitionConversationInputSchema,
 } from "./conversation-service.js";
-import { getMetaCloudConfig, MetaCloudProvider } from "../whatsapp/meta-cloud.js";
+import { getActiveWhatsApp } from "../whatsapp/factory.js";
 import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "./mock-inbound.js";
 
 /**
@@ -34,15 +34,14 @@ conversationRouter.post("/:id/messages", async (request, response, next) => {
     const id = parseOrThrow(idSchema, request.params.id, "conversation id");
     const input = parseOrThrow(sendSellerReplyInputSchema, request.body, "reply");
 
-    const config = getMetaCloudConfig();
+    const active = getActiveWhatsApp();
     // Spike-only: the one connected number belongs to one workspace. Any other
     // workspace (even the caller's own) must not send through it.
-    if (!config || input.workspaceId !== config.workspaceId) {
+    if (!active || input.workspaceId !== active.workspaceId) {
       throw new NotFoundError("WhatsApp is not connected.");
     }
-    const provider = new MetaCloudProvider(config);
 
-    response.status(201).json({ data: await sendSellerReply(auth, id, input, provider) });
+    response.status(201).json({ data: await sendSellerReply(auth, id, input, active.provider) });
   } catch (error) {
     next(error);
   }
