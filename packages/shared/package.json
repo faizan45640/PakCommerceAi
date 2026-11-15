@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./api": "./src/api/index.ts",
     "./categories": "./src/categories/index.ts",
+    "./conversations": "./src/conversations/index.ts",
     "./customers": "./src/customers/index.ts",
     "./customers/phone": "./src/customers/phone.ts",
     "./inventory": "./src/inventory/index.ts",
