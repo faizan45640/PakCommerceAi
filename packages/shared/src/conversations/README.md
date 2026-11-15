@@ -24,12 +24,13 @@ workspace), `system` (automation such as "agent on by default").
 | From | To | Who |
 |---|---|---|
 | `open` | `ai_active` | seller, system |
-| `open` | `human_takeover`, `closed` | seller |
+| `open` | `human_takeover` | seller |
 | `ai_active` | `waiting_approval` | ai |
 | `ai_active` | `human_takeover` | ai (handoff), seller |
-| `ai_active` | `open`, `closed` | seller |
-| `waiting_approval` | `ai_active`, `human_takeover`, `closed` | seller |
-| `human_takeover` | `ai_active`, `closed` | seller |
+| `ai_active` | `open` | seller |
+| `waiting_approval` | `ai_active` (approved or rejected), `human_takeover`, `open` | seller |
+| `human_takeover` | `ai_active`, `open` | seller |
+| any live state | `closed` | seller, system (auto-close) |
 | `closed` | `open` | buyer, seller |
 | `closed` | `ai_active` | buyer |
 
@@ -43,4 +44,15 @@ Anything not listed is refused, including staying in the same state.
 - Only a seller hands a conversation back to the agent.
 - A buyer message only reopens a closed conversation, into `ai_active` when the
   workspace has the agent on (`reopenStateFor(true)`), otherwise `open`.
-- `aiMayReply(state)` is the single check before any outbound agent message.
+- A buyer message in a live state changes nothing (`stateAfterBuyerMessage`);
+  the agent still replies only when `aiMayReply(state)` is true. That is the
+  single check before any outbound agent message.
+- Approving or rejecting a draft order is a seller action: the approval
+  endpoint moves `waiting_approval -> ai_active` as `seller`.
+
+## Database mirror
+
+Postgres cannot know which actor the API is acting for, so the database
+trigger enforces only the `from -> to` edges in `CONVERSATION_TRANSITION_EDGES`.
+Actor rules, and the `closed -> open | ai_active` choice, are enforced in the
+API with `assertConversationTransition` and `reopenStateFor`.

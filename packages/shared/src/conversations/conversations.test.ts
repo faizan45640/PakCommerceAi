@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CONVERSATION_STATE_TRANSITIONS,
+  CONVERSATION_TRANSITION_EDGES,
   aiMayReply,
   assertConversationTransition,
   canTransitionConversation,
@@ -9,6 +10,7 @@ import {
   conversationStateSchema,
   conversationStateValues,
   reopenStateFor,
+  stateAfterBuyerMessage,
   type ConversationActor,
   type ConversationState,
 } from "./index.js";
@@ -103,8 +105,29 @@ describe("seller and system moves", () => {
     }
   });
 
-  it("lets the system only switch an open conversation to the AI", () => {
-    expect(allowedMoves("system")).toEqual(["open->ai_active"]);
+  it("lets the system only switch open to the AI or auto-close a live conversation", () => {
+    expect(allowedMoves("system").sort()).toEqual([
+      "ai_active->closed",
+      "human_takeover->closed",
+      "open->ai_active",
+      "open->closed",
+      "waiting_approval->closed",
+    ]);
+  });
+
+  it("lets a seller release a conversation to open without handing it to the AI", () => {
+    expect(canTransitionConversation("human_takeover", "open", "seller")).toBe(true);
+    expect(canTransitionConversation("waiting_approval", "open", "seller")).toBe(true);
+  });
+
+  it("lets only the AI enter waiting_approval", () => {
+    for (const from of conversationStateValues) {
+      for (const actor of conversationActorValues) {
+        expect(canTransitionConversation(from, "waiting_approval", actor)).toBe(
+          from === "ai_active" && actor === "ai",
+        );
+      }
+    }
   });
 
   it("reopens into the AI only when the seller has it enabled", () => {
@@ -119,5 +142,49 @@ describe("seller and system moves", () => {
       "Illegal conversation transition by ai: human_takeover → ai_active",
     );
     expect(() => assertConversationTransition("ai_active", "human_takeover", "ai")).not.toThrow();
+  });
+});
+
+describe("reachability and buyer messages", () => {
+  function reachable(start: ConversationState): Set<ConversationState> {
+    const seen = new Set<ConversationState>([start]);
+    const queue = [start];
+    while (queue.length > 0) {
+      const from = queue.shift()!;
+      for (const [edgeFrom, to] of CONVERSATION_TRANSITION_EDGES) {
+        if (edgeFrom === from && !seen.has(to)) {
+          seen.add(to);
+          queue.push(to);
+        }
+      }
+    }
+    return seen;
+  }
+
+  it("reaches every state from open, and every state can reach closed", () => {
+    expect([...reachable("open")].sort()).toEqual([...conversationStateValues].sort());
+    for (const state of conversationStateValues) {
+      expect(reachable(state).has("closed")).toBe(true);
+    }
+  });
+
+  it("flattens the map into from -> to edges, one per allowed pair", () => {
+    const expected = conversationStateValues.flatMap((from) =>
+      conversationStateValues
+        .filter((to) => conversationActorValues.some((a) => canTransitionConversation(from, to, a)))
+        .map((to) => `${from}->${to}`),
+    );
+    expect(CONVERSATION_TRANSITION_EDGES.map(([f, t]) => `${f}->${t}`).sort()).toEqual(
+      expected.sort(),
+    );
+  });
+
+  it("keeps a live state on a buyer message and reopens a closed one", () => {
+    for (const state of ["open", "ai_active", "waiting_approval", "human_takeover"] as const) {
+      expect(stateAfterBuyerMessage(state, true)).toBe(state);
+      expect(stateAfterBuyerMessage(state, false)).toBe(state);
+    }
+    expect(stateAfterBuyerMessage("closed", true)).toBe("ai_active");
+    expect(stateAfterBuyerMessage("closed", false)).toBe("open");
   });
 });

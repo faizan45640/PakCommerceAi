@@ -41,34 +41,55 @@ type TransitionRules = {
  *   off. It can never take a conversation back from a seller, approve its own
  *   request, reopen, or close.
  * - A buyer message can only reopen a closed conversation.
- * - Only a seller can hand a conversation back to the AI.
+ * - Only a seller hands a conversation back to the AI. Approving or rejecting
+ *   a draft order is a seller action, so the approval endpoint performs
+ *   `waiting_approval -> ai_active` as `seller`.
+ * - `system` may switch an open conversation to the AI and auto-close any live
+ *   conversation (for example after days of silence). Nothing else.
  */
 export const CONVERSATION_STATE_TRANSITIONS = {
   open: {
     ai_active: ["seller", "system"],
     human_takeover: ["seller"],
-    closed: ["seller"],
+    closed: ["seller", "system"],
   },
   ai_active: {
     open: ["seller"],
     waiting_approval: ["ai"],
     human_takeover: ["ai", "seller"],
-    closed: ["seller"],
+    closed: ["seller", "system"],
   },
   waiting_approval: {
+    open: ["seller"],
     ai_active: ["seller"],
     human_takeover: ["seller"],
-    closed: ["seller"],
+    closed: ["seller", "system"],
   },
   human_takeover: {
+    open: ["seller"],
     ai_active: ["seller"],
-    closed: ["seller"],
+    closed: ["seller", "system"],
   },
   closed: {
     open: ["buyer", "seller"],
     ai_active: ["buyer"],
   },
 } as const satisfies TransitionRules;
+
+/**
+ * Flat `from -> to` edges, ignoring actors. The database only sees edges (it
+ * cannot know which actor the API is acting for), so the Postgres trigger
+ * enforces exactly this list and a test diffs it against the SQL. Actor rules
+ * are enforced in the API with `assertConversationTransition`.
+ */
+export const CONVERSATION_TRANSITION_EDGES: readonly (readonly [
+  ConversationState,
+  ConversationState,
+])[] = conversationStateValues.flatMap((from) =>
+  Object.keys(CONVERSATION_STATE_TRANSITIONS[from]).map(
+    (to) => [from, to as ConversationState] as const,
+  ),
+);
 
 export const conversationContractVersion = "2026-11-15";
 
@@ -99,6 +120,17 @@ export function assertConversationTransition(
 /** The agent may send a message only while it holds the conversation. */
 export function aiMayReply(state: ConversationState): boolean {
   return state === "ai_active";
+}
+
+/**
+ * State after a new buyer message. A live conversation keeps its state (the
+ * agent still only replies when `aiMayReply` says so); a closed one reopens.
+ */
+export function stateAfterBuyerMessage(
+  state: ConversationState,
+  aiEnabled: boolean,
+): ConversationState {
+  return state === "closed" ? reopenStateFor(aiEnabled) : state;
 }
 
 /**
