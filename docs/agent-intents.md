@@ -16,9 +16,9 @@ The agent only replies when the conversation is `ai_active`.
 
 ## Rules
 
-- Confidence below 0.5 routes to handoff.
+- Low confidence does not hand off: the agent answers from tools or asks one short clarifying question. Only the `handoff` intent and the policy rules hand off.
 - Handoff returns `reply: null`, `handoff.required: true` and a reason
-  (`buyer_needs_human`, `low_confidence:<n>`, `policy_unavailable`, `policy_not_covered`,
+  (`buyer_needs_human`, `policy_unavailable`, `policy_not_covered`,
   `tools_unavailable`, `tool_loop_limit`, `empty_reply`). Node then moves the conversation to `human_takeover`.
 - Prices, stock, delivery times and policies are never invented: only tool output or seller policy text.
 - Replies are short and in the buyer's language and script (Roman Urdu stays Roman Urdu).

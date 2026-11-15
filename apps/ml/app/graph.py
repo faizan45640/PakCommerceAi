@@ -25,7 +25,6 @@ from app.tools_client import ToolsClient
 
 log = logging.getLogger("agent")
 
-MIN_CONFIDENCE = 0.5
 LLM_TIMEOUT_SECONDS = 30.0
 MAX_TRANSCRIPT_TURNS = 30
 # Delivery / returns / payment / price-promise language. A model-written reply that touches
@@ -112,7 +111,6 @@ def build_graph(
     tools_client: ToolsClient | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
     *,
-    min_confidence: float = MIN_CONFIDENCE,
     timeout: float = LLM_TIMEOUT_SECONDS,
 ):
     async def guarded(coro: Awaitable[Any]) -> Any:
@@ -151,17 +149,17 @@ def build_graph(
     def route(state: AgentState) -> Literal["handoff", "policy", "respond", "finalize"]:
         if state.get("handoff_required"):  # classify failed closed
             return "finalize"
-        if state["intent"] == "handoff" or state["confidence"] < min_confidence:
+        if state["intent"] == "handoff":
             return "handoff"
-        return "policy" if state["intent"] == "policy" else "respond"
+        if state["intent"] == "policy":
+            return "policy"
+        # Unsure is not risky: the respond step answers from tools or asks one short
+        # clarifying question. Risky topics are classified as handoff above, and the
+        # policy guard still blocks delivery/payment/discount promises in any reply.
+        return "respond"
 
     def handoff_node(state: AgentState) -> dict[str, Any]:
-        reason = (
-            "buyer_needs_human"
-            if state["intent"] == "handoff"
-            else f"low_confidence:{state['confidence']:.2f}"
-        )
-        return {"reply": None, "handoff_required": True, "handoff_reason": reason}
+        return {"reply": None, "handoff_required": True, "handoff_reason": "buyer_needs_human"}
 
     async def policy_node(state: AgentState) -> dict[str, Any]:
         policy = (state.get("policy_text") or "").strip()
