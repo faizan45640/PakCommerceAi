@@ -1,5 +1,39 @@
 import { format, isSameDay } from "date-fns";
-import type { Message, MessageMedia, MessageSender, MessageStatus } from "@pakcommerce/shared/conversations";
+import {
+  canTransitionConversation,
+  type ConversationState,
+  type Message,
+  type MessageMedia,
+  type MessageSender,
+  type MessageStatus,
+} from "@pakcommerce/shared/conversations";
+
+export interface StateAction {
+  to: ConversationState;
+  label: string;
+}
+
+/** Wording depends on where the conversation is now. */
+function stateActionLabel(from: ConversationState, to: ConversationState): string {
+  switch (to) {
+    case "human_takeover":
+      return "Take over";
+    case "ai_active":
+      return from === "open" ? "Turn AI on" : "Hand back to AI";
+    case "open":
+      return from === "closed" ? "Reopen" : "Turn AI off";
+    default:
+      return "Close";
+  }
+}
+
+/** Only the moves the shared state machine lets a seller make from `state`, in display order. */
+export function availableStateActions(state: ConversationState): StateAction[] {
+  const order: ConversationState[] = ["human_takeover", "ai_active", "open", "closed"];
+  return order
+    .filter((to) => canTransitionConversation(state, to, "seller"))
+    .map((to) => ({ to, label: stateActionLabel(state, to) }));
+}
 
 /** The API sends newest first; the thread reads oldest first. */
 export function toChronological(newestFirst: Message[]): Message[] {

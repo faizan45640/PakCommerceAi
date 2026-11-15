@@ -13,6 +13,8 @@ import {
   listConversations,
   listMessages,
   markConversationRead,
+  transitionConversationState,
+  transitionConversationInputSchema,
 } from "./conversation-service.js";
 import { isMockInboundEnabled, ingestMockInbound, mockInboundBodySchema } from "./mock-inbound.js";
 
@@ -118,6 +120,19 @@ conversationRouter.post("/:id/read", async (request, response, next) => {
     const { workspaceId } = parseOrThrow(workspaceQuerySchema, request.query, "conversation query");
 
     response.json({ data: await markConversationRead(auth, workspaceId, id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Seller-driven state change: take over, hand back to the AI, turn AI off, close. */
+conversationRouter.post("/:id/state", async (request, response, next) => {
+  try {
+    const auth = sellerContext(request);
+    const id = parseOrThrow(idSchema, request.params.id, "conversation id");
+    const input = parseOrThrow(transitionConversationInputSchema, request.body, "conversation state");
+
+    response.json({ data: await transitionConversationState(auth, id, input) });
   } catch (error) {
     next(error);
   }

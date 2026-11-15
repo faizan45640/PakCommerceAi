@@ -80,6 +80,23 @@ export async function fetchMessages(id: string, params: MessageListParams): Prom
   return { items: response.data, nextCursor: response.nextCursor };
 }
 
+/** Moves a conversation to `to` as the seller. `reason` is kept only for `human_takeover`. */
+export async function changeConversationState(
+  workspaceId: string,
+  id: string,
+  to: ConversationState,
+  reason?: string,
+): Promise<Conversation> {
+  const response = await apiFetch<ApiDataResponse<Conversation>>(
+    `/api/v1/conversations/${encodeURIComponent(id)}/state`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, to, ...(reason?.trim() ? { reason: reason.trim() } : {}) }),
+    },
+  );
+  return response.data;
+}
+
 /** Marks every message in the thread as seen; returns the conversation with `unreadCount` 0. */
 export async function markConversationRead(workspaceId: string, id: string): Promise<Conversation> {
   const response = await apiFetch<ApiDataResponse<Conversation>>(

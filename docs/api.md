@@ -440,6 +440,15 @@ Newest first (`limit` 1-200, default 50). `{ data, meta, nextCursor }`; `nextCur
 
 Sets `unreadCount` to 0 and returns `{ data: Conversation }`.
 
+### `POST /api/v1/conversations/:id/state`
+
+Seller state change: take over, hand back to the AI, turn AI off, close. Body:
+`{ "workspaceId": "uuid", "to": "human_takeover", "reason": "optional, up to 500 chars" }`.
+The actor is always `seller` (`assertConversationTransition`); `reason` is stored in `handoffReason`
+only when `to` is `human_takeover`. Returns `{ data: Conversation }`. `409` for a move a seller may
+not make, or when another tab changed the state first (the update is conditional on the state that
+was read); `404` when not found or not yours.
+
 ### `POST /api/v1/conversations/mock-inbound`
 
 Fakes a Twilio inbound WhatsApp message so the inbox can be demoed before Twilio is connected.
