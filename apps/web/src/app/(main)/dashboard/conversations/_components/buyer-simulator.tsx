@@ -31,12 +31,19 @@ const fieldClass =
  * selects the conversation, and polls so the AI reply shows up on its own.
  * Hidden when the API reports mock inbound as disabled (404).
  */
-export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
+export function BuyerSimulator({
+  onActivity,
+  buyer,
+}: {
+  onActivity: () => void;
+  /** Inline mode under a thread: reply as this conversation's buyer, no phone/name fields. */
+  buyer?: { phone: string; name: string | null };
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
-  const [phone, setPhone] = React.useState(SIMULATOR_DEFAULT_PHONE);
-  const [name, setName] = React.useState(SIMULATOR_DEFAULT_NAME);
+  const [phone, setPhone] = React.useState(buyer?.phone ?? SIMULATOR_DEFAULT_PHONE);
+  const [name, setName] = React.useState(buyer ? (buyer.name ?? "") : SIMULATOR_DEFAULT_NAME);
   const [message, setMessage] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
   const [isWaiting, setIsWaiting] = React.useState(false);
@@ -143,6 +150,56 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
     ) : null;
   }
 
+  const status = error ? (
+    <p role="alert" className="text-destructive text-xs">
+      {error}
+    </p>
+  ) : notice ? (
+    <p className="text-muted-foreground text-xs">{notice}</p>
+  ) : isWaiting ? (
+    <p className="text-muted-foreground text-xs">Waiting for the AI to reply...</p>
+  ) : (
+    <span />
+  );
+
+  if (buyer) {
+    return (
+      <form
+        className="flex flex-col gap-2 rounded-md border border-dashed p-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send();
+        }}
+      >
+        <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+          <FlaskConical className="size-3.5" aria-hidden />
+          Reply as the buyer (simulator, not a real WhatsApp message)
+        </span>
+        <textarea
+          className={`${fieldClass} resize-none`}
+          rows={2}
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void send();
+            }
+          }}
+          maxLength={4096}
+          placeholder="Type as the buyer... (Enter to send)"
+          aria-label="Message as the buyer"
+        />
+        <div className="flex items-center justify-between gap-2">
+          {status}
+          <Button type="submit" size="sm" variant="outline" disabled={isSending || message.trim() === ""}>
+            {isSending ? "Sending..." : "Send as buyer"}
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <Card className="border-dashed">
       <Collapsible open={open} onOpenChange={setOpen}>
@@ -202,17 +259,7 @@ export function BuyerSimulator({ onActivity }: { onActivity: () => void }) {
                 />
               </label>
               <div className="flex items-center justify-between gap-2">
-                {error ? (
-                  <p role="alert" className="text-destructive text-xs">
-                    {error}
-                  </p>
-                ) : notice ? (
-                  <p className="text-muted-foreground text-xs">{notice}</p>
-                ) : isWaiting ? (
-                  <p className="text-muted-foreground text-xs">Waiting for the AI to reply...</p>
-                ) : (
-                  <span />
-                )}
+                {status}
                 <Button type="submit" size="sm" disabled={isSending}>
                   {isSending ? "Sending..." : "Send as buyer"}
                 </Button>

@@ -30,6 +30,13 @@ export function ConversationsSplitView({ selectedId }: { selectedId?: string }) 
             conversationId={selectedId}
             onConversationUpdated={setUpdated}
             refreshTick={refreshTick}
+            renderBuyerReply={(conversation) => (
+              <BuyerSimulator
+                key={conversation.id}
+                onActivity={bumpRefresh}
+                buyer={{ phone: conversation.buyerPhone, name: conversation.buyerName }}
+              />
+            )}
           />
         </div>
         <div className="xl:col-span-3">
